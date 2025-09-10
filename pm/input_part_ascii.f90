@@ -6,7 +6,6 @@ contains
 !#########################################################################
 !#########################################################################
 subroutine m_input_part_ascii(pst)
-  use amr_parameters, only: dp
   use ramses_commons, only: pst_t
   implicit none
   type(pst_t)::pst
@@ -14,7 +13,7 @@ subroutine m_input_part_ascii(pst)
   ! This routine is the master procedure to read and dispatch particles
   ! from an ascii file.
   !--------------------------------------------------------------------
-  real(dp)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1,jj1,jj2,jj3
+  real(kind=8)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1,jj1,jj2,jj3
   integer(kind=8)::npart_tot,nstar_tot,nsink_tot
   character(LEN=80)::filename
   integer,allocatable,dimension(:)::input_array
@@ -36,8 +35,18 @@ subroutine m_input_part_ascii(pst)
            open(10,file=filename,form='formatted')
            npart_tot=0
            do
+#if NDIM==1
+              read(10,*,end=101)xx1,vv1,mm1
+              if(ABS(xx1)<s%r%boxlen/2.0d0)then
+#endif
+#if NDIM==2
+              read(10,*,end=101)xx1,xx2,vv1,vv2,mm1
+              if(ABS(xx1)<s%r%boxlen/2.0d0.AND.ABS(xx2)<s%r%boxlen/2.0d0)then
+#endif
+#if NDIM==3
               read(10,*,end=101)xx1,xx2,xx3,vv1,vv2,vv3,mm1
               if(ABS(xx1)<s%r%boxlen/2.0d0.AND.ABS(xx2)<s%r%boxlen/2.0d0.AND.ABS(xx3)<s%r%boxlen/2.0d0)then
+#endif
                  npart_tot=npart_tot+1
               endif
            end do
@@ -75,8 +84,18 @@ subroutine m_input_part_ascii(pst)
            open(10,file=filename,form='formatted')
            nstar_tot=0
            do
+#if NDIM==1
+              read(10,*,end=102)xx1,vv1,mm1,zz1,tt1
+              if(ABS(xx1)<s%r%boxlen/2.0d0)then
+#endif
+#if NDIM==2
+              read(10,*,end=102)xx1,xx2,vv1,vv2,mm1,zz1,tt1
+              if(ABS(xx1)<s%r%boxlen/2.0d0.AND.ABS(xx2)<s%r%boxlen/2.0d0)then
+#endif
+#if NDIM==3
               read(10,*,end=102)xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1
               if(ABS(xx1)<s%r%boxlen/2.0d0.AND.ABS(xx2)<s%r%boxlen/2.0d0.AND.ABS(xx3)<s%r%boxlen/2.0d0)then
+#endif
                  nstar_tot=nstar_tot+1
                  s%g%mass_star_tot=s%g%mass_star_tot+mm1
               endif
@@ -182,7 +201,6 @@ end subroutine r_input_part_ascii
 !#########################################################################
 subroutine input_part_ascii(mdl,r,g,p,npart_tot)
   use mdl_module
-  use amr_parameters, only: dp
   use amr_commons, only: run_t,global_t
   use pm_commons, only: part_t
   implicit none
@@ -203,7 +221,7 @@ subroutine input_part_ascii(mdl,r,g,p,npart_tot)
   integer(kind=8)::indglob
   integer(kind=8)::jpart,npart,nremain
   integer(kind=8),dimension(1:g%ncpu+1)::start_ind
-  real(dp)::xx1,xx2,xx3,vv1,vv2,vv3,mm1
+  real(kind=8)::xx1,xx2,xx3,vv1,vv2,vv3,mm1
   character(LEN=80)::filename
 
   !--------------------------------------
@@ -230,8 +248,18 @@ subroutine input_part_ascii(mdl,r,g,p,npart_tot)
   indglob=0
   jpart_loc=0
   do 
+#if NDIM==1
+     read(10,*,end=100)xx1,vv1,mm1
+     if(ABS(xx1)<r%boxlen/2.0d0)then
+#endif
+#if NDIM==2
+     read(10,*,end=100)xx1,xx2,vv1,vv2,mm1
+     if(ABS(xx1)<r%boxlen/2.0d0.AND.ABS(xx2)<r%boxlen/2.0d0)then
+#endif
+#if NDIM==3
      read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1
      if(ABS(xx1)<r%boxlen/2.0d0.AND.ABS(xx2)<r%boxlen/2.0d0.AND.ABS(xx3)<r%boxlen/2.0d0)then
+#endif
         jpart=jpart+1
         indglob=indglob+1
         if(jpart >= start_ind(g%myid) .and. jpart < start_ind(g%myid+1))then
@@ -241,12 +269,18 @@ subroutine input_part_ascii(mdl,r,g,p,npart_tot)
               write(*,*)'npartmax should be greater than',start_ind(2)
               call mdl_abort(mdl)
            endif
+#if NDIM>0
            p%xp(jpart_loc,1)=xx1+r%boxlen/2.0
-           p%xp(jpart_loc,2)=xx2+r%boxlen/2.0
-           p%xp(jpart_loc,3)=xx3+r%boxlen/2.0
            p%vp(jpart_loc,1)=vv1
+#endif
+#if NDIM>1
+           p%xp(jpart_loc,2)=xx2+r%boxlen/2.0
            p%vp(jpart_loc,2)=vv2
+#endif
+#if NDIM>2
+           p%xp(jpart_loc,3)=xx3+r%boxlen/2.0
            p%vp(jpart_loc,3)=vv3
+#endif
            p%mp(jpart_loc  )=mm1*r%ic_scale_m
            p%idp(jpart_loc )=indglob
            p%levelp(jpart_loc)=r%levelmin
@@ -300,7 +334,6 @@ end subroutine r_input_star_ascii
 !#########################################################################
 subroutine input_star_ascii(mdl,r,g,p,npart_tot)
   use mdl_module
-  use amr_parameters, only: dp
   use amr_commons, only: run_t,global_t
   use pm_commons, only: part_t
   implicit none
@@ -321,7 +354,7 @@ subroutine input_star_ascii(mdl,r,g,p,npart_tot)
   integer(kind=8)::indglob
   integer(kind=8)::jpart,npart,nremain
   integer(kind=8),dimension(1:g%ncpu+1)::start_ind
-  real(dp)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1
+  real(kind=8)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1
   character(LEN=80)::filename
 
   !--------------------------------------
@@ -348,8 +381,18 @@ subroutine input_star_ascii(mdl,r,g,p,npart_tot)
   indglob=0
   jpart_loc=0
   do
+#if NDIM==1
+     read(10,*,end=100)xx1,vv1,mm1,zz1,tt1
+     if(ABS(xx1)<r%boxlen/2.0d0)then
+#endif
+#if NDIM==2
+     read(10,*,end=100)xx1,xx2,vv1,vv2,mm1,zz1,tt1
+     if(ABS(xx1)<r%boxlen/2.0d0.AND.ABS(xx2)<r%boxlen/2.0d0)then
+#endif
+#if NDIM==3
      read(10,*,end=100)xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1
      if(ABS(xx1)<r%boxlen/2.0d0.AND.ABS(xx2)<r%boxlen/2.0d0.AND.ABS(xx3)<r%boxlen/2.0d0)then
+#endif
         jpart=jpart+1
         indglob=indglob+1
         if(jpart >= start_ind(g%myid) .and. jpart < start_ind(g%myid+1))then
@@ -359,12 +402,18 @@ subroutine input_star_ascii(mdl,r,g,p,npart_tot)
               write(*,*)'nstarmax should be greater than',start_ind(2)
               call mdl_abort(mdl)
            endif
+#if NDIM>0
            p%xp(jpart_loc,1)=xx1+r%boxlen/2.0
-           p%xp(jpart_loc,2)=xx2+r%boxlen/2.0
-           p%xp(jpart_loc,3)=xx3+r%boxlen/2.0
            p%vp(jpart_loc,1)=vv1
+#endif
+#if NDIM>1
+           p%xp(jpart_loc,2)=xx2+r%boxlen/2.0
            p%vp(jpart_loc,2)=vv2
+#endif
+#if NDIM>2
+           p%xp(jpart_loc,3)=xx3+r%boxlen/2.0
            p%vp(jpart_loc,3)=vv3
+#endif
            p%mp(jpart_loc  )=mm1
            p%zp(jpart_loc  )=zz1
            p%tp(jpart_loc  )=tt1
@@ -421,7 +470,6 @@ end subroutine r_input_sink_ascii
 !#########################################################################
 subroutine input_sink_ascii(mdl,r,g,p,npart_tot)
   use mdl_module
-  use amr_parameters, only: dp
   use amr_commons, only: run_t,global_t
   use pm_commons, only: part_t
   implicit none
@@ -442,7 +490,7 @@ subroutine input_sink_ascii(mdl,r,g,p,npart_tot)
   integer(kind=8)::indglob
   integer(kind=8)::jpart,npart,nremain
   integer(kind=8),dimension(1:g%ncpu+1)::start_ind
-  real(dp)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1,jj1,jj2,jj3
+  real(kind=8)::xx1,xx2,xx3,vv1,vv2,vv3,mm1,zz1,tt1,jj1,jj2,jj3
   character(LEN=80)::filename
 
   !--------------------------------------

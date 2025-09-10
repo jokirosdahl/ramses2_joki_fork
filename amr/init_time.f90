@@ -49,7 +49,7 @@ end subroutine r_init_time
   ! Local variables
   integer::i
 
-  if(r%nrestart==0)then
+  if(r%nrestart==0.and.r%filetype.NE.'ramses')then
      if(r%cosmo)then
         ! Get cosmological parameters from input files
         call init_cosmo(mdl,r,g)
@@ -93,7 +93,7 @@ end subroutine r_init_time
   end if                                                                   
 
   ! Initialize cooling model
-  if(r%cooling.and..not.r%cooling_ism.and..not.r%neq_chem)then
+  if(r%cooling.and..not.r%cooling_ism.and..not.r%neq_chem.and..not.r%rtz_cooling)then
      call init_cooling(r,g,c)
      call set_table(c,dble(g%aexp))
   endif
@@ -116,7 +116,6 @@ end subroutine init_time
 !###########################################################
 !###########################################################
 subroutine init_file(mdl,r,g,m)
-  use amr_parameters, only: sp
   use amr_commons, only: run_t,global_t,mesh_t
   use mdl_module
   implicit none
@@ -130,7 +129,7 @@ subroutine init_file(mdl,r,g,m)
   ! Bertschinger's grafic version 2.0 code.
   !------------------------------------------------------
   integer:: ilevel
-  real(sp)::dxini0,xoff10,xoff20,xoff30,astart0,omega_m0,omega_l0,h00
+  real(kind=4)::dxini0,xoff10,xoff20,xoff30,astart0,omega_m0,omega_l0,h00
   character(LEN=80)::filename
   logical::ok
 
@@ -209,7 +208,7 @@ end subroutine init_file
 !###########################################################
 !###########################################################
 subroutine init_cosmo(mdl,r,g)
-  use amr_parameters, only: sp,dp,ndim
+  use amr_parameters, only: ndim
   use amr_commons, only: run_t,global_t
   use gadgetreadfilemod
   use mdl_module
@@ -224,7 +223,7 @@ subroutine init_cosmo(mdl,r,g)
   ! Bertschinger's grafic version 2.0 code.
   !------------------------------------------------------
   integer:: ilevel,i
-  real(sp)::dxini0,xoff10,xoff20,xoff30,astart0,omega_m0,omega_l0,h00
+  real(kind=4)::dxini0,xoff10,xoff20,xoff30,astart0,omega_m0,omega_l0,h00
   character(LEN=80)::filename
   character(LEN=5)::nchar
   logical::ok
@@ -238,7 +237,7 @@ subroutine init_cosmo(mdl,r,g)
   end if
 
   SELECT CASE (r%filetype)
-  case ('grafic', 'grafic_zoom', 'ascii')
+  CASE ('grafic', 'grafic_zoom')
 
      ! Reading initial conditions parameters only
      g%aexp=2.0
@@ -310,10 +309,28 @@ subroutine init_cosmo(mdl,r,g)
            call mdl_abort(mdl)
         endif
      end if
-     
+
      ! Compute box length in the initial conditions in units of h-1 Mpc
      g%boxlen_ini=2**r%levelmin*g%dxini(r%levelmin)*(g%h0/100.)
-     
+
+  CASE ('ascii')
+
+     g%aexp=r%aexp_ini
+     g%aexp_ini=g%aexp
+     g%boxlen_ini=r%boxlen_ini
+     g%h0=r%h0
+     g%omega_m=r%omega_m
+     g%omega_l=r%omega_l
+     if(r%hydro)then
+        if(r%omega_b>0)then
+           g%omega_b=r%omega_b
+        else
+           g%omega_b=0.045
+        endif
+        r%ic_scale_m=1.0-g%omega_b/g%omega_m
+        r%mass_sph=g%omega_b/g%omega_m*0.5d0**(ndim*r%levelmin)
+     endif
+
   CASE ('gadget')
 
      ! Reading gadget file header only
@@ -368,6 +385,8 @@ subroutine init_cosmo(mdl,r,g)
   end if
   g%omega_k=1.d0-g%omega_l-g%omega_m
 
+  if(r%filetype=='ascii')return
+
   ! Compute linear scaling factor between aexp and astart(ilevel)
   do ilevel=r%levelmin,g%nlevelmax_part
      g%dfact(ilevel)=d1a(mdl,g%aexp,g%omega_m,g%omega_l)/d1a(mdl,g%astart(ilevel),g%omega_m,g%omega_l)
@@ -419,7 +438,7 @@ subroutine friedman(mdl,O_mat_0,O_vac_0,O_k_0,alpha,axp_min, &
   integer::ntable
   real(kind=8)::O_mat_0, O_vac_0, O_k_0
   real(kind=8)::alpha,axp_min
-  real(dp),dimension(0:ntable)::axp_out,hexp_out,tau_out,t_out
+  real(kind=8),dimension(0:ntable)::axp_out,hexp_out,tau_out,t_out
   ! ######################################################!
   ! This subroutine assumes that axp = 1 at z = 0 (today) !
   ! and that t and tau = 0 at z = 0 (today).              !
@@ -533,11 +552,10 @@ function dadt(axp_t,O_mat_0,O_vac_0,O_k_0)
 end function dadt
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 function fy(a,omega_m,omega_l)
-  use amr_parameters, only: dp
   implicit none
   !      Computes the integrand
-  real(dp)::fy
-  real(dp)::y,a,omega_m,omega_l
+  real(kind=8)::fy
+  real(kind=8)::y,a,omega_m,omega_l
   
   y=omega_m*(1.d0/a-1.d0) + omega_l*(a*a-1.d0) + 1.d0
   fy=1.d0/y**1.5d0
@@ -546,14 +564,13 @@ function fy(a,omega_m,omega_l)
 end function fy
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 function d1a(mdl,a,omega_m,omega_l)
-  use amr_parameters, only: dp
   use mdl_module
   implicit none
-  real(dp)::d1a
+  real(kind=8)::d1a
   !     Computes the linear growing mode D1 in a Friedmann-Robertson-Walker
   !     universe. See Peebles LSSU sections 11 and 14.
   type(mdl_t)::mdl
-  real(dp)::a,omega_m,omega_l,y12,y,eps
+  real(kind=8)::a,omega_m,omega_l,y12,y,eps
   
   eps=1.0d-6
   if(a .le. 0.0d0)then
@@ -572,11 +589,10 @@ function d1a(mdl,a,omega_m,omega_l)
 end function d1a
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 function fpeebl(a,omega_m,omega_l)
-  use amr_parameters, only: dp
   implicit none
-  real(dp) :: fpeebl,a,omega_m,omega_l
+  real(kind=8) :: fpeebl,a,omega_m,omega_l
   !     Computes the growth factor f=d\log D1/d\log a.
-  real(dp) :: fact,y,eps
+  real(kind=8) :: fact,y,eps
   
   eps=1.0d-6
   y=omega_m*(1.d0/a-1.d0) + omega_l*(a*a-1.d0) + 1.d0
@@ -586,9 +602,8 @@ function fpeebl(a,omega_m,omega_l)
 end function fpeebl
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 function rombint(a,b,tol,omega_m,omega_l)
-  use amr_parameters, only: dp
   implicit none
-  real(dp)::rombint
+  real(kind=8)::rombint
   !
   !     Rombint returns the integral from a to b of f(x)dx using Romberg 
   !     integration. The method converges provided that f(x) is continuous 
@@ -597,9 +612,9 @@ function rombint(a,b,tol,omega_m,omega_l)
   !     tol indicates the desired relative accuracy in the integral.
   !
   integer::maxiter=16,maxj=5
-  real(dp),dimension(100):: g
-  real(dp)::a,b,tol,fourj,omega_m,omega_l
-  real(dp)::h,error,gmax,g0,g1
+  real(kind=8),dimension(100):: g
+  real(kind=8)::a,b,tol,fourj,omega_m,omega_l
+  real(kind=8)::h,error,gmax,g0,g1
   integer::nint,i,j,k,jmax
   
   h=0.5d0*(b-a)

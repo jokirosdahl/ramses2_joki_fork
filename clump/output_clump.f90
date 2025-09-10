@@ -63,7 +63,7 @@ end subroutine r_output_clump
 !###################################################
 !###################################################
 subroutine output_clump_properties(s,filename)
-  use amr_parameters, only: flen, nbin, ndim, dp
+  use amr_parameters, only: flen, nbin, ndim
   use ramses_commons, only: ramses_t,open_file,close_file
   use clfind_commons
   implicit none
@@ -75,8 +75,8 @@ subroutine output_clump_properties(s,filename)
   integer::ilun,j,ind,igrid,hid
   character(LEN=flen)::fileloc
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
-  real(dp)::pi,grav,rho,rad,mass,r200b,rmax,concentration,purity
-  real(dp),dimension(1:nbin)::mbin
+  real(kind=8)::pi,grav,rho,rad,mass,r200b,rmax,concentration,purity
+  real(kind=8),dimension(1:nbin)::mbin
 
   associate(r=>s%r,g=>s%g,m=>s%m,c=>s%c)
 
@@ -141,13 +141,13 @@ end subroutine output_clump_properties
 !###################################################
 !###################################################
 subroutine halo_mass_def(s,mbin,rad,r200b,rmax,c)
-  use amr_parameters, only: nbin, dp
+  use amr_parameters, only: nbin
   use ramses_commons, only: ramses_t
   type(ramses_t)::s
-  real(dp),dimension(1:nbin)::mbin
-  real(dp)::rad,rmax,r200b,c,deltamax,cmin,cmax
-  real(dp)::pi,G,delta,deltaold,rbin,vcirc,volbin,alpha
-  real(dp)::vmax,v200b,c0,cl,cr,err,const,dr
+  real(kind=8),dimension(1:nbin)::mbin
+  real(kind=8)::rad,rmax,r200b,c,deltamax,cmin,cmax
+  real(kind=8)::pi,G,delta,deltaold,rbin,vcirc,volbin,alpha
+  real(kind=8)::vmax,v200b,c0,cl,cr,err,const,dr
   integer::i,imax
   ! Constants
   pi=ACOS(-1.0D0)
@@ -203,7 +203,7 @@ subroutine halo_mass_def(s,mbin,rad,r200b,rmax,c)
   v200b=sqrt(G*4d0*pi/3d0*200d0*r200b**2)
   ! Find concentration parameter
   vmax=max(vmax,v200b)
-  const=MIN(vmax**2/v200b**2,4d0)*c0/(log(1d0+c0)-c0/(1d0+c0))
+  const=MIN(dble(vmax**2/v200b**2),4d0)*c0/(log(1d0+c0)-c0/(1d0+c0))
   ! Find large root
   cl=c0
   cr=100d0

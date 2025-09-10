@@ -1,6 +1,7 @@
 module update_time_module
   type :: in_broadcast_aexp_t
     real(kind=8)::t,texp,aexp,hexp
+    real(kind=8)::aexp_old
   end type in_broadcast_aexp_t
 contains
 !################################################################
@@ -8,10 +9,11 @@ contains
 !################################################################
 !################################################################
 subroutine m_update_time(pst,ilevel,done)
-  use amr_parameters, only: dp,n_frw
+  use amr_parameters, only: n_frw
   use ramses_commons, only: pst_t
   use mdl_module
   use update_rt_c_module, only: r_rt_neq_updates
+  use turb_update_module, only: r_update_turb
   implicit none
   type(pst_t)::pst
   integer::ilevel
@@ -20,7 +22,7 @@ subroutine m_update_time(pst,ilevel,done)
   ! Local variables
   double precision::ttend
   double precision,save::ttstart=0.0
-  real(dp)::dt,econs,mcons
+  real(kind=8)::dt,econs,mcons
   integer::i,itest
   type(in_broadcast_aexp_t)::in_broadcast_aexp
   
@@ -170,14 +172,18 @@ subroutine m_update_time(pst,ilevel,done)
      g%texp = g%t
   end if
 
-  ! Broadcast t, aexp, texp and hexp to all CPUs
+  ! Broadcast t, aexp, aexp_old, texp and hexp to all CPUs
   in_broadcast_aexp%t=g%t
   in_broadcast_aexp%texp=g%texp
   in_broadcast_aexp%aexp=g%aexp
+  in_broadcast_aexp%aexp_old = g%aexp_old
   in_broadcast_aexp%hexp=g%hexp
   call r_broadcast_aexp(pst,in_broadcast_aexp,storage_size(in_broadcast_aexp)/32)
 
-  end associate
+  ! Update turbulent driving field
+  if(r%turb)call r_update_turb(pst)
+
+end associate
 
 end subroutine m_update_time
 !##############################################################
@@ -203,10 +209,34 @@ recursive subroutine r_broadcast_aexp(pst,input,input_size)
      pst%s%g%t   =input%t
      pst%s%g%texp=input%texp
      pst%s%g%aexp=input%aexp
+     pst%s%g%aexp_old = input%aexp_old
      pst%s%g%hexp=input%hexp
   endif
 
 end subroutine r_broadcast_aexp
+!##############################################################
+!##############################################################
+!##############################################################
+!##############################################################
+recursive subroutine r_hash_stats(pst)
+  use mdl_module
+  use ramses_commons, only: pst_t
+  use hash, only: hash_stats
+  use mdl_parameters
+  implicit none
+  type(pst_t)::pst
+
+  integer::rID
+
+  if(pst%nLower>0)then
+     rID = mdl_send_request(pst%s%mdl,MDL_HASH_STATS,pst%iUpper+1)
+     call r_hash_stats(pst%pLower)
+     call mdl_get_reply(pst%s%mdl,rID,0)
+  else
+     call hash_stats(pst%s%m%grid_dict)
+  endif
+
+end subroutine r_hash_stats
 !##############################################################
 !##############################################################
 !##############################################################

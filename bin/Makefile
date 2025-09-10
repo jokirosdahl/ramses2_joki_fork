@@ -9,10 +9,23 @@ HYDRO = 1
 GRAV = 0
 MHD = 0
 RT = 0
+RTZ = 0
 INIT =
 UNITS =
 NENER = 0
 NMETAL = 0
+TURB = 0
+N_HYDROGEN_IONS = 0
+N_H2 = 0
+N_HELIUM_IONS = 0
+N_CARBON_IONS = 0
+N_NITROGEN_IONS = 0
+N_OXYGEN_IONS = 0
+N_NEON_IONS = 0
+N_MAGNESIUM_IONS = 0
+N_SILICON_IONS = 0
+N_SULFUR_IONS = 0
+N_IRON_IONS = 0
 NION = 0
 NPSCAL = 0
 NRTGRP = 0
@@ -27,6 +40,12 @@ EXEC = ramses
 #############################################################################
 # Compute NVAR
 NHYDRO = 5
+ifeq ($(RTZ),1)
+NION := $(N_CARBON_IONS)+$(N_NITROGEN_IONS)+$(N_OXYGEN_IONS)
+NION := $(NION)+$(N_NEON_IONS)+$(N_MAGNESIUM_IONS)+$(N_SILICON_IONS)
+NION := $(NION)+$(N_SULFUR_IONS)+$(N_IRON_IONS)
+NION := $(NION)+$(N_HYDROGEN_IONS)+$(N_H2)+$(N_HELIUM_IONS)
+endif
 NVAR := $(NHYDRO)+$(NENER)+$(NPSCAL)+$(NMETAL)+$(NION)
 #############################################################################
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
@@ -35,6 +54,19 @@ GITREPO = $(shell git config --get remote.origin.url)
 BUILDDATE = $(shell date +"%D-%T")
 BUILDCOMMAND = ${MAKE} ${MAKEFLAGS}
 DEFINES = -DNDIM=$(NDIM) -DNVAR=$(NVAR)
+ifeq ($(RTZ),1)
+DEFINES += -DN_HYDROGEN_IONS=$(N_HYDROGEN_IONS)
+DEFINES += -DN_HELIUM_IONS=$(N_HELIUM_IONS)
+DEFINES += -DN_CARBON_IONS=$(N_CARBON_IONS)
+DEFINES += -DN_NITROGEN_IONS=$(N_NITROGEN_IONS)
+DEFINES += -DN_OXYGEN_IONS=$(N_OXYGEN_IONS)
+DEFINES += -DN_NEON_IONS=$(N_NEON_IONS)
+DEFINES += -DN_MAGNESIUM_IONS=$(N_MAGNESIUM_IONS)
+DEFINES += -DN_SILICON_IONS=$(N_SILICON_IONS)
+DEFINES += -DN_SULFUR_IONS=$(N_SULFUR_IONS)
+DEFINES += -DN_IRON_IONS=$(N_IRON_IONS)
+DEFINES += -DN_H2=$(N_H2)
+endif
 ifneq ($(NION),0)
    DEFINES += -DNION=$(NION)
 endif
@@ -47,11 +79,17 @@ endif
 ifeq ($(GRAV),1)
    DEFINES += -DGRAV
 endif
+ifeq ($(TURB),1)
+   DEFINES += -DTURB
+endif
 ifneq ($(NENER),0)
    DEFINES += -DNENER=$(NENER)
 endif
 ifeq ($(RT),1)
    DEFINES += -DRT -DNRTGRP=$(NRTGRP)
+endif
+ifeq ($(RTZ),1)
+   DEFINES += -DRTZ
 endif
 ifneq ($(NVECTOR),32)
    DEFINES += -DNVECTOR=$(NVECTOR)
@@ -116,7 +154,7 @@ endif
 #############################################################################
 # NVHPC compiler
 ifeq ($(COMPILER),NVHPC)
-   FFLAGS = -cpp -gpu=sm_80,sm_90,nordc -cuda $(DEFINES)
+   FFLAGS = -mp -cpp -gpu=sm_80,sm_90,nordc -cuda $(DEFINES)
    LIBS = -gpu=sm_80,sm_90,nordc -cuda -cudalib=nvtx
    GPU_PATH = ../gpu
    ifeq ($(MPI),1)
@@ -142,40 +180,56 @@ CFLAGS = -g -O3
 #############################################################################
 MOD = mod
 #############################################################################
-# MPI librairies
+# MPI librairies if needed
 LIBMPI =
 #LIBMPI = -lfmpi -lmpi -lelan
 ifeq ($(HDF5),1)
    LIBHDF5 = -lhdf5 -lhdf5_hl -lhdf5_fortran -lhdf5hl_fortran
 endif
-LIBS += $(LIBMPI) $(LIBHDF5)
+ifeq ($(TURB),1)
+   FFTW = /usr/local/fftw/gcc/3.3.9
+   LIBFFTW = -L$(FFTW)/lib -lfftw3
+   FFLAGS += -I$(FFTW)/include
+endif
+LIBS += $(LIBMPI) $(LIBFFTW)
 #############################################################################
 # Sources directories are searched in this exact order
-VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt
+VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt:../lightcone
 #############################################################################
 # Modules
 MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o oct_commons.o \
 	 hash.o pm_parameters.o pm_commons.o hilbert.o domain_hilbert.o \
 	 hydro_commons.o rt_commons.o amr_commons.o poisson_parameters.o rngstream.o \
 	 constants.o cooling_module.o cooling_module_ism.o init_cooling.o \
-	 coolrates_module.o neq_cooling_module.o init_neq_chem.o \
-	 mdl_commons.o mdl.o rt_spectra.o clfind_commons.o ramses_commons.o \
-	 call_back.o cache_commons.o cache.o gadgetreadfile.o \
+	 coolrates_module.o \
+    collisional_ionization_module.o recombination_module.o \
+    cosmic_ray_ionization_module.o photoionization_UVB_module.o dust_recombination_module.o \
+    molecules_module.o charge_exchange_module.o rtz_module.o
+ifeq ($(RTZ),1)
+MODOBJ += rtz_coolrates_module.o rtz_cooling_module.o
+else
+MODOBJ += neq_cooling_module.o 
+endif
+MODOBJ += init_neq_chem.o \
+	 mdl_commons.o mdl.o cross_sections_module.o rt_spectra.o clfind_commons.o turb_commons.o \
+	 ramses_commons.o call_back.o cache_commons.o cache.o gadgetreadfile.o \
 	 boundaries.o output_hydro.o output_poisson.o output_part.o output_rt.o output_amr.o movie.o \
-	 sort.o nbors_utils.o hydro_flag.o multigrid_fine_coarse.o rho_fine.o marshal.o upload.o init_xion.o \
-	 rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
+	 sort.o nbors_utils.o hydro_flag.o multigrid_fine_coarse.o rho_fine.o marshal.o upload.o init_xion.o
+ifeq ($(COMPILER),NVHPC)
+MODOBJ += gpu_utils.o hydro_integrator.o gpu_runner.o gpu_manager.o
+endif
+MODOBJ += rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
 	 rt_condinit.o rt_flag.o rt_upload.o interpol_rt.o rt_godunov_utils.o read_rt_params.o \
+	 turb_hydro.o turb_driving.o turb_init.o turb_update.o \
+	 lightcone_utils.o lightcone_buffer.o lightcone_io.o lightcone_test.o lightcone.o \
 	 init_hydro.o init_part.o init_amr.o smooth.o flag_utils.o init_time.o read_params.o \
 	 init_rt.o input_part_grafic.o input_part_zoom.o input_part_ascii.o \
-	 input_part_restart.o input_part_ramses.o input_part_gadget.o input_part.o \
+	 input_part_restart.o input_part_ramses.o input_part_gadget.o input_part.o input_hydro_grafic.o \
 	 interpol_hydro.o update_time.o timer.o init_refine_basegrid.o load_balance.o refine_utils.o \
 	 grav_ana.o phi_fine_cg.o interpol_phi.o force_fine.o poisson_flag.o multigrid_fine_commons.o \
-	 boundana.o godunov_utils.o write_screen.o courant_fine.o newdt_fine.o
-ifeq ($(COMPILER),NVHPC)
-MODOBJ += gpu_utils.o hydro_integrator.o gpu_runner.o
-endif
-MODOBJ += godunov_fine.o umuscl.o synchro_hydro_fine.o source_hydro_fine.o cooling_fine.o \
-	 input_hydro_condinit.o input_hydro_grafic.o input_hydro_gadget.o init_flow_fine.o \
+	 boundana.o godunov_utils.o write_screen.o courant_fine.o newdt_fine.o \
+	 godunov_fine.o umuscl.o synchro_hydro_fine.o source_hydro_fine.o cooling_fine.o \
+	 input_hydro_condinit.o input_hydro_gadget.o init_flow_fine.o \
 	 condinit.o vecpotentialinit.o init_refine_adaptive.o init_refine_restart.o \
 	 init_refine_ramses.o title.o units.o move_fine.o rho_ana.o \
 	 star_formation.o feedback.o clump_merger.o output_clump.o clump_finder.o \

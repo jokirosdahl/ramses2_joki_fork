@@ -68,7 +68,7 @@ end subroutine get_bound
 !################################################################
 !################################################################
 subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
-  use amr_parameters, only: ndim, twotondim, dp, nvector
+  use amr_parameters, only: ndim, twotondim, nvector
   use hydro_parameters, only: nvar, nener
   use rt_parameters, only: nrtvar, nrtgrp
   use amr_commons, only: run_t, global_t, mesh_t, oct
@@ -107,11 +107,11 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
 
   integer::idim, ind, ivar, irad
   integer::type, dir, shift, nstride
-  real(dp)::reverse, ek_bound
-  real(dp),dimension(1:nvector,1:ndim)::xx
-  real(dp),dimension(1:nvector,1:nvar)::uu
-  real(dp),dimension(1:nvector,1:nvar)::qq
-  real(dp)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
+  real(kind=8)::reverse, ek_bound
+  real(kind=8),dimension(1:nvector,1:ndim)::xx
+  real(kind=8),dimension(1:nvector,1:nvar)::uu
+  real(kind=8),dimension(1:nvector,1:nvar)::qq
+  real(kind=8)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
 
   type = r%bound_type(ibound)
   dir = r%bound_dir(ibound)

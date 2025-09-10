@@ -3,7 +3,7 @@
 !================================================================
 !================================================================
 subroutine condinit(r,g,x,q,dx,nn)
-  use amr_parameters, only: dp, ndim, nvector
+  use amr_parameters, only: ndim, nvector
   use hydro_parameters, only: nvar, nener
   use amr_commons, only: run_t, global_t
   use input_hydro_condinit_module, only: region_condinit
@@ -11,13 +11,13 @@ subroutine condinit(r,g,x,q,dx,nn)
   type(run_t)::r
   type(global_t)::g
   integer ::nn                            ! Number of cells
-  real(dp)::dx                            ! Cell size
+  real(kind=8)::dx                            ! Cell size
 #ifdef MHD
-  real(dp),dimension(1:nvector,1:nvar+3-ndim)::q ! Primitive variables
+  real(kind=8),dimension(1:nvector,1:nvar+3-ndim)::q ! Primitive variables
 #else
-  real(dp),dimension(1:nvector,1:nvar)::q ! Primitive variables
+  real(kind=8),dimension(1:nvector,1:nvar)::q ! Primitive variables
 #endif
-  real(dp),dimension(1:nvector,1:ndim)::x ! Cell center position.
+  real(kind=8),dimension(1:nvector,1:ndim)::x ! Cell center position.
   !================================================================
   ! This routine generates initial conditions for RAMSES.
   ! Positions are in user (aka code) units:
@@ -37,26 +37,33 @@ subroutine condinit(r,g,x,q,dx,nn)
 #define PONO 5
 #define ABC 6
 #define CURRENTSHEET 7
+#define RTZEQM 8
+#define PANCAKE 9
 
   integer::i
 #if INIT==COEUR
-  real(dp)::r2,rx,ry,rz,d,p,vx,vy,vz,r_trunc,r2_trunc,c2
-  real(dp)::omega_code,AU,Msol,pi,M,sigma,r_min,r2_min,omega_const,r_vortex,invr2_vortex
+  real(kind=8)::r2,rx,ry,rz,d,p,vx,vy,vz,r_trunc,r2_trunc,c2
+  real(kind=8)::omega_code,AU,Msol,pi,M,sigma,r_min,r2_min,omega_const,r_vortex,invr2_vortex
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
 #elif INIT==INSTA
   integer::id,iu,iv,iw,ip,ix,iy
-  real(dp)::x0,lambday,ky,lambdaz,kz,rho1,rho2,p0,v0,v1,v2
+  real(kind=8)::x0,lambday,ky,lambdaz,kz,rho1,rho2,p0,v0,v1,v2
 #elif INIT==DOUBLEMACH
   integer::id,iu,iv,iw,ip
-  real(dp)::pi,xp
+  real(kind=8)::pi,xp
 #elif INIT==OT
-  real(dp)::pi,xc,yc
+  real(kind=8)::pi,xc,yc
 #elif INIT==PONO
-  real(dp)::xx,yy,zz,vx,vy,vz,rr,tt,omega,R0,twopi
+  real(kind=8)::xx,yy,zz,vx,vy,vz,rr,tt,omega,R0,twopi
 #elif INIT==ABC
-  real(dp)::xx,yy,zz,vx,vy,vz,A0,twopi
+  real(kind=8)::xx,yy,zz,vx,vy,vz,A0,twopi
 #elif INIT==CURRENTSHEET
-  real(dp)::pi,xc,yc,beta,v0
+  real(kind=8)::pi,xc,yc,beta,v0
+#elif INIT==RTZEQM
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
+#elif INIT==PANCAKE
+  real(kind=8)::pi,del_ini
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
 #else
   ! Call built-in initial condition generator
   call region_condinit(r,g,x,q,dx,nn)
@@ -242,7 +249,7 @@ subroutine condinit(r,g,x,q,dx,nn)
 #endif
 
 #if INIT==CURRENTSHEET
-  pi=acos(-1.0d0)
+  pi = acos(-1.0d0)
   beta = 0.1
   v0 = 0.1
   do i = 1,nn
@@ -254,6 +261,35 @@ subroutine condinit(r,g,x,q,dx,nn)
      q(i,4) = 0.0
      q(i,5) = 0.5*beta
      q(i,nvar+1) = 0.0 ! Bz
+  end do
+#endif
+
+#if INIT==RTZEQM
+  ! get the units
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  ! Smoothly interpolate gas density between
+  ! 1e-3 and 1e5, fix T to 10^4, and convert everything to code units
+  ! note that this assumes a boxsize of 1 and Nx = Ny and unigrid
+  do i = 1,nn
+     q(i,1) = (10.d0**(x(i,1) * 8.d0 - 3.d0)) / scale_nH
+     q(i,2) = 0.0 ! Vx
+     q(i,3) = 0.0 ! Vy
+     q(i,4) = 0.0 ! Vz
+     q(i,5) = 1.d4 / scale_T2 ! Temperature is 10^4 K
+  end do
+#endif
+
+#if INIT==PANCAKE
+  pi = acos(-1.0d0)
+  del_ini = 0.1
+  ! get cbs units
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  do i = 1,nn
+     q(i,1) = g%omega_b/g%omega_m/(1+del_ini*COS(2.0d0*pi*x(i,1)))
+     q(i,2) = del_ini*g%vfact(1)*SIN(2.0d0*pi*x(i,1))/(2.0d0*pi)
+     q(i,3) = 0.0 ! Vy
+     q(i,4) = 0.0 ! Vz
+     q(i,5) = 100./scale_T2 ! Temperature is 10^2 K
   end do
 #endif
 

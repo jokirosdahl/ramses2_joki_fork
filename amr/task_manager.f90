@@ -7,6 +7,9 @@ subroutine mdl_init
   use amr_parameters, only: flen
   use mdl_module
   use ramses_commons, only: pst_t, ramses_t
+#ifdef RTZ
+  use rtz_module, only: initialize_elements
+#endif
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_FUNLOC, C_SIZEOF
 #ifndef WITHOUTMPI
   use mpi
@@ -31,6 +34,10 @@ subroutine mdl_init
   call init_cache(mdl)
 #endif
   
+#ifdef RTZ
+  call initialize_elements()
+#endif
+
   ! For slave workers, go into waiting loop
   if(mdl_self(mdl)>1)then
      call mdl_wait(pst)
@@ -96,7 +103,7 @@ function worker_init(mdl) result(pst)
   use input_part_ramses_module, only: r_input_part_ramses
   use input_part_gadget_module, only: r_input_part_gadget
   use input_part_module, only: r_npart_max, r_mass_min_part, r_broadcast_mp_min, r_check_part_emission
-  use update_time_module, only: r_broadcast_aexp
+  use update_time_module, only: r_broadcast_aexp, r_hash_stats
   use init_refine_basegrid_module, only:r_init_refine_basegrid,r_collect_noct,r_noct_tot,r_noct_min,r_noct_max,r_noct_used_max
   use init_refine_restart_module, only: r_init_refine_restart
   use init_refine_ramses_module, only: r_init_refine_ramses
@@ -139,6 +146,7 @@ function worker_init(mdl) result(pst)
   use clump_finder_module, only: r_clump_finder
   use clump_merger_module, only: r_deallocate_clump
   use output_clump_module, only: r_output_clump
+  use lightcone_module, only: r_output_lightcone
   use movie_module, only: r_output_frame
   use amr_parameters, only: nhilbert
   use init_rt_module, only: r_init_rt
@@ -148,6 +156,13 @@ function worker_init(mdl) result(pst)
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold,r_set_emissivity
   use update_rt_c_module, only: r_rt_neq_updates
   use rt_star_feedback, only: r_star_rt_feedback
+#ifdef _CUDA
+  use gpu_manager, only: r_set_grid_device
+#endif
+  use turb_driving, only: r_drive_turb
+  use turb_hydro_module, only: r_turb_hydro
+  use turb_init_module, only: r_init_turb
+  use turb_update_module, only: r_update_turb
 
   implicit none
 
@@ -170,6 +185,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_CLEAN_STOP,             pst,C_FUNLOC(r_clean_stop),0,0,"clean_stop")
   call mdl_add_service(pst%s%mdl,MDL_SET_ADD,                pst,C_FUNLOC(r_set_add),storage_size(dummy)/32,0, "set_add")
   call mdl_add_service(pst%s%mdl,MDL_BCAST_PARAMS,           pst,C_FUNLOC(r_broadcast_params),storage_size(pst%s%r)/32,0,"broadcast_params")
+  call mdl_add_service(pst%s%mdl,MDL_HASH_STATS,             pst,C_FUNLOC(r_hash_stats),0,0,"hash_stats")
   call mdl_add_service(pst%s%mdl,MDL_BCAST_GLOBAL,           pst,C_FUNLOC(r_broadcast_global),storage_size(pst%s%g)/32,0,"broadcast_global")
   call mdl_add_service(pst%s%mdl,MDL_INIT_AMR,               pst,C_FUNLOC(r_init_amr),0,0,"init_amr")
   call mdl_add_service(pst%s%mdl,MDL_INIT_TIME,              pst,C_FUNLOC(r_init_time),0,0,"init_time")
@@ -238,6 +254,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_GRAVITY_HYDRO_FINE,     pst,C_FUNLOC(r_gravity_hydro_fine),1,0,"gravity_hydro_fine")
   call mdl_add_service(pst%s%mdl,MDL_SOURCE_HYDRO_FINE,      pst,C_FUNLOC(r_source_hydro_fine),1,0,"source_hydro_fine")
   call mdl_add_service(pst%s%mdl,MDL_CLUMP_FINDER,           pst,C_FUNLOC(r_clump_finder),1,0,"clump_finder")
+  call mdl_add_service(pst%s%mdl,MDL_OUTPUT_LIGHTCONE,       pst,C_FUNLOC(r_output_lightcone),1,0,"output_lightcone")
   call mdl_add_service(pst%s%mdl,MDL_CLUMP_DEALLOC,          pst,C_FUNLOC(r_deallocate_clump),1,0,"deallocate_clump")
   call mdl_add_service(pst%s%mdl,MDL_SPLIT_PART,             pst,C_FUNLOC(r_split_part),0,0,"split_part")
   call mdl_add_service(pst%s%mdl,MDL_SORT_PART,              pst,C_FUNLOC(r_sort_part),0,0,"sort_part")
@@ -287,6 +304,13 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_SET_RTUOLD,             pst,C_FUNLOC(r_set_rtuold),1,0,"set_rtuold")
   call mdl_add_service(pst%s%mdl,MDL_RT_NEQ_UPDATES,         pst,C_FUNLOC(r_rt_neq_updates),1,0,"rt_neq_updates")
   call mdl_add_service(pst%s%mdl,MDL_CHECK_PART_EMISSION,    pst,C_FUNLOC(r_check_part_emission),0,0,"check_part_emission")
+#ifdef _CUDA
+  call mdl_add_service(pst%s%mdl,MDL_SET_GRID_DEVICE,        pst,C_FUNLOC(r_set_grid_device),0,0,"set_grid_device")
+#endif
+  call mdl_add_service(pst%s%mdl,MDL_INIT_TURB,              pst,C_FUNLOC(r_init_turb),1,0,"init_turb")
+  call mdl_add_service(pst%s%mdl,MDL_UPDATE_TURB,            pst,C_FUNLOC(r_update_turb),1,0,"update_turb")
+  call mdl_add_service(pst%s%mdl,MDL_DRIVE_TURB,             pst,C_FUNLOC(r_drive_turb),1,0,"drive_turb")
+  call mdl_add_service(pst%s%mdl,MDL_TURB_HYDRO,             pst,C_FUNLOC(r_turb_hydro),1,0,"turb_hydro")
 end function worker_init
 !##############################################################
 !##############################################################

@@ -15,7 +15,7 @@ contains
 !#####################################################################
 !#####################################################################
 subroutine m_newdt_fine(pst,ilevel)
-  use amr_parameters, only: dp,nvector
+  use amr_parameters, only: nvector
   use ramses_commons, only: pst_t
   use courant_fine_module, only: r_courant_fine, out_courant_fine_t
   implicit none
@@ -28,7 +28,7 @@ subroutine m_newdt_fine(pst,ilevel)
   ! 3- 10% maximum variation for aexp 
   ! This routine also compute the particle kinetic energy.
   !-----------------------------------------------------------
-  real(dp)::dx,tff,fourpi,threepi2
+  real(kind=8)::dx,tff,fourpi,threepi2
   real(kind=8)::ekin,vmax
   type(out_courant_fine_t)::out_courant_fine
   type(out_newdt_part_t)::out_newdt_part
@@ -64,6 +64,11 @@ subroutine m_newdt_fine(pst,ilevel)
      g%dtnew(ilevel)=MIN(g%dtnew(ilevel),0.1/g%hexp)
   end if
 
+  ! Turbulence driving condition
+  if(r%turb)then
+     g%dtnew(ilevel)=MIN(g%dtnew(ilevel),pst%s%turb%turb_dt)
+  end if
+
   ! Particle-based Courant condition
   if(r%pic)then
      if(r%verbose)write(*,'("   Entering newdt_part for level ",I2)')ilevel
@@ -72,7 +77,7 @@ subroutine m_newdt_fine(pst,ilevel)
      g%ekin_tot=g%ekin_tot+ekin
      vmax=out_newdt_part%vmax
      if(vmax>0.0d0)then
-        g%dtnew(ilevel)=MIN(g%dtnew(ilevel),r%courant_factor*dx/vmax)
+        g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%courant_factor*dx/vmax)
      endif
   endif
 
@@ -84,12 +89,12 @@ subroutine m_newdt_fine(pst,ilevel)
      g%ekin_tot=g%ekin_tot+out_courant_fine%ekin
      g%eint_tot=g%eint_tot+out_courant_fine%eint
      g%emag_tot=g%emag_tot+out_courant_fine%emag
-     g%dtnew(ilevel)=MIN(g%dtnew(ilevel),out_courant_fine%dt)
+     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),out_courant_fine%dt)
   endif
 
   if(r%rt.and.r%rt_advect)then
      if(r%verbose)write(*,'("   Entering newdt_rt for level ",I2)')ilevel
-     g%dtnew(ilevel)=MIN(g%dtnew(ilevel),r%rt_nsubcycle*r%rt_courant_factor*dx/3d0/g%rt_c(ilevel))
+     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%rt_nsubcycle*r%rt_courant_factor*dx/3d0/g%rt_c(ilevel))
   endif
 
   ! Adaptive time step condition
@@ -154,7 +159,7 @@ end subroutine r_newdt_part
 !#####################################################################
 subroutine newdt_part(r,g,p,ilevel,ekin,vmax)
   use amr_parameters, only: ndim
-  use amr_commons, only: run_t,global_t
+  use amr_commons, only: run_t, global_t
   use pm_commons, only: part_t
   use pm_parameters, only: TREE_TYPE
   implicit none
@@ -169,7 +174,7 @@ subroutine newdt_part(r,g,p,ilevel,ekin,vmax)
   ! Compute maximum particle velocity
   do idim = 1, ndim
      do ipart = p%headp(ilevel), p%tailp(ilevel)
-        vmax = MAX(vmax, ABS(p%vp(ipart, idim)))
+        vmax = MAX(vmax, ABS(dble(p%vp(ipart, idim))))
      end do
   end do
 

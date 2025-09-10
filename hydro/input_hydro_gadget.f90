@@ -29,7 +29,7 @@ end subroutine r_input_hydro_gadget
 !#########################################################################
 !#########################################################################
 subroutine input_hydro_gadget(s,ilevel)
-  use amr_parameters, only: ndim,twotondim,dp
+  use amr_parameters, only: ndim, twotondim
   use amr_commons, only: oct
   use hydro_parameters, only: nvar
   use ramses_commons, only: ramses_t
@@ -46,9 +46,9 @@ subroutine input_hydro_gadget(s,ilevel)
   !-----------------------------------------------------
   ! Compute initial conditions from gadget gas particles
   !-----------------------------------------------------
-  real(dp),dimension(1:ndim)::x,dd,dg
+  real(kind=8),dimension(1:ndim)::x,dd,dg
   integer,dimension(1:ndim)::ig,id,ix
-  real(dp),dimension(1:twotondim)::vol
+  real(kind=8),dimension(1:twotondim)::vol
   integer,dimension(1:ndim,1:twotondim)::ckey
   integer(kind=8),dimension(0:ndim)::hash_nbor
   integer::igrid,ipart,icell,ind,idim,ivar
@@ -194,10 +194,10 @@ subroutine input_hydro_gadget(s,ilevel)
         do ivar=nvar,1,-1
            if(m%grid(igrid)%uold(ind,1)<r%IG_rho/scale_nH)then
               m%grid(igrid)%uold(ind,ivar)=0.0
-              if(ivar.eq.1)m%grid(igrid)%uold(ind,ivar)=max(r%IG_rho/scale_nH,r%smallr)
-              if(ivar.eq.5)m%grid(igrid)%uold(ind,ivar)=r%IG_T2/scale_T2/(r%gamma-1)*max(r%IG_rho/scale_nH,r%smallr)
+              if(ivar.eq.1)m%grid(igrid)%uold(ind,ivar)=max(dble(r%IG_rho)/scale_nH,dble(r%smallr))
+              if(ivar.eq.5)m%grid(igrid)%uold(ind,ivar)=r%IG_T2/scale_T2/(r%gamma-1)*max(dble(r%IG_rho)/scale_nH,dble(r%smallr))
               if(r%metal)then
-                 if(ivar.eq.r%imetal)m%grid(igrid)%uold(ind,ivar)=r%IG_metal*max(r%IG_rho/scale_nH,r%smallr)
+                 if(ivar.eq.r%imetal)m%grid(igrid)%uold(ind,ivar)=r%IG_metal*max(dble(r%IG_rho)/scale_nH,dble(r%smallr))
               endif
            endif
         end do

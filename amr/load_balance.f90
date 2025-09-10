@@ -187,8 +187,8 @@ end subroutine r_collect_bound_key
 !#########################################################################
 !#########################################################################
 subroutine compute_new_bound_key(r,g,m,ilevel,noct,bound_key_target)
-  use amr_parameters, only: ndim,twotondim,nhilbert,dp
-  use amr_commons, only: run_t,global_t,mesh_t,oct
+  use amr_parameters, only: ndim, twotondim, nhilbert
+  use amr_commons, only: run_t, global_t, mesh_t, oct
   use hilbert
   use hash
   use cache_commons
@@ -214,7 +214,7 @@ subroutine compute_new_bound_key(r,g,m,ilevel,noct,bound_key_target)
   integer,dimension(1:g%ncpu)::noct_cum
   integer,dimension(1:g%ncpu)::ntarget_cum
   integer(kind=8),dimension(1:nhilbert)::one_key
-  real(dp)::xtarget
+  real(kind=8)::xtarget
 
   ! Hilbert key corresponding to one units
   one_key=0
@@ -300,7 +300,7 @@ end subroutine r_load_balance
 !#########################################################################
 subroutine load_balance(s,ilevel)
   USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_F_POINTER
-  use amr_parameters, only: ndim,twotondim,nhilbert,dp
+  use amr_parameters, only: ndim, twotondim, nhilbert
   use amr_commons, only: oct
   use ramses_commons, only: ramses_t
   use hilbert
@@ -652,9 +652,6 @@ subroutine unpack_flush_loadbalance(grid,msg_size,msg_array,hash_key)
   grid%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-!  write(*,*)'UNPACK REF',msg%int4
-!  write(*,*)'UNPACK RHO',msg%realdp_hydro(1:twotondim,1)
-
   do ind=1,twotondim
      if(msg%int4(ind)==1)then
         grid%refined(ind)=.true.
@@ -739,7 +736,7 @@ end subroutine r_balance_part
 !#########################################################################
 #ifndef WITHOUTMPI
 subroutine balance_part(s,p,ilevel)
-  use amr_parameters, only: nhilbert,ndim,i8b,dp
+  use amr_parameters, only: nhilbert, ndim, i8b, dp
   use pm_parameters, only: part_memory
   use pm_commons, only: part_t
   use ramses_commons, only: ramses_t
@@ -785,7 +782,7 @@ subroutine balance_part(s,p,ilevel)
   integer::npart_lev,npart_lev_tot,iter
   integer,dimension(0:s%g%ncpu)::npart_cum,npart_cum_tot
   integer,dimension(1:s%g%ncpu)::npart_cpu,npart_cpu_tot
-  real(dp)::xpart_target,xcum_target
+  real(kind=8)::xpart_target,xcum_target
 
   real(dp),dimension(1:ndim)::xp_tmp,vp_tmp,fp_tmp,jp_tmp
   real(dp)::mp_tmp,zp_tmp,tp_tmp
@@ -793,7 +790,7 @@ subroutine balance_part(s,p,ilevel)
   integer(i8b)::idp_tmp
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-  
+
   !----------------------------------------------------
   ! Default for particle domains are grid domains
   !----------------------------------------------------

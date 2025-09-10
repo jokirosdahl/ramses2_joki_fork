@@ -59,10 +59,10 @@ end subroutine r_star_formation
 subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
   use rng
   use constants
-  use hydro_parameters, only:nvar
-  use amr_parameters, only:dp,ndim,twotondim
-  use amr_commons, only:run_t,global_t,mesh_t
-  use pm_commons, only:part_t
+  use hydro_parameters, only: nvar
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: run_t, global_t, mesh_t
+  use pm_commons, only: part_t
   use input_hydro_condinit_module, only: cons_from_prim, prim_from_cons
 #ifndef WITHOUTMPI
   use mpi
@@ -197,10 +197,10 @@ subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
         endif
         ! Compute sound speed squared
         p = m%grid(igrid)%uold(ind,5)
-        cs2 = max(r%gamma*p/d,r%smallc**2)
+        cs2 = max(dble(r%gamma)*p/d,dble(r%smallc)**2)
         ! Turbulence 1D velocity dispersion
         sigma2 = 0d0
-        if(r%turb)then
+        if(r%sgs_turb)then
            sigma2 = m%grid(igrid)%uold(ind,r%iturb)*2d0/3d0
         endif
 
@@ -223,7 +223,7 @@ subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
            case(3)
               ! Multi-freefall model a la Krumholz & McKee
               alpha_vir = (15d0*(sigma2+cs2))/(pi*factG*d*dx**2)
-              Mach2 = max(sigma2/cs2,r%smallr)
+              Mach2 = max(sigma2/cs2,dble(r%smallr))
               b_turb = 1.0 ! Turbulent forcing parameter (Federrath 2008 & 2010)
               sigs = log(1d0+b_turb**2*Mach2)
               scrit = log(alpha_vir*(1d0+(2d0*Mach2**2/(1d0+Mach2))))
@@ -344,10 +344,9 @@ end subroutine star_formation
 !###########################################################
 function erfc(x)
   ! complementary error function
-  use amr_parameters, ONLY: dp
   implicit none
-  real(dp) :: erfc
-  real(dp) :: x, y
+  real(kind=8) :: erfc
+  real(kind=8) :: x, y
   real(kind=8) :: pv, ph
   real(kind=8) :: q0, q1, q2, q3, q4, q5, q6, q7
   real(kind=8) :: p0, p1, p2, p3, p4, p5, p6, p7

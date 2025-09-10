@@ -13,6 +13,7 @@ subroutine m_dump_all(pst,write_bkp_file)
   use mdl_module, only: mdl_mkdir, mdl_wtime
   use cooling_module, only: output_cool
   use output_rt_module, only: r_output_rt,file_descriptor_rt,output_rtinfo
+  use turb_commons, only: write_turb_fields
   implicit none
   type(pst_t)::pst
   logical::write_bkp_file
@@ -117,6 +118,9 @@ subroutine m_dump_all(pst,write_bkp_file)
         filename=TRIM(filedir)//'cooling.bin'
         call output_cool(pst%s%cool,filename)
      end if
+     if(r%turb)then
+        call write_turb_fields(pst%s%r,pst%s%turb,filedir)
+     endif
      filename=TRIM(filedir)//'info.txt'
      call output_info(r,g,filename)
      filename=TRIM(filedir)//'namelist.txt'
@@ -212,7 +216,7 @@ subroutine output_compil(filename)
   use pm_commons
   use hydro_commons
   implicit none
-  real(dp)::xxx
+  real(dp)::real_size
   character(LEN=flen)::filename
   character(LEN=30)::mystring
   ! Copy compilation details to output directory
@@ -229,7 +233,7 @@ subroutine output_compil(filename)
   write(11,'(" NVECTOR = ",A)')adjustl(mystring)
   write(mystring,*)ndim
   write(11,'(" NDIM = ",A)')adjustl(mystring)
-  if(sizeof(xxx)==8)then
+  if(sizeof(real_size)==8)then
      write(11,'(" NPRE = 8")')
   else
      write(11,'(" NPRE = 4")')
@@ -357,8 +361,8 @@ end subroutine output_params
 !#########################################################################
 subroutine input_params(mdl,r,g,filename,ncpu_file,levelmin_file,nlevelmax_file)
   use mdl_module
-  use amr_parameters, only: ndim,nhilbert,dp,flen
-  use amr_commons, only: run_t,global_t
+  use amr_parameters, only: ndim, nhilbert, flen
+  use amr_commons, only: run_t, global_t
   implicit none
   type(mdl_t)::mdl
   type(run_t)::r
@@ -373,7 +377,8 @@ subroutine input_params(mdl,r,g,filename,ncpu_file,levelmin_file,nlevelmax_file)
   integer::ilun
   integer::ndim_file,nfile_file,noutput_file
   integer::noutput_min,nlevelmax_min
-  real(dp)::mass_sph_file,gamma_file
+  real(kind=8)::mass_sph_file,gamma_file
+  real(kind=8),allocatable,dimension(:)::tout,aout,dtold,dtnew
   character(LEN=flen)::fileloc
 
   if(r%verbose)write(*,*)'Entering input_params'
@@ -393,12 +398,26 @@ subroutine input_params(mdl,r,g,filename,ncpu_file,levelmin_file,nlevelmax_file)
   ! Read time variables
   read(ilun)noutput_file,g%iout,g%ifout,g%ifbkp
   noutput_min=MIN(r%noutput,noutput_file)
-  read(ilun)r%tout(1:noutput_min)
-  read(ilun)r%aout(1:noutput_min)
+  allocate(tout(1:noutput_file))
+  allocate(aout(1:noutput_file))
+  read(ilun)tout
+  read(ilun)aout
+  if(noutput_min>0)then
+     r%tout(1:noutput_min)=tout(1:noutput_min)
+     r%aout(1:noutput_min)=aout(1:noutput_min)
+  endif
+  deallocate(tout,aout)
   read(ilun)g%t
   nlevelmax_min=MIN(r%nlevelmax,nlevelmax_file)
-  read(ilun)g%dtold(1:nlevelmax_min)
-  read(ilun)g%dtnew(1:nlevelmax_min)
+  allocate(dtold(1:nlevelmax_file))
+  allocate(dtnew(1:nlevelmax_file))
+  read(ilun)dtold(1:nlevelmax_file)
+  read(ilun)dtnew(1:nlevelmax_file)
+  if(nlevelmax_min>0)then
+     g%dtold(1:nlevelmax_min)=dtold(1:nlevelmax_min)
+     g%dtnew(1:nlevelmax_min)=dtnew(1:nlevelmax_min)
+  endif
+  deallocate(dtold,dtnew)
   read(ilun)g%nstep,g%nstep_coarse
   ! Read various constants
   read(ilun)g%const,g%mass_tot_0,g%rho_tot
@@ -507,8 +526,8 @@ end subroutine output_amr
 !#########################################################################
 !#########################################################################
 subroutine backup_amr(r,g,m,mdl,filename)
-  use amr_parameters, only: ndim,sp,dp,flen
-  use amr_commons, only: run_t,global_t,mesh_t
+  use amr_parameters, only: ndim, flen
+  use amr_commons, only: run_t, global_t, mesh_t
   use mdl_module
   implicit none
   type(run_t)::r
@@ -553,8 +572,8 @@ end subroutine backup_amr
 !#########################################################################
 !#########################################################################
 subroutine output_info(r,g,filename)
-  use amr_parameters, only: ndim,sp,dp,flen
-  use amr_commons, only: run_t,global_t
+  use amr_parameters, only: ndim, flen
+  use amr_commons, only: run_t, global_t
   implicit none
   type(run_t)::r
   type(global_t)::g

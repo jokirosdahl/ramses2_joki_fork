@@ -20,7 +20,7 @@ recursive subroutine r_source_hydro_fine(pst,ilevel,input_size)
   ! Check if hydro source terms are required
   ok = pst%s%r%entropy .and.  pst%s%r%dual_energy .GE. 0
   ok = ok .or. nener>0
-  ok = ok .or. pst%s%r%turb
+  ok = ok .or. pst%s%r%sgs_turb
   if(.not. ok)return
   
   if(pst%nLower>0)then
@@ -37,10 +37,10 @@ end subroutine r_source_hydro_fine
 !################################################################
 !################################################################
 subroutine source_hydro_fine(s,ilevel)
-  use amr_parameters, only: ndim,twondim,twotondim,threetondim,nvector,dp
-  use amr_commons, only: oct,nbor
+  use amr_parameters, only: ndim, twondim, twotondim, threetondim, nvector
+  use amr_commons, only: oct, nbor
   use ramses_commons, only: ramses_t
-  use hydro_parameters, only: nvar,nener
+  use hydro_parameters, only: nvar, nener
   use hydro_flag_module, only: pack_fetch_hydro, unpack_fetch_hydro
   use cache_commons
   use cache
@@ -62,16 +62,16 @@ subroutine source_hydro_fine(s,ilevel)
   integer::igrid,ind,idim,jdim,ivar,irad,i_nbor
   integer::igridd,igridg,icelld,icellg,igridp,icellp
   integer,dimension(1:twondim)::igridn,icelln
-  real(dp),dimension(1:twondim)::dxn
+  real(kind=8),dimension(1:twondim)::dxn
   integer(kind=8),dimension(0:ndim)::hash_key,hash_nbor
-  real(dp),dimension(1:ndim,1:ndim)::vg,vd,gradu,E
-  real(dp),dimension(1:ndim)::dxg,dxd
+  real(kind=8),dimension(1:ndim,1:ndim)::vg,vd,gradu,E
+  real(kind=8),dimension(1:ndim)::dxg,dxd
   type(nbor),dimension(1:twondim)::gridn
   type(oct),pointer::gridp
   type(msg_realdp)::dummy_realdp
-  real(dp)::dx,phi_diss,div,divu
-  real(dp)::d,u,v,w,bx,by,bz,d_old,sigma
-  real(dp)::e_kin,e_mag,e_cons,e_prim,e_turb,e_trunc,T2_cons,T2_fix
+  real(kind=8)::dx,phi_diss,div,divu
+  real(kind=8)::d,u,v,w,bx,by,bz,d_old,sigma
+  real(kind=8)::e_kin,e_mag,e_cons,e_prim,e_turb,e_trunc,T2_cons,T2_fix
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
 #ifdef HYDRO
@@ -165,7 +165,7 @@ subroutine source_hydro_fine(s,ilevel)
 #endif     
         ! Correct total energy if internal energy is too small
         if(r%entropy.and.r%dual_energy.GE.0)then
-           d=max(m%grid(igrid)%unew(ind,1),r%smallr)
+           d=max(dble(m%grid(igrid)%unew(ind,1)),r%smallr)
            u=m%grid(igrid)%unew(ind,2)/d
            v=m%grid(igrid)%unew(ind,3)/d
            w=m%grid(igrid)%unew(ind,4)/d
@@ -195,7 +195,7 @@ subroutine source_hydro_fine(s,ilevel)
         end if
 
         ! Add source terms for subgrid turbulence model
-        if(r%turb)then
+        if(r%sgs_turb)then
            ! Compute gradu = G
            gradu(1:ndim,1:ndim)=0.0d0
            do idim=1,ndim
@@ -230,9 +230,9 @@ subroutine source_hydro_fine(s,ilevel)
               m%grid(igrid)%unew(ind,r%iturb)=m%grid(igrid)%uold(ind,1)*dx**2*phi_diss
            else
               ! Implicit solution wrt to decay term only
-              d_old=max(m%grid(igrid)%uold(ind,1),r%smallr)
+              d_old=max(dble(m%grid(igrid)%uold(ind,1)),r%smallr)
               e_turb=m%grid(igrid)%uold(ind,r%iturb)
-              sigma=sqrt(max(2.0*e_turb/d_old,r%smallc**2))
+              sigma=sqrt(max(2.0*e_turb/d_old,dble(r%smallc)**2))
               m%grid(igrid)%unew(ind,r%iturb)=(m%grid(igrid)%unew(ind,r%iturb) &
                    &  +d_old*dx*sigma*phi_diss*g%dtnew(ilevel)) &
                    & /(1.0+sigma/dx*g%dtnew(ilevel))

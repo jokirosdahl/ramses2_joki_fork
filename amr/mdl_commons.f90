@@ -4,6 +4,7 @@ module mdl_parameters
   enum,bind(C)
      enumerator::MDL_CLEAN_STOP
      enumerator::MDL_SET_ADD
+     enumerator::MDL_HASH_STATS
      enumerator::MDL_BCAST_PARAMS
      enumerator::MDL_BCAST_GLOBAL
      enumerator::MDL_INIT_AMR
@@ -109,6 +110,7 @@ module mdl_parameters
      enumerator::MDL_CMP_RESIDUAL_NORM2
      enumerator::MDL_OUTPUT_FRAME
      enumerator::MDL_CLUMP_FINDER
+     enumerator::MDL_OUTPUT_LIGHTCONE
      enumerator::MDL_CLUMP_DEALLOC
      enumerator::MDL_INIT_RT
      enumerator::MDL_RT_INPUT_CONDINIT
@@ -122,10 +124,15 @@ module mdl_parameters
      enumerator::MDL_RT_NEQ_UPDATES
      enumerator::MDL_CHECK_PART_EMISSION
      enumerator::MDL_STAR_RT_FEEDBACK
+     enumerator::MDL_SET_GRID_DEVICE
+     enumerator::MDL_INIT_TURB
+     enumerator::MDL_UPDATE_TURB
+     enumerator::MDL_DRIVE_TURB
+     enumerator::MDL_TURB_HYDRO
   end enum
-  
+
   ! Maximum number of cpus
   integer,parameter::MDL_MAX_CPU=262144
-  
+
 end module mdl_parameters
 

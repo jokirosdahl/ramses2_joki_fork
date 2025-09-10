@@ -11,6 +11,9 @@ subroutine m_read_params(pst)
   use movie_module, only: set_movie_vars
   use rt_params_module
   use constants
+#ifdef RTZ
+  use rtz_module, only: elements, n_elements !, initialize_elements
+#endif
   implicit none
   type(pst_t)::pst
 
@@ -48,6 +51,7 @@ subroutine m_read_params(pst)
   logical::debug   =.false.    ! Debug mode activated
   logical::static_mesh=.false. ! Static mesh refinement activated
   logical::static_gas=.false.  ! Hydro is turned off
+  logical::clump_only=.false.  ! Only clump finding
 
   ! Step parameters
   integer::nrestart=0         ! New run or backup file number
@@ -73,14 +77,14 @@ subroutine m_read_params(pst)
   integer::nlevelmax=1        ! Maximum number of level
   integer::ngridmax=0         ! Maximum number of grids
   integer::ncachemax=10000    ! Maximum number of cache lines
-  real(dp)::boxlen=1.0D0      ! Cell sixe at level 0
-  real(dp)::box_size=0.0D0    ! Box length in active domain along x direction
-  integer::box_xmin=0         ! Min. Cartesian key for the box at levelmin in x direction
-  integer::box_xmax=0         ! Max. Cartesian key for the box at levelmin in x direction
-  integer::box_ymin=0         ! Min. Cartesian key for the box at levelmin in y direction
-  integer::box_ymax=0         ! Max. Cartesian key for the box at levelmin in y direction
-  integer::box_zmin=0         ! Min. Cartesian key for the box at levelmin in z direction
-  integer::box_zmax=0         ! Max. Cartesian key for the box at levelmin in z direction
+  real(kind=8)::boxlen=1.0D0      ! Cell sixe at level 0
+  real(kind=8)::box_size=0.0D0    ! Box length in active domain along x direction
+  integer::box_xmin=0 ! Min. Cartesian key for the box at levelmin in x direction
+  integer::box_xmax=0 ! Max. Cartesian key for the box at levelmin in x direction
+  integer::box_ymin=0 ! Min. Cartesian key for the box at levelmin in y direction
+  integer::box_ymax=0 ! Max. Cartesian key for the box at levelmin in y direction
+  integer::box_zmin=0 ! Min. Cartesian key for the box at levelmin in z direction
+  integer::box_zmax=0 ! Max. Cartesian key for the box at levelmin in z direction
 
   ! Output parameters
   integer::noutput=1          ! Total number of outputs
@@ -91,15 +95,15 @@ subroutine m_read_params(pst)
   real(kind=8)::run_time_hrs=0   ! Estimated run time in hrs
   real(kind=8)::bkp_last_min=10  ! Backup file before the end of run in min
   integer::bkp_modulo=0       ! Use modulo for backup file count
-  integer::nfile=1            ! Number of file per snapshot. Use -1 for nfile=ncpu
+  integer::nfile=1          ! Number of file per snapshot. Use -1 for nfile=ncpu
 
   ! Output times
-  real(dp),dimension(1:MAXOUT)::aout=1.1       ! Output expansion factors
-  real(dp),dimension(1:MAXOUT)::tout=0.0       ! Output times
+  real(kind=8),dimension(1:MAXOUT)::aout=1.1  ! Output expansion factors
+  real(kind=8),dimension(1:MAXOUT)::tout=0.0  ! Output times
 
   ! Movie
-  integer::imovout=0             ! Increment for output times
-  integer::imov=1                ! Initialize
+  integer::imovout=0     ! Increment for output times
+  integer::imov=1        ! Initialize
   real(kind=8)::tendmov=0.,aendmov=0.
   logical::movie=.false.
   logical::zoom_only=.false.
@@ -120,142 +124,146 @@ subroutine m_read_params(pst)
   ! Refinement parameters for each level
   integer ,dimension(1:MAXLEVEL)::nexpand = 1 ! Number of mesh expansion
   integer ,dimension(1:MAXLEVEL)::nsubcycle = 2 ! Subcycling at each level
-  real(dp),dimension(1:MAXLEVEL)::m_refine =-1.0 ! Lagrangian threshold
-  real(dp),dimension(1:MAXLEVEL)::r_refine =-1.0 ! Radius of refinement region
-  real(dp),dimension(1:MAXLEVEL)::x_refine = 0.0 ! Center of refinement region
-  real(dp),dimension(1:MAXLEVEL)::y_refine = 0.0 ! Center of refinement region
-  real(dp),dimension(1:MAXLEVEL)::z_refine = 0.0 ! Center of refinement region
-  real(dp),dimension(1:MAXLEVEL)::exp_refine = 2.0 ! Exponent for distance
-  real(dp),dimension(1:MAXLEVEL)::a_refine = 1.0 ! Ellipticity (Y/X)
-  real(dp),dimension(1:MAXLEVEL)::b_refine = 1.0 ! Ellipticity (Z/X)
-  real(dp)::var_cut_refine=-1.0 ! Threshold for variable-based refinement
-  real(dp)::mass_cut_refine=-1.0 ! Mass threshold for particle-based refinement
+  real(kind=8),dimension(1:MAXLEVEL)::m_refine =-1.0 ! Lagrangian threshold
+  real(kind=8),dimension(1:MAXLEVEL)::r_refine =-1.0 ! Radius of refinement region
+  real(kind=8),dimension(1:MAXLEVEL)::x_refine = 0.0 ! Center of refinement region
+  real(kind=8),dimension(1:MAXLEVEL)::y_refine = 0.0 ! Center of refinement region
+  real(kind=8),dimension(1:MAXLEVEL)::z_refine = 0.0 ! Center of refinement region
+  real(kind=8),dimension(1:MAXLEVEL)::exp_refine = 2.0 ! Exponent for distance
+  real(kind=8),dimension(1:MAXLEVEL)::a_refine = 1.0 ! Ellipticity (Y/X)
+  real(kind=8),dimension(1:MAXLEVEL)::b_refine = 1.0 ! Ellipticity (Z/X)
+  real(kind=8)::var_cut_refine=-1.0 ! Threshold for variable-based refinement
+  real(kind=8)::mass_cut_refine=-1.0 ! Mass threshold for particle-based refinement
   integer::ivar_refine=-1 ! Variable index for refinement
-  real(dp)::aexp_lock_refine=-1.0
+  real(kind=8)::aexp_lock_refine=-1.0
   logical::pic_lock_refine=.false.
 
   ! Default units
-  real(dp)::units_density=1.0 ! [g/cm^3]
-  real(dp)::units_time=1.0    ! [seconds]
-  real(dp)::units_length=1.0  ! [cm]
-  real(dp)::units_np=1.0      ! [#photon/cm^3]
+  real(kind=8)::units_density=1.0 ! [g/cm^3]
+  real(kind=8)::units_time=1.0    ! [seconds]
+  real(kind=8)::units_length=1.0  ! [cm]
+  real(kind=8)::units_np=1.0      ! [#photon/cm^3]
 
   ! Initial conditions parameters from grafic
-  real(dp)::aexp_ini=10.
-  real(dp)::omega_b=0.045
+  real(kind=8)::aexp_ini=10.
+  real(kind=8)::boxlen_ini=1.0
+  real(kind=8)::omega_b=0.045
+  real(kind=8)::omega_m=1.0
+  real(kind=8)::omega_l=0.0
+  real(kind=8)::h0=1.0
 
   ! Initial condition regions parameters
   integer::nregion=0
   character(LEN=10),dimension(1:MAXREGION)::region_type='square'
-  real(dp),dimension(1:MAXREGION)::x_center=0.
-  real(dp),dimension(1:MAXREGION)::y_center=0.
-  real(dp),dimension(1:MAXREGION)::z_center=0.
-  real(dp),dimension(1:MAXREGION)::length_x=1.E10
-  real(dp),dimension(1:MAXREGION)::length_y=1.E10
-  real(dp),dimension(1:MAXREGION)::length_z=1.E10
-  real(dp),dimension(1:MAXREGION)::exp_region=2.0
+  real(kind=8),dimension(1:MAXREGION)::x_center=0.
+  real(kind=8),dimension(1:MAXREGION)::y_center=0.
+  real(kind=8),dimension(1:MAXREGION)::z_center=0.
+  real(kind=8),dimension(1:MAXREGION)::length_x=1.E10
+  real(kind=8),dimension(1:MAXREGION)::length_y=1.E10
+  real(kind=8),dimension(1:MAXREGION)::length_z=1.E10
+  real(kind=8),dimension(1:MAXREGION)::exp_region=2.0
 
   ! Initial condition files for each level
   logical::multiple=.false.
   character(LEN=20)::filetype='ascii'
   character(LEN=80),dimension(1:MAXLEVEL)::initfile=' '
-  real(dp)::ic_scale_m=1.0d0
+  real(kind=8)::ic_scale_m=1.0d0
 
   ! Initial conditions hydro variables
-  real(dp),dimension(1:MAXREGION)::d_region=0.
-  real(dp),dimension(1:MAXREGION)::u_region=0.
-  real(dp),dimension(1:MAXREGION)::v_region=0.
-  real(dp),dimension(1:MAXREGION)::w_region=0.
-  real(dp),dimension(1:MAXREGION)::p_region=0.
+  real(kind=8),dimension(1:MAXREGION)::d_region=0.
+  real(kind=8),dimension(1:MAXREGION)::u_region=0.
+  real(kind=8),dimension(1:MAXREGION)::v_region=0.
+  real(kind=8),dimension(1:MAXREGION)::w_region=0.
+  real(kind=8),dimension(1:MAXREGION)::p_region=0.
 #if NENER>0
-  real(dp),dimension(1:MAXREGION,1:NENER)::prad_region=0.0
+  real(kind=8),dimension(1:MAXREGION,1:NENER)::prad_region=0.0
 #endif
 #if NVAR>5+NENER
-  real(dp),dimension(1:MAXREGION,1:NVAR-5-NENER)::var_region=0.0
+  real(kind=8),dimension(1:MAXREGION,1:NVAR-5-NENER)::var_region=0.0
 #endif
 #ifdef MHD
-  real(dp),dimension(1:MAXREGION)::B_region=0.
-  real(dp),dimension(1:MAXREGION)::C_region=0.
-  real(dp)::A_ave=0.,B_ave=0.,C_ave=0.
+  real(kind=8),dimension(1:MAXREGION)::B_region=0.
+  real(kind=8),dimension(1:MAXREGION)::C_region=0.
+  real(kind=8)::A_ave=0.,B_ave=0.,C_ave=0.
 #endif
 
   ! Initial condition rt variables
 #ifdef RT
   integer::rt_nregion=0
   character(LEN=10),dimension(1:MAXREGION)::rt_region_type='square'
-  real(dp),dimension(1:MAXREGION)::rt_reg_x_center=0.
-  real(dp),dimension(1:MAXREGION)::rt_reg_y_center=0.
-  real(dp),dimension(1:MAXREGION)::rt_reg_z_center=0.
-  real(dp),dimension(1:MAXREGION)::rt_reg_length_x=1.E10
-  real(dp),dimension(1:MAXREGION)::rt_reg_length_y=1.E10
-  real(dp),dimension(1:MAXREGION)::rt_reg_length_z=1.E10
-  real(dp),dimension(1:MAXREGION)::rt_exp_region=2.0
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_x_center=0.
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_y_center=0.
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_z_center=0.
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_length_x=1.E10
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_length_y=1.E10
+  real(kind=8),dimension(1:MAXREGION)::rt_reg_length_z=1.E10
+  real(kind=8),dimension(1:MAXREGION)::rt_exp_region=2.0
   integer ,dimension(1:MAXREGION)::rt_reg_group=1
-  real(dp),dimension(1:MAXREGION)::rt_n_region=0.0 ! Photon density
-  real(dp),dimension(1:MAXREGION)::rt_u_region=0.0 !    Photon flux
-  real(dp),dimension(1:MAXREGION)::rt_v_region=0.0 !    Photon flux
-  real(dp),dimension(1:MAXREGION)::rt_w_region=0.0 !    Photon flux
+  real(kind=8),dimension(1:MAXREGION)::rt_n_region=0.0 ! Photon density
+  real(kind=8),dimension(1:MAXREGION)::rt_u_region=0.0 !    Photon flux
+  real(kind=8),dimension(1:MAXREGION)::rt_v_region=0.0 !    Photon flux
+  real(kind=8),dimension(1:MAXREGION)::rt_w_region=0.0 !    Photon flux
 #endif
 
   ! Refinement parameters for hydro
-  real(dp)::err_grad_d=-1.0  ! Density gradient
-  real(dp)::err_grad_u=-1.0  ! Velocity gradient
-  real(dp)::err_grad_p=-1.0  ! Pressure gradient
-  real(dp)::err_grad_xHI=-1.0! xHI gradient
-  real(dp)::err_grad_xHII=-1.0 ! xHII gradient
-  real(dp)::floor_d=1.d-10   ! Density floor
-  real(dp)::floor_u=1.d-10   ! Velocity floor
-  real(dp)::floor_p=1.d-10   ! Pressure floor
-  real(dp)::floor_xHI=1d-10  ! xHI floor
-  real(dp)::floor_xHII=1d-10 ! xHII floor
-  real(dp)::mass_sph=0.0D0   ! mass_sph
+  real(kind=8)::err_grad_d=-1.0  ! Density gradient
+  real(kind=8)::err_grad_u=-1.0  ! Velocity gradient
+  real(kind=8)::err_grad_p=-1.0  ! Pressure gradient
+  real(kind=8)::err_grad_xHI=-1.0! xHI gradient
+  real(kind=8)::err_grad_xHII=-1.0 ! xHII gradient
+  real(kind=8)::floor_d=1.d-10   ! Density floor
+  real(kind=8)::floor_u=1.d-10   ! Velocity floor
+  real(kind=8)::floor_p=1.d-10   ! Pressure floor
+  real(kind=8)::floor_xHI=1d-10  ! xHI floor
+  real(kind=8)::floor_xHII=1d-10 ! xHII floor
+  real(kind=8)::mass_sph=0.0D0   ! mass_sph
 #ifdef MHD
-  real(dp)::err_grad_b2=-1.0
-  real(dp)::err_grad_A=-1.0
-  real(dp)::err_grad_B=-1.0
-  real(dp)::err_grad_C=-1.0
-  real(dp)::floor_b2=1.d-10
-  real(dp)::floor_A=1.d-10
-  real(dp)::floor_B=1.d-10
-  real(dp)::floor_C=1.d-10
+  real(kind=8)::err_grad_b2=-1.0
+  real(kind=8)::err_grad_A=-1.0
+  real(kind=8)::err_grad_B=-1.0
+  real(kind=8)::err_grad_C=-1.0
+  real(kind=8)::floor_b2=1.d-10
+  real(kind=8)::floor_A=1.d-10
+  real(kind=8)::floor_B=1.d-10
+  real(kind=8)::floor_C=1.d-10
 #endif
 #if NENER>0
-  real(dp),dimension(1:NENER)::err_grad_prad=-1.0
+  real(kind=8),dimension(1:NENER)::err_grad_prad=-1.0
 #endif
 #if NVAR>5+NENER
-  real(dp),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
+  real(kind=8),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
 #endif
-  real(dp),dimension(1:MAXLEVEL)::jeans_refine=-1.0
+  real(kind=8),dimension(1:MAXLEVEL)::jeans_refine=-1.0
 
   ! Refinement parameters for rt
 #ifdef RT
-  real(dp)::rt_err_grad_cn(nrtgrp)=-1 ! Photon flux gradient for refinement
-  real(dp)::rt_floor_cn(nrtgrp)=1d-10 ! Photon flux floor for refinement
-  real(dp)::rt_refine_aexp=-1.0      ! Start expansion factor for RT refinements
+  real(kind=8)::rt_err_grad_cn(nrtgrp)=-1 ! Photon flux gradient for refinement
+  real(kind=8)::rt_floor_cn(nrtgrp)=1d-10 ! Photon flux floor for refinement
+  real(kind=8)::rt_refine_aexp=-1.0      ! Start expansion factor for RT refinements
 #endif
 
   ! Hydro solver parameters
   integer ::niter_riemann=10
   integer ::slope_type=1
   integer ::slope_mag_type=-1
-  real(dp)::gamma=1.4d0
-  real(dp),dimension(1:512)::gamma_rad=1.33333333334d0
-  real(dp)::courant_factor=0.5d0
-  real(dp)::difmag=0.0d0
-  real(dp)::etamag=0.0d0
-  real(dp)::smallc=1.d-10
-  real(dp)::smallr=1.d-10
+  real(kind=8)::gamma=1.4d0
+  real(kind=8),dimension(1:512)::gamma_rad=1.33333333334d0
+  real(kind=8)::courant_factor=0.5d0
+  real(kind=8)::difmag=0.0d0
+  real(kind=8)::etamag=0.0d0
+  real(kind=8)::smallc=1.d-10
+  real(kind=8)::smallr=1.d-10
   character(LEN=10)::scheme='muscl'
   character(LEN=10)::riemann='llf'
   character(LEN=10)::riemann2d='none'
   logical ::induction=.false.
   logical ::entropy=.false.
-  logical ::turb=.false.
-  real(dp)::dual_energy=-1
-  real(dp)::T2_fix=0d0
-  real(dp),dimension(1:3)::constant_gravity=0.0d0
-  real(dp)::switch_llf_dmin=-1
-  real(dp)::switch_llf_pmin=-1
+  logical ::sgs_turb=.false.
+  real(kind=8)::dual_energy=-1
+  real(kind=8)::T2_fix=0d0
+  real(kind=8),dimension(1:3)::constant_gravity=0.0d0
+  real(kind=8)::switch_llf_dmin=-1
+  real(kind=8)::switch_llf_pmin=-1
 
   ! Non-thernal energies and passive scalars index
   integer ::inener,ientropy,imetal,iturb,ichem
@@ -265,8 +273,8 @@ subroutine m_read_params(pst)
   integer ::interpol_type=1
 
   ! Poisson solver parameters
-  real(dp)::epsilon=1.0D-4 ! Convergence criterion
-  real(dp),dimension(1:10)::gravity_params=0.0 ! Gravity parameters
+  real(kind=8)::epsilon=1.0D-4 ! Convergence criterion
+  real(kind=8),dimension(1:10)::gravity_params=0.0 ! Gravity parameters
   integer :: gravity_type=0 ! Type of gravity calculations (see user guide)
   integer :: cic_levelmax=0 ! Maximum level for CIC dark matter interpolation
   integer :: cg_levelmin=999   ! Min level for CG solver
@@ -295,22 +303,22 @@ subroutine m_read_params(pst)
   integer,dimension(1:MAXBOUND)::bound_ymax=0
   integer,dimension(1:MAXBOUND)::bound_zmin=0
   integer,dimension(1:MAXBOUND)::bound_zmax=0
-  real(dp),dimension(1:MAXBOUND)::d_bound=0
-  real(dp),dimension(1:MAXBOUND)::p_bound=0
-  real(dp),dimension(1:MAXBOUND)::u_bound=0
-  real(dp),dimension(1:MAXBOUND)::v_bound=0
-  real(dp),dimension(1:MAXBOUND)::w_bound=0
+  real(kind=8),dimension(1:MAXBOUND)::d_bound=0
+  real(kind=8),dimension(1:MAXBOUND)::p_bound=0
+  real(kind=8),dimension(1:MAXBOUND)::u_bound=0
+  real(kind=8),dimension(1:MAXBOUND)::v_bound=0
+  real(kind=8),dimension(1:MAXBOUND)::w_bound=0
 #if NENER>0
-  real(dp),dimension(1:MAXBOUND,1:NENER)::prad_bound=0
+  real(kind=8),dimension(1:MAXBOUND,1:NENER)::prad_bound=0
 #endif
 #if NVAR>5+NENER
-  real(dp),dimension(1:MAXBOUND,1:NVAR-5-NENER)::var_bound=0
+  real(kind=8),dimension(1:MAXBOUND,1:NVAR-5-NENER)::var_bound=0
 #endif
 #ifdef RT
-  real(dp),dimension(1:MAXBOUND,1:nrtgrp)::rt_n_bound=0.0d0
-  real(dp),dimension(1:MAXBOUND,1:nrtgrp)::rt_u_bound=0.0d0
-  real(dp),dimension(1:MAXBOUND,1:nrtgrp)::rt_v_bound=0.0d0
-  real(dp),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_n_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_u_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_v_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
 #endif
 
   ! Cooling parameters
@@ -320,37 +328,58 @@ subroutine m_read_params(pst)
   logical::isothermal=.false. ! Force temperature to eos value
   logical::haardt_madau=.false.
   logical::self_shielding=.false.
-  real(dp)::J21=0d0,a_spec=1d0,z_ave=0d0,z_reion=8.5d0
+  real(kind=8)::J21=0,a_spec=1,z_ave=0,z_reion=8.5
   integer::eos_type=1 ! 1=isothermal, 2=polytrope, 3=isothermal+polytrope
-  real(dp)::eos_nH=1d50,eos_index=1d0,eos_T2=10d0
-  real(dp)::T2max=1d50
+  real(kind=8)::eos_nH=huge(1d0),eos_index=1,eos_T2=10
+  real(kind=8)::T2max=huge(1d0)
   logical::neq_chem=.false. ! Non-equilibrium cooling -------------------
   logical::is_init_xion=.false.   ! Initialize ionization from T profile?
   logical::upload_equilibrium_x=.false.! Enforce equ. xion when uploading
   logical::isHe=.true.            !      He ionization fractions tracked?
   logical::isH2=.false.           !                 H2 tracked (via xHI)?
-  real(dp)::neq_Tconst=-1         !             Const T in neq chemistry?
+  real(kind=8)::neq_Tconst=-1         !             Const T in neq chemistry?
   real(kind=8) ::mu_mol=1.2195d0  ! Mean molecular weight (std ISM value)
   real(kind=8) ::X_H=0.7600d0     !                Hydrogen mass fraction
   real(kind=8) ::Y_He=0.2400d0    !                  Helium mass fraction
   integer::iIons,ixHI=0,ixHII=0,ixHeII=0,ixHeIII=0 !   Ionization indices
+#ifdef RTZ
+  integer::element_first_idx(1:27)       !  Start idx of elements in uold
+  integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold 
+  real(kind=8),dimension(1:27,1:27)::ionEvs=0.     !  Ionization energies
+#else
   real(kind=8),dimension(nion)::ionEvs=0.          !  Ionization energies
+#endif
   integer::icount
+
+  ! RTZ cooling parameters
+  logical::rtz_cooling=.false. ! RTZ Non-equilibrium cooling ------------
+  integer::rtz_equilibrium_test=-1 ! RTZ EQM test ------------------
+  logical::rtz_include_collisional_ionization=.true.
+  logical::rtz_include_photoionization=.true.
+  logical::rtz_include_cosmic_ray_ionization=.true.
+  logical::rtz_include_charge_exchange=.true.
+  logical::rtz_include_dust_recombination=.true.
+  logical::rtz_include_HM12_UVB=.true.
+  logical::isH2_rtz=.false.
+  real(kind=8)::rtz_UV_background_G0=0.d0
+  real(kind=8)::rtz_primary_cosmic_ray_ionization_rate=0.d0
+  real(kind=8)::rtz_max_cool_timestep=1.d11
+  integer::rtz_eqm_min_its
 
   ! Star formation parameters
   integer::sf_model=1
-  real(dp)::T2_star=2e4
-  real(dp)::n_star=0.1
-  real(dp)::eps_star=0.01
+  real(kind=8)::T2_star=2e4
+  real(kind=8)::n_star=0.1
+  real(kind=8)::eps_star=0.01
   integer(kind=8),dimension(1:6)::seed=(/123,456,789,1,1,1/)
-  real(dp)::m_star=1
+  real(kind=8)::m_star=1
 
   ! Supernovae feedback parameters
-  real(dp)::M_SNII=10.
-  real(dp)::E_SNII=1d51
-  real(dp)::t_SNII=20.
-  real(dp)::eta_SNII=0.1
-  real(dp)::yield_SNII=0.1
+  real(kind=8)::M_SNII=10.
+  real(kind=8)::E_SNII=1d51
+  real(kind=8)::t_SNII=20.
+  real(kind=8)::eta_SNII=0.1
+  real(kind=8)::yield_SNII=0.1
   logical::thermal_feedback=.false.
   logical::mechanical_feedback=.false.
 
@@ -364,56 +393,67 @@ subroutine m_read_params(pst)
   logical::output_peak_sink=.false.
   logical::output_peak_tree=.false.
   integer::rho_type_clump=1 ! 1: DM, 2: stars, 3: sinks, 4: gas
-  real(dp)::relevance_threshold=2
-  real(dp)::density_threshold=-1
-  real(dp)::saddle_threshold=-1
-  real(dp)::mass_threshold=0
-  real(dp)::purity_threshold=-1
-  real(dp)::fraction_threshold=0.1d0
+  real(kind=8)::relevance_threshold=2
+  real(kind=8)::density_threshold=-1
+  real(kind=8)::saddle_threshold=-1
+  real(kind=8)::mass_threshold=0
+  real(kind=8)::purity_threshold=-1
+  real(kind=8)::fraction_threshold=0.1d0
+
+  ! Lightcone parameters
+  logical :: lightcone = .false.   ! Lightcone activated
+  real(kind=8) :: cone_z_min = 0.0 ! Minimum redshift
+  real(kind=8) :: cone_z_max = 1.0 ! Maximum redshift
+  real(kind=8) :: cone_opening_angle_y = 0.0 ! Opening angle in y direction in degrees
+  real(kind=8) :: cone_opening_angle_z = 0.0 ! Opening angle in z direction in degrees
+  real(kind=8) :: cone_theta = 0.0 ! Rotation of the cone's x-axis around the box's y-axis in degrees
+  real(kind=8) :: cone_phi = 0.0 ! Rotation of the cone's x-axis around the box's z-axis in degrees
+  real(kind=8), dimension(1:3) :: cone_observer = (/0.0, 0.0, 0.0/) ! Observer position in code units
 
   ! Sink parameters
   integer::rho_type_sink=1
   logical::sink_descent=.false.
-  real(dp)::fudge_descent=0.5d0
-  real(dp)::sink_relevance_threshold=2
-  real(dp)::sink_density_threshold=-1
-  real(dp)::sink_saddle_threshold=-1
-  real(dp)::sink_mass_threshold=0
-  real(dp)::sink_purity_threshold=-1
-  real(dp)::sink_fraction_threshold=2d0
+  real(kind=8)::fudge_descent=0.5d0
+  real(kind=8)::sink_relevance_threshold=2
+  real(kind=8)::sink_density_threshold=-1
+  real(kind=8)::sink_saddle_threshold=-1
+  real(kind=8)::sink_mass_threshold=0
+  real(kind=8)::sink_purity_threshold=-1
+  real(kind=8)::sink_fraction_threshold=2d0
   logical::sink_form=.false.
   logical::sink_refine=.false.
   logical::sink_dump=.false.
   logical::static_sink=.false.
   integer::output_sink_fine=0 ! Integer for how often full sink information should be saved, works with 1 cpu
   logical::fix_sink_mass = .false. 
+  logical::drag_sink = .false. ! Whether to use dynamical friction for black hole dynamics
 
   ! Black hole parameters
   integer::accretion_type = 0 ! 0: None, 1: Bondi, 2: Flux
-  real(dp)::acc_sink_boost = 1.0d0 ! Boost for bondi accretion
+  real(kind=8)::acc_sink_boost = 1.0d0 ! Boost for bondi accretion
   logical::bondi_use_vrel = .true. ! Whether to use the relative sink velocity for BHL accretion
-  real(dp)::eddington_cap = -1 ! Factor of Eddington rate to cap accretion at
+  real(kind=8)::eddington_cap = -1 ! Factor of Eddington rate to cap accretion at
   integer::sink_b_spline_order = 4 ! Order of B-spline interpolation used for sink accretion and dynamics
   logical::verbose_sink = .false. ! Whether to print verbose statements for sink particles
   logical::bondi_use_gas_mass = .false. ! Whether to include the local gas mass in the Bondi calculation
   logical::use_local_bondi_rate = .false. ! Switch to average after (true) or before (false) computing the Bondi rate
   logical::use_rho_inf = .true. ! Whether to use bondi_alpha(x) to extrapolate density at infinity from Bondi solution
-  real(dp)::t_start_black_hole = -1 ! Time after which to start using sink particle/black hole routines (code units)
+  real(kind=8)::t_start_black_hole = -1 ! Time after which to start using sink particle/black hole routines (code units)
   logical::use_bondi_lambda = .true.
 
   ! AGN Feedback parameters
   logical::agn = .false. ! Whether to activate AGN feedback around black hole/sink particles
   integer::agn_feedback_radius = 4 ! Radius (in dx_min) of feedback region (should be geq sink_b_spline_order/2)
   integer::agn_weighting_scheme = 1 ! Which AGN weighting scheme (psy_function) to use 
-  real(dp)::epsilon_rad = 0.1d0 ! Radiative efficiency
-  real(dp)::epsilon_therm_jet = 1.0d0 ! Efficiency of thermal feedback for jet
-  real(dp)::epsilon_therm_quasar = 0.15d0 ! Efficiency of thermal feedback for quasar
-  real(dp)::kin_mass_loading = 100d0 ! Mass loading factor of the jet
-  real(dp)::agn_fbk_mode_switch_threshold = 0.01d0 ! Threshold accretion rate to switch from jet to quasar mode
-  real(dp)::agn_jet_opening_angle = 60.0d0 !  Outflow cone opening angle; in deg
-  real(dp)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
+  real(kind=8)::epsilon_rad = 0.1d0 ! Radiative efficiency
+  real(kind=8)::epsilon_therm_jet = 1.0d0 ! Efficiency of thermal feedback for jet
+  real(kind=8)::epsilon_therm_quasar = 0.15d0 ! Efficiency of thermal feedback for quasar
+  real(kind=8)::kin_mass_loading = 1.0d0 ! Mass loading factor of the jet
+  real(kind=8)::agn_fbk_mode_switch_threshold = 0.01d0 ! Threshold accretion rate to switch from jet to quasar mode
+  real(kind=8)::agn_jet_opening_angle = 60.0d0 !  Outflow cone opening angle; in deg
+  real(kind=8)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
   logical::agn_use_mass_weighting = .false. ! Whether to use a mass-weighted feedback scheme
-  real(dp)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
+  real(kind=8)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
 
   ! Gadget initial conditions parameters
   character(len=flen)::ic_file, ic_format
@@ -426,14 +466,28 @@ subroutine m_read_params(pst)
   character(len=4)::ic_u_name = 'U   '
   character(len=4)::ic_metal_name = 'Z   '
   character(len=4)::ic_age_name = 'AGE '
-  real(dp)::gadget_scale_l = 3.085677581282D21 ! Gadget units in cgs
-  real(dp)::gadget_scale_v = 1.0D5
-  real(dp)::gadget_scale_m = 1.9891D43
-  real(dp)::gadget_scale_t = 1.0D6*365*24*3600
-  real(dp)::IG_rho = 1.0D-6
-  real(dp)::IG_T2 = 1.0D7
-  real(dp)::IG_metal = 0.01
+  real(kind=8)::gadget_scale_l = 3.085677581282D21 ! Gadget units in cgs
+  real(kind=8)::gadget_scale_v = 1.0D5
+  real(kind=8)::gadget_scale_m = 1.9891D43
+  real(kind=8)::gadget_scale_t = 1.0D6*365*24*3600
+  real(kind=8)::IG_rho = 1.0D-6
+  real(kind=8)::IG_T2 = 1.0D7
+  real(kind=8)::IG_metal = 0.01
 
+  ! Turbulence driving parameters
+  logical  :: turb=.false.            ! Use turbulence?
+  integer  :: turb_seed=-1            ! Turbulent seed (-1=random)
+  character (LEN=100) :: forcing_power_spectrum='parabolic'
+                                      ! Power spectrum type of turbulent forcing
+  real(kind=8) :: comp_frac=0.3333    ! Compressive fraction
+  real(kind=8) :: turb_T=1.0          ! Turbulent velocity autocorrelation time
+  integer      :: turb_Ndt=100        ! Number of timesteps per autocorr. time
+  real(kind=8) :: turb_rms=1.0        ! rms turbulent forcing acceleration
+  real(kind=8) :: turb_min_rho=1d-50  ! Minimum density for turbulence
+  
+#ifdef RTZ
+  integer::i_Element, i_Iion
+#endif
 
   !--------------------------------------------------
   ! Namelist definitions
@@ -441,7 +495,8 @@ subroutine m_read_params(pst)
   ! Global run parameter
   namelist/run_params/cosmo,pic,poisson,hydro,rt,verbose,debug &
        & ,nrestart,ncontrol,nstepmax,nsubcycle,nremap &
-       & ,static_mesh,static_gas,geom,overload,nsuperoct
+       & ,static_mesh,static_gas,geom,overload,nsuperoct &
+       & ,clump_only
   ! Output parameters
   namelist/output_params/foutput,aout,tout,output_mode &
        & ,tend,delta_tout,aend,delta_aout,gadget_output &
@@ -464,8 +519,8 @@ subroutine m_read_params(pst)
        & ,imovout,imov,tendmov,aendmov,proj_axis,movie_vars,movie_vars_txt
   ! Initial conditions parameters
   namelist/init_params/filetype,initfile,multiple,nregion,region_type &
-       & ,x_center,y_center,z_center,aexp_ini,omega_b &
-       & ,length_x,length_y,length_z,exp_region &
+       & ,x_center,y_center,z_center,aexp_ini,omega_b,omega_m,omega_l,h0 &
+       & ,length_x,length_y,length_z,exp_region,boxlen_ini &
        & ,ic_scale_m &
 #if NENER>0
        & ,prad_region &
@@ -487,7 +542,7 @@ subroutine m_read_params(pst)
   ! Hydro solver parameters
   namelist/hydro_params/gamma,courant_factor,smallr,smallc &
        & ,slope_type,slope_mag_type,difmag,etamag,gamma_rad &
-       & ,dual_energy,T2_fix,induction,entropy,turb,riemann,riemann2d,constant_gravity &
+       & ,dual_energy,T2_fix,induction,entropy,sgs_turb,riemann,riemann2d,constant_gravity &
        & ,niter_riemann,scheme,switch_llf_dmin,switch_llf_pmin
   ! Grid refinement parameters
   namelist/refine_params/x_refine,y_refine,z_refine,r_refine &
@@ -529,14 +584,19 @@ subroutine m_read_params(pst)
   namelist/cooling_params/neq_chem,cooling,metal,isothermal,haardt_madau,J21 &
        & ,eos_type,eos_nH,eos_index,eos_T2, mu_mol, X_H, Y_He &
        & ,a_spec,self_shielding,z_ave,z_reion,T2max,cooling_ism &
-       & ,isHe, isH2, is_init_xion, neq_Tconst, upload_equilibrium_x
+       & ,isHe, isH2, is_init_xion, neq_Tconst, upload_equilibrium_x &
+       & ,rtz_cooling, rtz_equilibrium_test, rtz_include_collisional_ionization &
+       & ,rtz_include_photoionization, rtz_include_cosmic_ray_ionization &
+       & ,rtz_include_charge_exchange, rtz_include_dust_recombination, rtz_UV_background_G0 &
+       & ,rtz_primary_cosmic_ray_ionization_rate, rtz_include_HM12_UVB, isH2_rtz &
+       & ,rtz_max_cool_timestep, rtz_eqm_min_its
   ! Star particles and star formation recipe
   namelist/star_params/star,nstarmax,nstartot,T2_star,n_star,eps_star,seed,m_star,sf_model
   ! Sink particles and black hole parameters
   namelist/sink_params/sink,nsinkmax,nsinktot,rho_type_sink,sink_descent,fudge_descent &
        & ,sink_relevance_threshold,sink_density_threshold,sink_saddle_threshold &
        & ,sink_mass_threshold,sink_purity_threshold,sink_fraction_threshold &
-       & ,sink_form,verbose_sink,sink_dump
+       & ,sink_form,verbose_sink,sink_dump,drag_sink
   ! Black Hole accretion parameters
   namelist/sink_accretion_params/accretion_type,acc_sink_boost,bondi_use_vrel,use_rho_inf &
        & ,eddington_cap,sink_b_spline_order,bondi_use_gas_mass,use_bondi_lambda &
@@ -554,12 +614,18 @@ subroutine m_read_params(pst)
        & ,relevance_threshold,density_threshold,saddle_threshold &
        & ,mass_threshold,purity_threshold,fraction_threshold &
        & ,merger_tree,orphan,ntreemax,ntreetot,rho_type_clump
+  ! Lightcone parameters
+  namelist/lightcone_params/lightcone,cone_z_min,cone_z_max,cone_opening_angle_y,cone_opening_angle_z &
+       & ,cone_theta,cone_phi,cone_observer
   ! Gadget initial conditions parameters
   namelist/gadget_params/ic_file,ic_format,IG_rho,IG_T2,IG_metal &
        & ,ic_head_name,ic_pos_name,ic_vel_name,ic_id_name,ic_mass_name &
        & ,ic_u_name,ic_metal_name,ic_age_name &
        & ,gadget_scale_l, gadget_scale_v, gadget_scale_m ,gadget_scale_t &
        & ,ic_skip_type
+  ! Turbulence driving parameters
+  namelist/turb_params/turb, turb_seed, comp_frac,&
+       & forcing_power_spectrum, turb_T, turb_Ndt, turb_rms, turb_min_rho
 
   associate(s=>pst%s)
 
@@ -583,7 +649,7 @@ subroutine m_read_params(pst)
   write(*,'(" Using gravity solver")')
 #endif
 #ifdef HYDRO
-  write(*,'(" Using hydro solver with nvar = ",I2)')nvar
+  write(*,'(" Using hydro solver with nvar = ",I3)')nvar
   ! Check nvar is not too small
   if(nvar<5)then
      write(*,*)'You should have: nvar>=5'
@@ -807,6 +873,12 @@ subroutine m_read_params(pst)
   rewind(1)
   read(1,NML=sink_feedback_params,END=114)
 114 continue
+  rewind(1)
+  read(1, NML=lightcone_params, END=115)
+115 continue 
+  rewind(1)
+  read(1, NML=turb_params, END=116)
+116 continue 
   close(1)
 
   !-----------------
@@ -895,7 +967,7 @@ subroutine m_read_params(pst)
      iturb=imetal+1
   endif
   ichem=iturb
-  if(turb)then
+  if(sgs_turb)then
      ichem=iturb+1
   endif
   if(hydro.and.(nvar>5)) then
@@ -906,13 +978,12 @@ subroutine m_read_params(pst)
 #endif
      if(entropy) write(*,*) '   ientropy = ',ientropy
      if(metal)   write(*,*) '   imetal   = ',imetal
-     if(turb)    write(*,*) '   iturb    = ',iturb
+     if(sgs_turb)write(*,*) '   iturb    = ',iturb
      if(ichem.LE.nvar)then
                  write(*,*) '   ichem    = ',ichem
      endif
      write(*,'(A50)')"__________________________________________________"
   endif
-
 
   ! Force non-equilibrium chemistry if using rt
   if(rt .and. cooling) then
@@ -925,20 +996,38 @@ subroutine m_read_params(pst)
   ! fractions, and ionization energies, and check if we have enough
   ! ionization variables (NION)
   !----------------------------------------------------------------
-  if(nion.gt.0) then
+  if(neq_chem) then
      iCount=0
+#ifdef RTZ
+     do i_Element=1,n_elements ! loop over elements
+        if (elements(i_Element)%atomic_number.gt.0) then 
+           do i_Iion=1,elements(i_Element)%n_ions ! loop over ions
+              icount = icount + 1
+              if (i_Iion.eq.1) then 
+                 element_first_idx(i_Element) = icount
+              end if
+           end do ! end loop over ions
+        end if
+     end do ! end loop over elements
+
+     ! Deal with molecules separately
+     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then 
+        icount = icount + 1
+        molecules_first_idx(1) = icount
+     end if
+#else
      ! HI fraction and ionization energy
      if(isH2) then
-        iCount=iCount+1
-        ixHI=iCount    ; ionEvs(ixHI)=ionEv_HI
+        iCount=iCount+1 ; ixHI=iCount ; ionEvs(ixHI)=ionEv_HI
      endif
      ! HII fraction and ionization energy
-     iCount=iCount+1    ; ixHII=iCount   ; ionEvs(ixHII)=ionEv_HII
+     iCount=iCount+1 ; ixHII=iCount ; ionEvs(ixHII)=ionEv_HII
      ! HeII and HeIII fractions and ionization energies
      if(isHe) then
-        iCount=iCount+1 ; ixHeII=iCount  ; ionEvs(ixHeII)=ionEv_HeII
+        iCount=iCount+1 ; ixHeII=iCount ; ionEvs(ixHeII)=ionEv_HeII
         iCount=iCount+1 ; ixHeIII=iCount ; ionEvs(ixHeIII)=ionEv_HeIII
      endif
+#endif
      ! Check that we have enough chemical species
      if(iCount .gt. NION) then
         write(*,*) 'Not enough variables for ionization fractions'
@@ -964,13 +1053,50 @@ subroutine m_read_params(pst)
         call mdl_abort(s%mdl)
      endif
      ! Output indices for the user to check
-     write(*,'(A39, I2)') 'The number of ionization fractions is:',iCount
+     write(*,'(A39, I4)') 'The number of ionization fractions is:',iCount
      write(*,*) 'Their indices in U are:'
+#ifdef RTZ
+     do i_Element=1,n_elements ! Loop over elements
+        if (elements(i_Element)%atomic_number.gt.0) then 
+           write(*,'(A10, I4)') 'i' // trim(elements(i_Element)%element_name) // '=', iIons-1+element_first_idx(i_Element)
+        end if
+     end do
+
+     ! Deal with molecules separately
+     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then 
+        write(*,'(A10, I4)') 'iH2 =', iIons-1+molecules_first_idx(1)
+     end if
+#else
      if(isH2) write(*,'(A10, I2)') '  iHI =    ', iIons-1+ixHI
      write(*,'(A10, I2)')          '  iHII =   ', iIons-1+ixHII
      if(isHe) write(*,'(A10, I2)') '  iHeII =  ', iIons-1+ixHeII
      if(isHe) write(*,'(A10, I2)') '  iHeIII = ', iIons-1+ixHeIII
      !if(isHe) print '(I3, A9)', iIons-1+ixHeIII, 'iHeIII'
+#endif
+  endif
+
+  ! Check that lightcone parameters are consistent
+  if (lightcone) then
+     if (ndim /= 3) then
+        write(*, *) 'Error: lightcone is only supported in 3D'
+        nml_ok = .false.
+     endif
+     if (cone_z_min >= cone_z_max) then
+        write(*, *) 'Error: cone_z_min >= cone_z_max'
+        nml_ok = .false.
+     endif
+     if (cone_z_min < 0.0) then
+        write(*, *) 'Error: cone_z_min must be greater than 0'
+        nml_ok = .false.
+     endif
+     if (cone_opening_angle_y <= 0.0 .or. cone_opening_angle_z <= 0.0) then
+        write(*, *) 'Error: cone opening angles must be positive'
+        nml_ok = .false.
+     endif
+     if (cone_opening_angle_y >= 90.0 .or. cone_opening_angle_z >= 90.0) then
+        write(*, *) 'Error: cone opening angles must be < 90 degrees'
+        nml_ok = .false.
+     endif
   endif
 
   if(.not. nml_ok)then
@@ -1003,6 +1129,7 @@ subroutine m_read_params(pst)
   s%r%geom=geom
   s%r%overload=overload
   s%r%nsuperoct=nsuperoct
+  s%r%clump_only=clump_only
 
   s%r%noutput=noutput
   s%r%foutput=foutput
@@ -1087,7 +1214,7 @@ subroutine m_read_params(pst)
   s%r%T2_fix=T2_fix
   s%r%induction=induction
   s%r%entropy=entropy
-  s%r%turb=turb
+  s%r%sgs_turb=sgs_turb
   s%r%inener=inener
   s%r%ientropy=ientropy
   s%r%imetal=imetal
@@ -1181,6 +1308,10 @@ subroutine m_read_params(pst)
   s%r%multiple=multiple
   s%r%aexp_ini=aexp_ini
   s%r%omega_b=omega_b
+  s%r%boxlen_ini=boxlen_ini
+  s%r%omega_m=omega_m
+  s%r%omega_l=omega_l
+  s%r%h0=h0
   s%r%ic_scale_m=ic_scale_m
 
   s%r%nregion=nregion
@@ -1283,6 +1414,24 @@ subroutine m_read_params(pst)
   if(neq_Tconst .ge. 0d0) s%r%neq_isTconst=.true.
   s%r%upload_equilibrium_x = upload_equilibrium_x
 
+  s%r%rtz_cooling=rtz_cooling
+  s%r%rtz_equilibrium_test=rtz_equilibrium_test
+  s%r%rtz_include_collisional_ionization=rtz_include_collisional_ionization
+  s%r%rtz_include_photoionization=rtz_include_photoionization
+  s%r%rtz_include_cosmic_ray_ionization=rtz_include_cosmic_ray_ionization
+  s%r%rtz_include_charge_exchange=rtz_include_charge_exchange
+  s%r%rtz_include_dust_recombination=rtz_include_dust_recombination
+  s%r%rtz_include_HM12_UVB=rtz_include_HM12_UVB
+  s%r%isH2_rtz=isH2_rtz
+  s%r%rtz_UV_background_G0=rtz_UV_background_G0
+  s%r%rtz_primary_cosmic_ray_ionization_rate=rtz_primary_cosmic_ray_ionization_rate
+  s%r%rtz_max_cool_timestep=rtz_max_cool_timestep
+  s%r%rtz_eqm_min_its=rtz_eqm_min_its
+#ifdef RTZ
+  s%r%element_first_idx=element_first_idx
+  s%r%molecules_first_idx=molecules_first_idx
+#endif
+
   s%r%iIons=iIons
   s%r%ixHI=ixHI
   s%r%ixHII=ixHII
@@ -1321,6 +1470,15 @@ subroutine m_read_params(pst)
   s%r%fraction_threshold=fraction_threshold
   s%r%rho_type_clump=rho_type_clump
 
+  s%r%lightcone = lightcone
+  s%r%cone_z_min = cone_z_min
+  s%r%cone_z_max = cone_z_max
+  s%r%cone_opening_angle_y = cone_opening_angle_y
+  s%r%cone_opening_angle_z = cone_opening_angle_z
+  s%r%cone_theta = cone_theta
+  s%r%cone_phi = cone_phi
+  s%r%cone_observer = cone_observer
+
   s%r%rho_type_sink=rho_type_sink
   s%r%sink_descent=sink_descent
   s%r%fudge_descent=fudge_descent
@@ -1333,6 +1491,7 @@ subroutine m_read_params(pst)
   s%r%static_sink=static_sink
   s%r%output_sink_fine=output_sink_fine
   s%r%fix_sink_mass=fix_sink_mass
+  s%r%drag_sink=drag_sink
 
   s%r%accretion_type = accretion_type
   s%r%acc_sink_boost = acc_sink_boost
@@ -1381,6 +1540,14 @@ subroutine m_read_params(pst)
   s%r%gadget_scale_t=gadget_scale_t
   s%r%ic_skip_type=ic_skip_type
 
+  s%r%turb=turb
+  s%r%turb_seed=turb_seed
+  s%r%forcing_power_spectrum=forcing_power_spectrum
+  s%r%comp_frac=comp_frac
+  s%r%turb_T=turb_T
+  s%r%turb_Ndt=turb_Ndt
+  s%r%turb_rms=turb_rms
+  s%r%turb_min_rho=turb_min_rho
 
   ! Read RT parameters from namelist
   if(rt)call m_read_rt_params(pst)
@@ -1406,6 +1573,7 @@ subroutine m_broadcast_params(pst)
 
   ! Broadcast parameters to all CPUs.
   call r_broadcast_params(pst,pst%s%r,storage_size(pst%s%r)/32)
+
 end subroutine m_broadcast_params
 !#########################################################################
 !#########################################################################

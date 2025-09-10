@@ -37,7 +37,7 @@ end subroutine r_output_rt
 !###################################################
 !###################################################
 subroutine output_rt(s,filename)
-  use amr_parameters, only: ndim,twotondim, flen, dp
+  use amr_parameters, only: ndim,twotondim, flen
   use rt_parameters, only: nrtvar, nrtgrp
   use ramses_commons, only: ramses_t, open_file, close_file
   implicit none
@@ -49,8 +49,8 @@ subroutine output_rt(s,filename)
   integer::ilevel,igrid,ilun,igrp,idim,ind
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
   real(kind=4),dimension(1:twotondim,1:nrtvar)::qout
-  real(dp),dimension(1:twotondim,1:nrtvar)::qold
-  real(dp),dimension(1:twotondim,1:nrtvar)::rtuold
+  real(kind=8),dimension(1:twotondim,1:nrtvar)::qold
+  real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold
   logical::overflow_reported=.false.
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
@@ -69,8 +69,8 @@ subroutine output_rt(s,filename)
               end do
             end do
         end do
-        qout=real(max(qold,tiny(0.E0)),kind=4)
-        if(maxval(qout).gt.1d31 .and. s%g%myid==1 .and. .not. overflow_reported) then
+        qout=real(max(qold,tiny(0d0)),kind=4)
+        if(maxval(dble(qout)).gt.1d31 .and. s%g%myid==1 .and. .not. overflow_reported) then
             print*,'The RT variables have very high values and are overflowing in the outputs'
             overflow_reported=.true.
         endif
@@ -209,7 +209,7 @@ subroutine output_rtinfo(r, g, filename)
   ! Write physical parameters
   write(ilun,'("unit_np      = ", E23.15)') scale_np
   write(ilun,'("unit_fp      = ", E23.15)') scale_fp
-  write(ilun,'("rt_c_fraction= ", 100(E15.7))') r%rt_c_fraction
+  write(ilun,'("rt_c_fraction= ", 100(E15.7))') r%rt_c_fraction(r%levelmin:r%nlevelmax)
   write(ilun,*)
 
   ! Write photon group properties
@@ -230,10 +230,14 @@ subroutine write_group_props(r, update, lun)
 !------------------------------------------------------------------------
   use amr_commons, only: run_t
   use rt_parameters, only: nrtgrp
+#ifdef RTZ
+  use rtz_module, only: elements, n_elements
+#endif
   implicit none
   type(run_t)::r
   logical :: update
   integer :: ip, lun
+  integer :: iE
 !------------------------------------------------------------------------
   if (.not. update) then
      write(lun,*) 'Photon group properties=------------------------------ '
@@ -242,12 +246,23 @@ subroutine write_group_props(r, update, lun)
   end if
   write(lun, 901) r%group_L0(:)
   write(lun, 902) r%group_L1(:)
+#ifndef RTZ
   write(lun, 903) r%spec2group(:)
+#endif
   do ip = 1, nrtgrp
      write(lun, 907) ip
      write(lun, 904) r%group_egy(ip)
+#ifdef RTZ
+     do iE=1,n_elements
+        if (elements(iE)%atomic_number.gt.0) then
+           write(lun, 905) elements(iE)%element_name, r%group_csn(ip,iE,1:elements(iE)%n_ions+elements(iE)%n_mol)
+           write(lun, 905) elements(iE)%element_name, r%group_cse(ip,iE,1:elements(iE)%n_ions+elements(iE)%n_mol)
+        end if
+     end do
+#else
      write(lun, 905) r%group_csn(ip,:)
      write(lun, 906) r%group_cse(ip,:)
+#endif
   end do
   write (lun,*) '=-----------------------------------------------------'
 
@@ -255,8 +270,13 @@ subroutine write_group_props(r, update, lun)
 902 format ('  groupL1  [eV]  = ', 20f12.3)
 903 format ('  spec2group     = ', 20I12)
 904 format ('  egy      [eV]  = ', 1pe12.3)
+#ifdef RTZ
+905 format ('  csn    [cm^2]  = ', A20, 27(1pe12.3))
+906 format ('  cse    [cm^2]  = ', A20, 27(1pe12.3))
+#else
 905 format ('  csn    [cm^2]  = ', 20(1pe12.3))
 906 format ('  cse    [cm^2]  = ', 20(1pe12.3))
+#endif
 907 format ('  --=Group', I2)
 
 end subroutine write_group_props

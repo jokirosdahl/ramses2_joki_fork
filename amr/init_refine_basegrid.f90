@@ -6,9 +6,11 @@ contains
 !#########################################################################
 subroutine m_init_refine_basegrid(pst)
   use ramses_commons, only: pst_t
+  use flag_utils, only: m_flag_fine
 #ifdef GRAV
   use rho_fine_module, only: m_rho_fine
 #endif
+  use input_hydro_grafic_module, only: r_input_refmap_grafic
   implicit none
   type(pst_t)::pst
   !--------------------------------------------------------------------
@@ -16,8 +18,10 @@ subroutine m_init_refine_basegrid(pst)
   ! and initialize all cell-based variables within it.
   !--------------------------------------------------------------------
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
-  
+
   if(r%verbose)write(*,*)'Entering init_refine_basegrid'
+
+  write(*,*)'Building initial base grid at level ',r%levelmin
 
   ! Call recursive slave routine
   call r_init_refine_basegrid(pst,r%levelmin,1)
@@ -30,13 +34,26 @@ subroutine m_init_refine_basegrid(pst)
 
   ! Initialize hydro variables on the base grid
   if(r%hydro)call m_init_flow_fine(pst,r%levelmin)
+
+  ! Initialize rt variables on the base grid
 #ifdef RT
   if(r%rt)call m_rt_init_flow_fine(pst,r%levelmin)
 #endif
-#ifdef GRAV
+
+  ! Initialize refinement map on the base grid
+  if(pst%s%r%filetype=='grafic_zoom'.and.pst%s%r%ivar_refine==0)then
+     call r_input_refmap_grafic(pst,r%levelmin,1)
+  endif
+
   ! Compute total mass density from gas and particles on the base grid
-  call m_rho_fine(pst,r%levelmin,0)
+#ifdef GRAV
+  if(pst%s%r%filetype.NE.'grafic_zoom')then
+     call m_rho_fine(pst,r%levelmin,0)
+  endif
 #endif
+
+  ! Flag coarse level cells for refinement
+  call m_flag_fine(pst,r%levelmin,2)
 
   end associate
 
@@ -215,7 +232,7 @@ subroutine init_refine_basegrid(s,ilevel)
   use amr_parameters, only: nhilbert,ndim,twotondim
   use ramses_commons, only: ramses_t
   use hilbert
-  use hash, only: hash_setp, hash_is_clean
+  use hash, only: hash_setp, hash_is_clean, hash_stats
   implicit none
   type(ramses_t)::s
   integer::ilevel

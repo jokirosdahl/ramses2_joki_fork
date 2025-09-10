@@ -3,8 +3,7 @@
 !#####################################################################
 !#####################################################################
 subroutine poisson_flag(s,ilevel)
-  use amr_parameters, only: dp,ndim,twotondim
-  use constants, only: twopi
+  use amr_parameters, only: ndim,twotondim
   use ramses_commons, only: ramses_t
   use hydro_parameters, only: nvar
   use hash
@@ -15,9 +14,9 @@ subroutine poisson_flag(s,ilevel)
   ! This routine flag for refinement cells that satisfies
   ! some user-defined physical criteria at the level ilevel. 
   ! -------------------------------------------------------------------
-  real(dp)::dx_loc,vol_loc,d_scale,factG
-  real(dp),dimension(1:nvar)::uu
-  real(dp),dimension(1:6)::bb
+  real(kind=8)::dx_loc,vol_loc,d_scale,factG,twopi
+  real(kind=8),dimension(1:nvar)::uu
+  real(kind=8),dimension(1:6)::bb
   integer::igrid,ind,ivar
   logical::ok
 
@@ -27,6 +26,7 @@ subroutine poisson_flag(s,ilevel)
        & r%jeans_refine(ilevel).LE.-1.0 )return
 
   ! Constants
+  twopi=2.0d0*ACOS(-1.0d0)
   factG=1
   if(r%cosmo)factG=3d0/4d0/twopi*g%omega_m*g%aexp
   dx_loc=r%boxlen/2**ilevel
@@ -90,21 +90,21 @@ end subroutine poisson_flag
 !#####################################################################
 !#####################################################################
 subroutine jeans_length_refine(r,uu,bb,factG,size_cell,n_jeans,ok)
-  use amr_parameters, only: ndim,dp
-  use constants, only: twopi
+  use amr_parameters, only: ndim
   use amr_commons, only: run_t
   use hydro_parameters, only: nvar, nener
   implicit none
   type(run_t)::r
-  real(dp)::uu(1:nvar)
-  real(dp)::bb(1:6)
-  real(dp)::n_jeans,factG,size_cell
+  real(kind=8)::uu(1:nvar)
+  real(kind=8)::bb(1:6)
+  real(kind=8)::n_jeans,factG,size_cell
   logical ::ok
   !
   integer::irad
-  real(dp)::lamb_jeans
-  real(dp)::dens,tempe,etherm
+  real(kind=8)::lamb_jeans,twopi
+  real(kind=8)::dens,tempe,etherm
 
+  twopi=2.0d0*ACOS(-1.0d0)
   ! compute the thermal energy
   dens = max( uu(1) , r%smallr )
   etherm = uu(5)

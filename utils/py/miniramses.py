@@ -535,6 +535,24 @@ def rd_part(nout,**kwargs):
 
     return p
 
+def rd_cone(nout, path, nproperties=3, verbose=False):
+    """
+    Read the lightcone shell from the output directory.
+    First read number of particles from path/cone_nout/cone_nout.txt (1st line)
+    nproperties: number of properties per particle (e.g., 3 for x,y,z; 6 for x,y,z,vx,vy,vz)
+    """
+    nout_padded = str(nout).zfill(5)
+    binfile = f"{path}/cone_{nout_padded}/cone_{nout_padded}"
+    txtfile = f"{binfile}.txt"
+    with open(txtfile, 'r') as file:
+        npart = int(file.readline().strip())
+        aexp_old = float(file.readline().strip())
+        aexp = float(file.readline().strip())
+
+    verbose and print(f"Found {npart} particles in {txtfile}")
+
+    return np.fromfile(binfile, dtype=np.float32, count=npart*nproperties).reshape(nproperties, npart)
+
 class Level:
     def __init__(self,nndim):
         self.level = 0
@@ -743,6 +761,194 @@ def rd_hydro(nout,**kwargs):
             iskip[ilevel] = iskip[ilevel] + ncache
 
     return hydro
+
+def mk_image(x,y,dx,var):
+    """
+    Function to make image from cell data
+    """
+    xmin = np.min(x-dx/2)
+    xmax = np.max(x+dx/2)
+    ymin = np.min(y-dx/2)
+    ymax = np.max(y+dx/2)
+
+    dxmin = np.min(dx)
+    dxmax = np.max(dx)
+
+    nx = int((xmax-xmin)/dxmax)*int(dxmax/dxmin)
+    ny = int((ymax-ymin)/dxmax)*int(dxmax/dxmin)
+
+    nlev = int(np.log(dxmax/dxmin)/np.log(2))+1
+
+    print("Making image of size: ",nx,ny)
+    
+    image = np.zeros((nx,ny))
+    
+    for lev in range(0,nlev):
+
+        dxloc = dxmax/2**lev
+
+        # Filter cells on the level
+        filt = dx == dxloc
+
+        # Skip levels without cells
+        if (filt.sum() < 1):
+            continue
+
+        up_samp = int(2**(nlev-lev-1))
+
+        # Setup the bins
+        nxloc = int(nx/up_samp)
+        nyloc = int(ny/up_samp)
+
+        bins = (nxloc,nyloc)
+
+        # Create the image
+        H, _, _ = np.histogram2d(x[filt],
+                                 y[filt],
+                                 bins=bins,
+                                 range=((xmin,xmax),(ymin,ymax)),weights=var[filt])
+
+        if lev < nlev:
+            H = H.repeat(up_samp, axis=1).repeat(up_samp, axis=0)
+
+        image += H
+
+    return image.T
+
+def mk_cube(x,y,z,dx,var):
+    """
+    Function to make Cartesian cube from cell data
+    """
+    xmin = np.min(x-dx/2)
+    xmax = np.max(x+dx/2)
+    ymin = np.min(y-dx/2)
+    ymax = np.max(y+dx/2)
+    zmin = np.min(z-dx/2)
+    zmax = np.max(z+dx/2)
+
+    dxmin = np.min(dx)
+    dxmax = np.max(dx)
+
+    nx = int((xmax-xmin)/dxmax)*int(dxmax/dxmin)
+    ny = int((ymax-ymin)/dxmax)*int(dxmax/dxmin)
+    nz = int((zmax-zmin)/dxmax)*int(dxmax/dxmin)
+
+    nlev = int(np.log(dxmax/dxmin)/np.log(2))+1
+
+    print("Making cube of size: ",nx,ny,nz)
+    
+    cube = np.zeros((nx,ny,nz))
+    
+    for lev in range(0,nlev):
+
+        dxloc = dxmax/2**lev
+
+        # Filter cells on the level
+        filt = dx == dxloc
+
+        # Skip levels without cells
+        if (filt.sum() < 1):
+            continue
+
+        up_samp = int(2**(nlev-lev-1))
+
+        # Setup the bins
+        nxloc = int(nx/up_samp)
+        nyloc = int(ny/up_samp)
+        nzloc = int(nz/up_samp)
+
+        bins = (nxloc,nyloc,nzloc)
+
+        points = np.column_stack((x[filt],y[filt],z[filt]))
+
+        # Create the image
+        C, _ = np.histogramdd(points,
+                              bins=bins,
+                              range=((xmin,xmax),(ymin,ymax),(zmin,zmax)),
+                              weights=var[filt])
+
+        if lev < nlev:
+            C = C.repeat(up_samp, axis=2).repeat(up_samp, axis=1).repeat(up_samp, axis=0)
+
+        cube += C
+
+    return cube.T
+
+def rotate_view(c,**kwargs):
+    """This function rotate the input cells into a view where the z-axis is aligned with the
+    angular momentum vector and the x- and y-axis are in the rotation plane.
+
+    Args:
+        c: an object of type cell.
+
+    Optional args:
+
+        center: a numpy array containing the coordinates of the center
+
+        velocity: a numpy array containing the velocity of the center
+
+    Returns:
+        x, y, z: the 3-coordinates of the input cells after the rotation.
+
+    Example:
+        import miniramses as ram
+        c = ram.rd_cell(12,center=[0.5,0.5,0.5],radius=0.1)
+        x, y, z = ram.rotate_view(c,center=[0.5,0.5,0.5],velocity=[0,0,0])
+
+    Authors: Carlos Sarkis (Princeton University, July 2025)
+    """
+
+    center = kwargs.get("center")
+    velocity = kwargs.get("velocity")
+
+    if(center is None):
+        xc=np.mean(c.x[0])
+        yc=np.mean(c.x[1])
+        zc=np.mean(c.x[2])
+    else:
+        xc=center[0]
+        yc=center[1]
+        zc=center[2]
+
+    if(velocity is None):
+        uc=np.mean(c.u[1])
+        vc=np.mean(c.u[2])
+        wc=np.mean(c.u[3])
+    else:
+        uc=velocity[0]
+        vc=velocity[1]
+        wc=velocity[2]
+
+    x0=c.x[0]-xc
+    y0=c.x[1]-yc
+    z0=c.x[2]-zc
+    u0=c.u[1]-uc
+    v0=c.u[2]-vc
+    w0=c.u[3]-wc
+
+    m = c.u[0] * c.dx**3  # mass of each cell
+    Lx = np.sum(m * (y0 * w0 - z0 * v0))
+    Ly = np.sum(m * (z0 * u0 - x0 * w0))
+    Lz = np.sum(m * (x0 * v0 - y0 * u0))
+    L = np.array([Lx, Ly, Lz])
+    L_hat = L / np.linalg.norm(L)  # normalized direction vector
+
+    # New basis: u3 = disk normal, u1 and u2 = in-plane axes
+    u3 = L_hat
+    u1 = np.cross(u3, [0, 0, 1])
+    if np.linalg.norm(u1) == 0:
+        u1 = np.cross(u3, [0, 1, 0])
+    u1 /= np.linalg.norm(u1)
+    u2 = np.cross(u3, u1)
+
+    # Rotation matrix: columns = new basis vectors
+    R = np.vstack([u1, u2, u3]).T  # shape (3, 3)
+
+    # Apply rotation to all positions
+    coords = np.vstack([x0, y0, z0])        # shape: (3, N)
+    rotated = R.T @ coords                  # rotate into new frame
+
+    return rotated[0], rotated[1], rotated[2]
 
 class Cell:
     def __init__(self,nndim,nnvar):
@@ -1002,6 +1208,9 @@ def rd_info(nout,**kwargs):
     i.unit_l=info[17][1]
     i.unit_d=info[18][1]
     i.unit_t=info[19][1]
+
+    # Get the temperature conversion
+    i.unit_T2 = ((i.unit_l / i.unit_t)**2) * 1.6605390e-24 / 1.3806490e-16
 
     rd_rt_info = kwargs.get("rt",False)
     if rd_rt_info:

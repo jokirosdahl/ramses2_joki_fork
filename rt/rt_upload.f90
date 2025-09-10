@@ -53,13 +53,13 @@ end subroutine r_rt_upload_fine
 subroutine rt_upload_fine(s,ilevel)
   use mdl_module
   use rt_parameters, only: nrtvar
-  use amr_parameters, only: dp,ndim,twotondim
+  use amr_parameters, only: ndim, twotondim
   use amr_commons, only: oct
   use ramses_commons, only: ramses_t
   use nbors_utils
   use cache_commons
   use cache
-  use rt_flag_module, only: pack_fetch_rt,unpack_fetch_rt
+  use rt_flag_module, only: pack_fetch_rt, unpack_fetch_rt
   implicit none
   type(ramses_t)::s
   integer::ilevel
@@ -70,7 +70,7 @@ subroutine rt_upload_fine(s,ilevel)
   integer::ioct,ind,ivar,icell
   integer(kind=8),dimension(0:ndim)::hash_key
   integer,dimension(1:6,1:4)::hh
-  real(dp)::average
+  real(kind=8)::average
   type(oct),pointer::gridp
   type(msg_realdp)::dummy_realdp
 

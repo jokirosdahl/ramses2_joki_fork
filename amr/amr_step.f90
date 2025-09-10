@@ -31,10 +31,13 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   use tree_formation_module, only: m_tree_formation
   use feedback_module, only: out_feedback_t, r_thermal_feedback, m_mechanical_feedback
   use clump_finder_module, only: m_clump_finder
+  use lightcone_module, only: m_output_lightcone
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold,r_set_emissivity
   use rt_step_module, only: m_rt_step
   use sink_evolution_module, only: r_sink_evolution, out_accretion_t
-  
+  use turb_driving, only: r_drive_turb
+  use turb_hydro_module, only: m_turb_hydro
+
   implicit none
 
   type(pst_t) :: pst
@@ -121,6 +124,12 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
            bkp_last_done=.true.
         endif
      endif
+
+     ! Lightcone
+      if (r%lightcone) then
+         call m_timer(pst,'lightcone','start')
+         call m_output_lightcone(pst)
+      endif
   endif
 
   !--------------------------
@@ -151,7 +160,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   if(r%hydro.and..not.r%static_gas)then
      if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
         call m_timer(pst,'hydro - gravity','start')
-        call m_synchro_hydro_fine(pst,ilevel,-0.5d0*g%dtnew(ilevel))
+        call m_synchro_hydro_fine(pst,ilevel,-0.5d0*dble(g%dtnew(ilevel)))
      end if
   endif
 
@@ -194,9 +203,17 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   if(r%hydro.and..not.r%static_gas)then
      if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
         call m_timer(pst,'hydro - gravity','start')
-        call m_synchro_hydro_fine(pst,ilevel,+0.5d0*g%dtnew(ilevel))
+        call m_synchro_hydro_fine(pst,ilevel,+0.5d0*dble(g%dtnew(ilevel)))
      endif
   end if
+
+  !--------------------------
+  ! Compute turbulent driving
+  !--------------------------
+  if(r%turb)then
+     call m_timer(pst,'hydro - turbulence','start')
+     call r_drive_turb(pst,ilevel,1)
+  endif
 
   !----------------------
   ! Compute new time step
@@ -327,7 +344,13 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         ! to complete the time step with old force (will be removed later)
         if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
            call m_timer(pst,'hydro - gravity','start')
-           call m_synchro_hydro_fine(pst,ilevel,+0.5d0*g%dtnew(ilevel))
+           call m_synchro_hydro_fine(pst,ilevel,+0.5d0*dble(g%dtnew(ilevel)))
+        endif
+
+        ! Add turbulent driving source terms to uold with full time step
+        if(r%turb)then
+           call m_timer(pst,'hydro - turbulence','start')
+           call m_turb_hydro(pst,ilevel,dble(g%dtnew(ilevel)))
         endif
      endif
 

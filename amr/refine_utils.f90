@@ -126,7 +126,9 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   use call_back, only: cache_f
   use nbors_utils
   use hydro_parameters, only: nion
+#ifndef RTZ
   use init_xion_module, only: calc_equilibrium_xion
+#endif
   implicit none
   type(ramses_t)::s
   integer::ilevel
@@ -156,7 +158,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   type(oct),pointer::gridp
   type(msg_large_realdp)::dummy_large_realdp
   type(msg_int4)::dummy_int4
-  real(dp),dimension(nion)::xion
+  real(kind=8),dimension(nion)::xion
 
   associate(r=>s%r,g=>s%g,m=>s%m)
 
@@ -203,6 +205,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   end do
   ncreate=g%ncreate
 
+#ifndef RTZ
 #ifdef HYDRO
   if(r%neq_chem .and. r%upload_equilibrium_x) then
      ! Enforce equilibrium on ionization states when derefining, to
@@ -224,6 +227,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
      end do
   endif
 #endif
+#endif
 
   !----------------------------------------------------------
   ! Step 2: if the parent cell is not flagged for refinement,
@@ -243,7 +247,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
         ! Get parent cell using a read-write cache
         call get_parent_cell(s,hash_key,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.true.)
         if (.not.associated(gridp)) then
-          write(*,*) 'FATAL: no parent'
+          write(*,*) 'FATAL: no parent',hash_key
           stop
         endif
         ok   = gridp%flag1(icell)==0 .and. &
@@ -653,9 +657,9 @@ subroutine make_new_oct(s,parent,icell,ilevel)
   integer(kind=8),dimension(1:ndim)::cart_key
   integer(kind=8),dimension(0:ndim)::hash_key
 #ifdef MHD
-  real(dp),dimension(0:twondim,1:6)::b1
-  real(dp),dimension(1:twotondim,1:6)::b2
-  real(dp),dimension(1:twondim,1:twotondim,1:6)::b3
+  real(kind=8),dimension(0:twondim,1:6)::b1
+  real(kind=8),dimension(1:twotondim,1:6)::b2
+  real(kind=8),dimension(1:twondim,1:twotondim,1:6)::b3
   logical,dimension(1:twondim)::refined
   integer,dimension(1:3,1:6),save::shift=reshape(&
        & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
@@ -663,12 +667,12 @@ subroutine make_new_oct(s,parent,icell,ilevel)
   type(oct),pointer::gridn
 #endif
 #ifdef RT
-  real(dp),dimension(0:twondim  ,1:nrtvar)::rtu1
-  real(dp),dimension(1:twotondim,1:nrtvar)::rtu2
+  real(kind=8),dimension(0:twondim  ,1:nrtvar)::rtu1
+  real(kind=8),dimension(1:twotondim,1:nrtvar)::rtu2
 #endif
   integer,dimension(0:twondim)::ind_nbor
-  real(dp),dimension(0:twondim,1:nvar)::u1
-  real(dp),dimension(1:twotondim,1:nvar)::u2
+  real(kind=8),dimension(0:twondim,1:nvar)::u1
+  real(kind=8),dimension(1:twotondim,1:nvar)::u2
   type(nbor),dimension(0:twondim)::grid_nbor
   type(oct),pointer::child
   logical::ok
@@ -898,7 +902,7 @@ end subroutine r_clean_dirty
 !#########################################################################
 !#########################################################################
 subroutine clean_dirty(s,ilevel)
-  use amr_parameters, only: ndim,twotondim,nhilbert,dp
+  use amr_parameters, only: ndim, twotondim, nhilbert
   use ramses_commons, only: ramses_t
   use hilbert
   use hash
