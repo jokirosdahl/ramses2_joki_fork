@@ -219,6 +219,9 @@ recursive subroutine r_input_part_restart(pst,input_array,input_size,output,outp
      endif
      if(p_type==SINK_TYPE)then
         call input_part_restart(pst%s%r,pst%s%g,pst%s%sink,input_size-1,input_array(2:input_size),output%mass)
+        if(pst%s%r%sink_delta_tout>0)then ! Set high frequency dump counter
+           pst%s%sink%step_counter=int(pst%s%g%t/pst%s%r%sink_delta_tout)
+        endif
      endif
      if(p_type==TREE_TYPE)then
         call input_part_restart(pst%s%r,pst%s%g,pst%s%tree,input_size-1,input_array(2:input_size),output%mass)
@@ -430,6 +433,30 @@ subroutine input_part_restart(r,g,p,ncpu_file,npart_file,mpart_loc)
         iskip=iskip+8*npart_file(icpu)
      endif
 
+     ! Read size
+     if(allocated(p%size))then
+        ipos=iskip+8*(istart-1)
+        read(10,POS=ipos)xdp
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%size(ipart)=xdp(i)
+        end do
+        iskip=iskip+8*npart_file(icpu)
+     endif
+
+     ! Read charge
+     if(allocated(p%charge))then
+        ipos=iskip+8*(istart-1)
+        read(10,POS=ipos)xdp
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%charge(ipart)=xdp(i)
+        end do
+        iskip=iskip+8*npart_file(icpu)
+     endif
+
      deallocate(xdp)
 
      allocate(isp(istart:iend))
@@ -486,6 +513,26 @@ subroutine input_part_restart(r,g,p,ncpu_file,npart_file,mpart_loc)
 #endif
      endif
 
+     ! Read tracking identity
+     if(allocated(p%idt))then
+#ifndef LONGINT
+        ipos=iskip+4*(istart-1)
+#else
+        ipos=iskip+8*(istart-1)
+#endif
+        read(10,POS=ipos)isp8
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%idt(ipart)=isp8(i)
+        end do
+#ifndef LONGINT
+        iskip=iskip+4*npart_file(icpu)
+#else
+        iskip=iskip+8*npart_file(icpu)
+#endif
+     endif
+
      deallocate(isp8)
 
      ! Close the particle file
@@ -500,7 +547,11 @@ subroutine input_part_restart(r,g,p,ncpu_file,npart_file,mpart_loc)
   p%tailp=p%npart
   p%headp(r%levelmin)=1
   p%tailp(r%levelmin)=p%npart
-        
+  if(ANY(.not.r%periodic(1:ndim)))then
+     p%headp(r%levelmin-1)=1
+     p%tailp(r%levelmin-1)=0
+  endif
+
 end subroutine input_part_restart
 !#########################################################################
 !#########################################################################

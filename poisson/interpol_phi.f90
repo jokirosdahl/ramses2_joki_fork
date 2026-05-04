@@ -1,4 +1,7 @@
 module interpol_phi_module
+#ifdef _CUDA
+  use gpu_runner, only: gpu_save_phi_old
+#endif
 contains
 !###########################################################
 !###########################################################
@@ -25,7 +28,9 @@ subroutine interpol_phi(m,igrid_nbor,ind_nbor,ccc,bbb,tfrac,phi_int)
   integer::ind,ind_average,ind_father
   integer::igrid_nbr,ind_nbr,igrid_cen,ind_cen
   real(kind=8)::coeff,add
+
 #ifdef GRAV
+
   ! Store central cell
   igrid_cen=igrid_nbor(threetondim/2+1)
   ind_cen=ind_nbor(threetondim/2+1)
@@ -42,16 +47,16 @@ subroutine interpol_phi(m,igrid_nbor,ind_nbor,ccc,bbb,tfrac,phi_int)
            write(*,*)'no all neighbors present in interpol_phi...'
            write(*,*)igrid_nbor
            stop
-           add=coeff*(m%grid(igrid_cen)%phi(ind_cen)+&
-                & (m%grid(igrid_cen)%phi(ind_cen)-m%grid(igrid_cen)%phi_old(ind_cen))*tfrac)
+           add=coeff*(m%phi(ind_cen,igrid_cen)+(m%phi(ind_cen,igrid_cen)-m%phi_old(ind_cen,igrid_cen))*tfrac)
         else
-           add=coeff*(m%grid(igrid_nbr)%phi(ind_nbr)+&
-                & (m%grid(igrid_nbr)%phi(ind_nbr)-m%grid(igrid_nbr)%phi_old(ind_nbr))*tfrac)
+           add=coeff*(m%phi(ind_nbr,igrid_nbr)+(m%phi(ind_nbr,igrid_nbr)-m%phi_old(ind_nbr,igrid_nbr))*tfrac)
         endif
         phi_int(ind)=phi_int(ind)+add
      end do
   end do
+
 #endif
+
 end subroutine interpol_phi
 !###########################################################
 !###########################################################
@@ -73,7 +78,11 @@ recursive subroutine r_save_phi_old(pst,ilevel,input_size)
      call r_save_phi_old(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef __CUDA
+     call gpu_save_phi_old(pst%s, ilevel)
+#else
      call save_phi_old(pst%s%m,ilevel)
+#endif
   endif
 
 end subroutine r_save_phi_old
@@ -91,14 +100,16 @@ subroutine save_phi_old(m,ilevel)
   integer::ind,igrid
 
 #ifdef GRAV
+
   ! Loop over level grids
   do igrid=m%head(ilevel),m%tail(ilevel)
      ! Loop over cells
      do ind=1,twotondim
         ! Save phi      
-        m%grid(igrid)%phi_old(ind)=m%grid(igrid)%phi(ind)
+        m%phi_old(ind,igrid)=m%phi(ind,igrid)
      end do
   end do
+
 #endif
 
 end subroutine save_phi_old

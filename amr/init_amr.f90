@@ -55,7 +55,16 @@ recursive subroutine r_init_amr(pst)
      call r_init_amr(pst%pLower)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call init_amr(pst%s%mdl,pst%s%r,pst%s%g,pst%s%m)
+     allocate(pst%s%m)
+     call init_amr(pst%s%r,pst%s%g,pst%s%m,'amr')
+     if(pst%s%r%poisson)then
+        allocate(pst%s%m_mg)
+        call init_amr(pst%s%r,pst%s%g,pst%s%m_mg,'mg')
+     endif
+     if(pst%s%r%clump_finder)then
+        allocate(pst%s%c)
+     endif
+     call init_params(pst%s%mdl,pst%s%r,pst%s%g)
   endif
 
 end subroutine r_init_amr
@@ -63,62 +72,185 @@ end subroutine r_init_amr
 !###############################################
 !###############################################
 !###############################################
-subroutine init_amr(mdl,r,g,m)
-  use mdl_module
-  use amr_parameters, ONLY: nhilbert,ndim
+subroutine init_amr(r,g,m,type)
+  use amr_parameters, ONLY: nhilbert, ndim, twotondim, threetondim, dp
+  use hydro_parameters, ONLY: nvar
+  use rt_parameters, ONLY: nrtvar, nrtgrp
   use amr_commons, ONLY: run_t, global_t, mesh_t
   use hash
   use hilbert
-  use output_amr_module, only: input_params
 #ifdef _CUDA
-  use cudafor
   use gpu_runner
+  use gpu_utils
+  use cudafor
 #endif
   implicit none
-  type(mdl_t)::mdl
   type(run_t)::r
   type(global_t)::g
   type(mesh_t)::m
-
+  character(len=*)::type
   ! Local variables
-#ifdef _CUDA
-  integer::err_code
-#endif
-  integer::ilevel,icpu,igrid
+  integer::idim,ilevel,icpu,igrid,ibound,ilevelmin
+  integer::nborarrsize
   integer(kind=8)::max_key
-  character(len=5)::nchar
-  character(len=80)::file_params
   real(kind=8)::dx
-  integer::idim,ncpu_file,levelmin_file,nlevelmax_file
   integer(kind=8)::ngrid_tot,ikey
   integer(kind=4)::ngrid,nremain
   integer(kind=8),dimension(1:nhilbert)::hk
   integer(kind=8),dimension(1:ndim)::ix
-  logical::file_exist
-  
-  ! Initial time step for each level
-  g%dtold=0.0D0
-  g%dtnew=0.0D0
+
+  ! Store size in mesh object
+  if(type=='amr')then
+     m%ngridmax=r%ngridmax
+     m%ncachemax=MAX(r%ncachemax,10000)
+  endif
+  if(type=='mg')then
+     m%ngridmax=r%ngridmax/7
+     m%ncachemax=MAX(r%ncachemax/7,10000)
+  endif
 
   ! Allocate main oct array
-  allocate(m%grid(1:r%ngridmax+r%ncachemax))
-  do igrid=1,r%ngridmax+r%ncachemax
+  allocate(m%grid(1:m%ngridmax+m%ncachemax))
+  do igrid=1,m%ngridmax+m%ncachemax
      m%grid(igrid)%lev=0
   end do
 
-  ! Allocate the device array
+  ! Allocate grid arrays
+  allocate(m%flag1(1:twotondim,1:m%ngridmax+m%ncachemax))
+  allocate(m%flag2(1:twotondim,1:m%ngridmax+m%ncachemax))
+  m%flag1=0
+  m%flag2=0
+
+  ! Allocate the device arrays
 #ifdef _CUDA
-  err_code = cudaMalloc(grid_device_cptr, sizeof(m%grid))
-  call c_f_pointer(grid_device_cptr, grid_device, [r%ngridmax+r%ncachemax])
+  if(type=='amr')then
+     allocate(grid(1:m%ngridmax+m%ncachemax))
+     allocate(flag1(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(flag2(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(father(1:m%ngridmax+m%ncachemax))
+     nborarrsize = (m%ngridmax + nsubgridtondim - 1) / nsubgridtondim
+     allocate(nbor(1:subgridsize,1:nborarrsize))
+     flag1=0
+     flag2=0
+     father=0
+     nbor=0
+     ! Allocate hash table space
+     m%hash_size=2*(m%ngridmax+m%ncachemax)
+     allocate(hash_key(1:m%hash_size))
+     allocate(hash_val(1:m%hash_size))
+     hash_key=0
+     hash_val=0
+     ! Work buffers for GPU scan/sort/refine
+     allocate(swap_local(1:m%ngridmax+m%ncachemax))
+     allocate(swap_global(1:m%ngridmax+m%ncachemax))
+     allocate(prefix_sum(1:m%ngridmax+m%ncachemax))
+     allocate(partial_sums_0(1:max(1,(m%ngridmax+m%ncachemax)/256)))
+     allocate(partial_sums_1(1:max(1,(m%ngridmax+m%ncachemax)/65536)))
+     allocate(partial_sums_2(1:max(1,(m%ngridmax+m%ncachemax)/16777216)))
+     swap_local=0
+     swap_global=0
+     prefix_sum=0
+  endif
+  if(type=='mg')then
+#ifdef GRAV
+     allocate(grid_mg(1:m%ngridmax+m%ncachemax))
+     allocate(father_mg(1:r%ngridmax+r%ngridmax/7+m%ncachemax))
+     allocate(nbor_mg(1:threetondim,1:m%ngridmax))
+     father_mg=0
+     nbor_mg=0
+     ! Allocate hash table space
+     m%hash_size=2*(m%ngridmax+m%ncachemax)
+     allocate(hash_key_mg(1:m%hash_size))
+     allocate(hash_val_mg(1:m%hash_size))
+     hash_key_mg=0
+     hash_val_mg=0
+#endif
+  endif
+#endif
+
+  ! Allocate AMR specific arrays
+  if(type=='amr')then
+#ifdef HYDRO
+     allocate(m%uold(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
+     allocate(m%unew(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
+     m%uold=0d0
+     m%unew=0d0
+#endif
+#ifdef MHD
+     allocate(m%bold(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
+     allocate(m%bnew(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
+#endif
+#ifdef RT
+     allocate(m%rtuold(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
+     allocate(m%rtunew(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
+     allocate(m%emissivity(1:twotondim,1:nrtgrp,1:m%ngridmax+m%ncachemax))
+#endif
+#ifdef TURB
+     allocate(m%fturb(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
+#endif
+#ifdef GRAV
+     allocate(m%rho(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(m%phi(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(m%nref(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(m%f(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
+     allocate(m%phi_old(1:twotondim,1:m%ngridmax+m%ncachemax))
+     m%f=0d0
+     m%rho=0d0
+     m%phi=0d0
+     m%nref=0d0
+     m%phi_old=0d0
+#endif
+  endif
+
+  ! Allocate the device arrays
+#ifdef _CUDA
+  if(type=='amr')then
+#ifdef HYDRO
+     allocate(uold(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
+     allocate(unew(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
+     uold=0d0
+     unew=0d0
+#endif
+#ifdef GRAV
+     allocate(rho(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(phi(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(nref(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(f(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
+     allocate(phi_old(1:twotondim,1:m%ngridmax+m%ncachemax))
+     f=0d0
+     rho=0d0
+     phi=0d0
+     nref=0d0
+     phi_old=0d0
+#endif
+  endif
+#endif
+
+  ! Allocate MG solver specific arrays
+#ifdef GRAV
+  if(type=='mg')then
+     allocate(m%phi(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(m%f(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
+  endif
+#endif
+
+  ! Allocate the device arrays
+#ifdef GRAV
+#ifdef _CUDA
+  if(type=='mg')then
+     allocate(phi_mg(1:twotondim,1:m%ngridmax+m%ncachemax))
+     allocate(f_mg(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
+  endif
+#endif
 #endif
 
   ! Allocate cache-related arrays
-  allocate(m%dirty(1:r%ncachemax))
-  allocate(m%locked(1:r%ncachemax))
-  allocate(m%occupied(1:r%ncachemax))
-  allocate(m%parent_cpu(1:r%ncachemax))
-  allocate(m%ghost_parent_grid(1:r%ncachemax))
-  allocate(m%ghost_parent_cell(1:r%ncachemax))
+  allocate(m%dirty(1:m%ncachemax))
+  allocate(m%locked(1:m%ncachemax))
+  allocate(m%occupied(1:m%ncachemax))
+  allocate(m%parent_cpu(1:m%ncachemax))
+  allocate(m%ghost_parent_grid(1:m%ncachemax))
+  allocate(m%ghost_parent_cell(1:m%ncachemax))
   m%dirty=.false.
   m%locked=.false.
   m%occupied=.false.
@@ -126,20 +258,15 @@ subroutine init_amr(mdl,r,g,m)
   m%ghost_parent_cell=0
   m%free_cache=1; m%ncache=0; m%nlocked=0; m%nlocked_max=0
 
-  allocate(m%lev_null(1:r%ncachemax))
-  allocate(m%ckey_null(1:ndim,1:r%ncachemax))
-  allocate(m%occupied_null(1:r%ncachemax))
+  allocate(m%lev_null(1:m%ncachemax))
+  allocate(m%ckey_null(1:ndim,1:m%ncachemax))
+  allocate(m%occupied_null(1:m%ncachemax))
   m%occupied_null=.false.
   m%free_null=1; m%nnull=0
 
   ! Allocate hash table for AMR data
   if(r%verbose.and.g%myid==1)write(*,*)'Initialize empty hash'
-  call init_empty_hash(m%grid_dict,2*(r%ngridmax+r%ncachemax),'simple')
-
-  ! Allocate another smaller hash table for multigrid data
-  if(r%poisson)then
-     call init_empty_hash(m%mg_dict,2*(r%ngridmax+r%ncachemax)/7,'simple')
-  endif
+  call init_empty_hash(m%grid_dict,2*(m%ngridmax+m%ncachemax),'simple')
 
   ! Set initial cpu boundaries
   ! Set maximum Cartesian key per level
@@ -151,6 +278,11 @@ subroutine init_amr(mdl,r,g,m)
 
   allocate(m%box_ckey_min(1:3,1:r%nlevelmax+1))
   allocate(m%box_ckey_max(1:3,1:r%nlevelmax+1))
+
+  if(r%nbound>0)then
+     allocate(m%bound_ckey_min(1:3,1:r%nbound,1:r%nlevelmax+1))
+     allocate(m%bound_ckey_max(1:3,1:r%nbound,1:r%nlevelmax+1))
+  endif
 
   allocate(m%domain(1:r%nlevelmax+1))
   do ilevel=1,r%nlevelmax+1
@@ -177,54 +309,85 @@ subroutine init_amr(mdl,r,g,m)
      m%hkey_max(1:nhilbert,ilevel)=refine_key(m%hkey_max(1:nhilbert,ilevel-1),ilevel)
   end do
 
-  ! Bounding box for domain boundaries
+  ! Bounding box for computational domain
   ! Examples are: box_xmin=1 box_xmax=-1
   ! Default is:   box_xmin=0 box_xmax=0
   ! This sets the min. and max. Cartesian keys of the box in each direction
-  do ilevel=r%levelmin,r%nlevelmax+1
+  do ilevel=r%bound_levelmin,r%nlevelmax+1
      if(r%box_xmin.GE.0)then
-        m%box_ckey_min(1,ilevel)=r%box_xmin*2**(ilevel-r%levelmin)
+        m%box_ckey_min(1,ilevel)=r%box_xmin*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_min(1,ilevel)=(m%ckey_max(r%levelmin)+r%box_xmin)*2**(ilevel-r%levelmin)
+        m%box_ckey_min(1,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_xmin)*2**(ilevel-r%bound_levelmin)
      endif
      if(r%box_xmax.LE.0)then
-        m%box_ckey_max(1,ilevel)=(m%ckey_max(r%levelmin)+r%box_xmax)*2**(ilevel-r%levelmin)
+        m%box_ckey_max(1,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_xmax)*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_max(1,ilevel)=r%box_xmax*2**(ilevel-r%levelmin)
+        m%box_ckey_max(1,ilevel)=r%box_xmax*2**(ilevel-r%bound_levelmin)
      endif
 #if NDIM>1
-       if(r%box_ymin.GE.0)then
-        m%box_ckey_min(2,ilevel)=r%box_ymin*2**(ilevel-r%levelmin)
+     if(r%box_ymin.GE.0)then
+        m%box_ckey_min(2,ilevel)=r%box_ymin*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_min(2,ilevel)=(m%ckey_max(r%levelmin)+r%box_ymin)*2**(ilevel-r%levelmin)
+        m%box_ckey_min(2,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_ymin)*2**(ilevel-r%bound_levelmin)
      endif
      if(r%box_ymax.LE.0)then
-        m%box_ckey_max(2,ilevel)=(m%ckey_max(r%levelmin)+r%box_ymax)*2**(ilevel-r%levelmin)
+        m%box_ckey_max(2,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_ymax)*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_max(2,ilevel)=r%box_ymax*2**(ilevel-r%levelmin)
+        m%box_ckey_max(2,ilevel)=r%box_ymax*2**(ilevel-r%bound_levelmin)
      endif
 #endif
 #if NDIM>2
-       if(r%box_zmin.GE.0)then
-        m%box_ckey_min(3,ilevel)=r%box_zmin*2**(ilevel-r%levelmin)
+     if(r%box_zmin.GE.0)then
+        m%box_ckey_min(3,ilevel)=r%box_zmin*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_min(3,ilevel)=(m%ckey_max(r%levelmin)+r%box_zmin)*2**(ilevel-r%levelmin)
+        m%box_ckey_min(3,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_zmin)*2**(ilevel-r%bound_levelmin)
      endif
      if(r%box_zmax.LE.0)then
-        m%box_ckey_max(3,ilevel)=(m%ckey_max(r%levelmin)+r%box_zmax)*2**(ilevel-r%levelmin)
+        m%box_ckey_max(3,ilevel)=(m%ckey_max(r%bound_levelmin)+r%box_zmax)*2**(ilevel-r%bound_levelmin)
      else
-        m%box_ckey_max(3,ilevel)=r%box_zmax*2**(ilevel-r%levelmin)
+        m%box_ckey_max(3,ilevel)=r%box_zmax*2**(ilevel-r%bound_levelmin)
      endif
 #endif
   end do
 
-  ! This sets the min. and max. Cartesian keys of the box for coarse levels.
-  ! This is required for the Multigrid solver
-  do ilevel=r%levelmin-1,1,-1
-     m%box_ckey_min(1:3,ilevel)=m%box_ckey_min(1:3,ilevel+1)/2
-     m%box_ckey_max(1,ilevel)=m%ckey_max(ilevel)-(m%ckey_max(ilevel+1)-m%box_ckey_max(1,ilevel+1))/2
-     m%box_ckey_max(2,ilevel)=m%ckey_max(ilevel)-(m%ckey_max(ilevel+1)-m%box_ckey_max(2,ilevel+1))/2
-     m%box_ckey_max(3,ilevel)=m%ckey_max(ilevel)-(m%ckey_max(ilevel+1)-m%box_ckey_max(3,ilevel+1))/2
+  ! Bounding box for boundary regions
+  do ibound=1,r%nbound
+     do ilevel=r%bound_levelmin,r%nlevelmax+1
+        if(r%bound_xmin(ibound).GE.0)then
+           m%bound_ckey_min(1,ibound,ilevel)=r%bound_xmin(ibound)*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_min(1,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_xmin(ibound))*2**(ilevel-r%bound_levelmin)
+        endif
+        if(r%bound_xmax(ibound).LE.0)then
+           m%bound_ckey_max(1,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_xmax(ibound))*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_max(1,ibound,ilevel)=r%bound_xmax(ibound)*2**(ilevel-r%bound_levelmin)
+        endif
+#if NDIM>1
+        if(r%bound_ymin(ibound).GE.0)then
+           m%bound_ckey_min(2,ibound,ilevel)=r%bound_ymin(ibound)*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_min(2,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_ymin(ibound))*2**(ilevel-r%bound_levelmin)
+        endif
+        if(r%bound_ymax(ibound).LE.0)then
+           m%bound_ckey_max(2,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_ymax(ibound))*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_max(2,ibound,ilevel)=r%bound_ymax(ibound)*2**(ilevel-r%bound_levelmin)
+        endif
+#endif
+#if NDIM>2
+        if(r%bound_zmin(ibound).GE.0)then
+           m%bound_ckey_min(3,ibound,ilevel)=r%bound_zmin(ibound)*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_min(3,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_zmin(ibound))*2**(ilevel-r%bound_levelmin)
+        endif
+        if(r%bound_zmax(ibound).LE.0)then
+           m%bound_ckey_max(3,ibound,ilevel)=(m%ckey_max(r%bound_levelmin)+r%bound_zmax(ibound))*2**(ilevel-r%bound_levelmin)
+        else
+           m%bound_ckey_max(3,ibound,ilevel)=r%bound_zmax(ibound)*2**(ilevel-r%bound_levelmin)
+        endif
+#endif
+     end do
   end do
 
   ! Number of octs across the grid at levelmin
@@ -238,11 +401,14 @@ subroutine init_amr(mdl,r,g,m)
 #endif
 
   ! Size of the box in code units in the x-direction
-  if(r%box_size>0)then
-     r%boxlen = r%box_size/dble(m%nx)*m%ckey_max(r%levelmin)
+  if(r%box_size(1)>0)then
+     r%boxlen = r%box_size(1)/dble(m%nx)*m%ckey_max(r%levelmin)
   else
-     r%box_size = r%boxlen*dble(m%nx)/m%ckey_max(r%levelmin)
+     r%box_size(1) = r%boxlen*dble(m%nx)/m%ckey_max(r%levelmin)
   endif
+  ! Size of the box in code units in the y- and z-directions
+  r%box_size(2) = r%box_size(1)/dble(m%nx)*dble(m%ny)
+  r%box_size(3) = r%box_size(1)/dble(m%nx)*dble(m%nz)
 
   ! Coordinates of lower left corner of the box
   allocate(m%skip(1:ndim))
@@ -271,8 +437,8 @@ subroutine init_amr(mdl,r,g,m)
      m%domain(r%levelmin)%b(1,0) = 0
      m%domain(r%levelmin)%b(1,g%ncpu) = m%hkey_max(1,r%levelmin)
   else
-     ngrid=ngrid_tot/g%ncpu
-     nremain=ngrid_tot-int(ngrid,kind=8)*g%ncpu
+     ngrid=int(ngrid_tot/int(g%ncpu,kind=8),kind=4)
+     nremain=int(ngrid_tot-int(ngrid,kind=8)*int(g%ncpu,kind=8),kind=4)
      igrid=0
      icpu=1
      do ikey=1, m%hkey_max(1,r%levelmin)-1
@@ -320,14 +486,50 @@ subroutine init_amr(mdl,r,g,m)
 
   ! Allocate head, tail and numbers for each level
   if(r%verbose.and.g%myid==1)write(*,*)'Initialize oct decomposition'
-  allocate(m%head(r%levelmin:r%nlevelmax))
-  allocate(m%tail(r%levelmin:r%nlevelmax))
-  allocate(m%head_cache(1:r%nlevelmax))
-  allocate(m%tail_cache(1:r%nlevelmax))
-  allocate(m%noct(r%levelmin:r%nlevelmax))
-  allocate(m%noct_min(r%levelmin:r%nlevelmax))
-  allocate(m%noct_max(r%levelmin:r%nlevelmax))
-  allocate(m%noct_tot(r%levelmin:r%nlevelmax))
+  allocate(m%head(1:r%nlevelmax))
+  allocate(m%tail(1:r%nlevelmax))
+  allocate(m%noct(1:r%nlevelmax))
+  allocate(m%noct_min(1:r%nlevelmax))
+  allocate(m%noct_max(1:r%nlevelmax))
+  allocate(m%noct_tot(1:r%nlevelmax))
+
+#ifdef _CUDA
+  if(type=='amr')then
+     allocate(m%head_cache(1:r%nlevelmax))
+     allocate(m%tail_cache(1:r%nlevelmax))
+     allocate(m%noct_cache(1:r%nlevelmax))
+     m%head_cache=1
+     m%tail_cache=0
+     m%noct_cache=0
+     m%ifree_cache=1
+     ! Compute Cartesian key offset for GPU hash table
+     allocate(m%key_off(1:r%nlevelmax+1))
+     m%key_off(1)=1
+     do ilevel=2,r%nlevelmax+1
+        m%key_off(ilevel)=m%key_off(ilevel-1)+m%hkey_max(1,ilevel-1)
+     end do
+     ! Allocate and transfer bounding box to device
+     allocate(ckey_max(1:r%nlevelmax+1))
+     allocate(key_off(1:r%nlevelmax+1))
+     allocate(box_ckey_min(1:3,1:r%nlevelmax+1))
+     allocate(box_ckey_max(1:3,1:r%nlevelmax+1))
+     ckey_max=m%ckey_max
+     key_off=m%key_off
+     periodic=r%periodic
+     box_size=r%box_size
+     constant_gravity=r%constant_gravity
+     box_ckey_min=m%box_ckey_min
+     box_ckey_max=m%box_ckey_max
+     if(r%nbound>0)then
+        allocate(bound_ckey_min(1:3,1:r%nbound,1:r%nlevelmax+1))
+        allocate(bound_ckey_max(1:3,1:r%nbound,1:r%nlevelmax+1))
+        bound_ckey_min=m%bound_ckey_min
+        bound_ckey_max=m%bound_ckey_max
+     endif
+  endif
+#endif
+
+  ! Initialize level-based arrays
   m%head=1       ! Head oct in the level
   m%tail=0       ! Tail oct in the level
   m%noct=0       ! Number of oct in the level and in the cpu
@@ -338,17 +540,43 @@ subroutine init_amr(mdl,r,g,m)
   m%noct_used_tot=0  ! Total number of oct used (all cpus)
 
   ! Allocate head, tail, numbers and indice for clean and dirty octs at each level
-  allocate(m%head_clean(r%levelmin:r%nlevelmax))
-  allocate(m%tail_clean(r%levelmin:r%nlevelmax))
-  allocate(m%noct_clean(r%levelmin:r%nlevelmax))
-  allocate(m%indx_clean(1:r%ngridmax))
-  allocate(m%head_dirty(r%levelmin:r%nlevelmax))
-  allocate(m%tail_dirty(r%levelmin:r%nlevelmax))
-  allocate(m%noct_dirty(r%levelmin:r%nlevelmax))
-  allocate(m%indx_dirty(1:r%ngridmax))
+!!$  allocate(m%head_clean(1:r%nlevelmax))
+!!$  allocate(m%tail_clean(1:r%nlevelmax))
+!!$  allocate(m%noct_clean(1:r%nlevelmax))
+!!$  allocate(m%indx_clean(1:m%ngridmax))
+!!$  allocate(m%head_dirty(1:r%nlevelmax))
+!!$  allocate(m%tail_dirty(1:r%nlevelmax))
+!!$  allocate(m%noct_dirty(1:r%nlevelmax))
+!!$  allocate(m%indx_dirty(1:m%ngridmax))
 
+end subroutine init_amr
+!###############################################
+!###############################################
+!###############################################
+!###############################################
+subroutine init_params(mdl,r,g)
+  use mdl_module
+  use amr_parameters, ONLY: nhilbert,ndim
+  use amr_commons, ONLY: run_t, global_t
+  use hash
+  use hilbert
+  use output_amr_module, only: input_params
+  implicit none
+  type(mdl_t)::mdl
+  type(run_t)::r
+  type(global_t)::g
+
+  character(len=5)::nchar
+  character(len=80)::file_params
+  integer::ncpu_file,levelmin_file,nlevelmax_file
+  logical::file_exist
+  
+  ! Initial time step for each level
+  g%dtold=0.0D0
+  g%dtnew=0.0D0
+
+  ! Read parameters from restart file
   if(r%nrestart>0)then
-     ! Read parameters from restart file
      call title(r%nrestart,nchar)
      file_params='backup_'//TRIM(nchar)//'/params.bin'
      inquire(file=file_params, exist=file_exist)
@@ -361,8 +589,8 @@ subroutine init_amr(mdl,r,g,m)
         stop
      endif
   else
+  ! Read parameters from ramses output file
      if(r%filetype=='ramses')then
-        ! Read parameters from ramses output file
         file_params=TRIM(r%initfile(r%levelmin))//'/params.bin'
         inquire(file=file_params, exist=file_exist)
         if(file_exist)then
@@ -376,7 +604,7 @@ subroutine init_amr(mdl,r,g,m)
      endif
   endif
 
-end subroutine init_amr
+end subroutine init_params
 !###############################################
 !###############################################
 !###############################################

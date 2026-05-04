@@ -10,52 +10,21 @@ subroutine get_bound(s,ix,ilevel,ibound)
 
   logical::in_bound
   integer::i,idim
-  integer(kind=4)::bound_ckey_min  ! Min. Cartesian key per level for the boundary region
-  integer(kind=4)::bound_ckey_max  ! Max. Cartesian key per level for the boundary region
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
-    do i=1,r%nbound
+    ibound = 0
+    do i = 1, r%nbound
        in_bound = .true.
-       if(r%bound_xmin(i).GE.0)then
-          bound_ckey_min=r%bound_xmin(i)*2**(ilevel-r%levelmin)
-       else
-          bound_ckey_min=(m%ckey_max(r%levelmin)+r%bound_xmin(i))*2**(ilevel-r%levelmin)
-       endif
-       if(r%bound_xmax(i).LE.0)then
-          bound_ckey_max=(m%ckey_max(r%levelmin)+r%bound_xmax(i))*2**(ilevel-r%levelmin)-1
-       else
-          bound_ckey_max=r%bound_xmax(i)*2**(ilevel-r%levelmin)-1
-       endif
-       in_bound = in_bound .and. ix(1) .ge. bound_ckey_min .and. ix(1) .le. bound_ckey_max
+       in_bound = in_bound .and. ix(1) .ge. m%bound_ckey_min(1,i,ilevel) .and. ix(1) .lt. m%bound_ckey_max(1,i,ilevel)
 #if NDIM>1
-       if(r%bound_ymin(i).GE.0)then
-          bound_ckey_min=r%bound_ymin(i)*2**(ilevel-r%levelmin)
-       else
-          bound_ckey_min=(m%ckey_max(r%levelmin)+r%bound_ymin(i))*2**(ilevel-r%levelmin)
-       endif
-       if(r%bound_ymax(i).LE.0)then
-          bound_ckey_max=(m%ckey_max(r%levelmin)+r%bound_ymax(i))*2**(ilevel-r%levelmin)-1
-       else
-          bound_ckey_max=r%bound_ymax(i)*2**(ilevel-r%levelmin)-1
-       endif
-       in_bound = in_bound .and. ix(2) .ge. bound_ckey_min .and. ix(2) .le. bound_ckey_max
+       in_bound = in_bound .and. ix(2) .ge. m%bound_ckey_min(2,i,ilevel) .and. ix(2) .lt. m%bound_ckey_max(2,i,ilevel)
 #endif
 #if NDIM>2
-       if(r%bound_zmin(i).GE.0)then
-          bound_ckey_min=r%bound_zmin(i)*2**(ilevel-r%levelmin)
-       else
-          bound_ckey_min=(m%ckey_max(r%levelmin)+r%bound_zmin(i))*2**(ilevel-r%levelmin)
-       endif
-       if(r%bound_zmax(i).LE.0)then
-          bound_ckey_max=(m%ckey_max(r%levelmin)+r%bound_zmax(i))*2**(ilevel-r%levelmin)-1
-       else
-          bound_ckey_max=r%bound_zmax(i)*2**(ilevel-r%levelmin)-1
-       endif
-       in_bound = in_bound .and. ix(3) .ge. bound_ckey_min .and. ix(3) .le. bound_ckey_max
+       in_bound = in_bound .and. ix(3) .ge. m%bound_ckey_min(3,i,ilevel) .and. ix(3) .lt. m%bound_ckey_max(3,i,ilevel)
 #endif
-       if(in_bound)then
-          ibound=i
+       if (in_bound) then
+          ibound = i
           exit
        endif
     end do
@@ -67,7 +36,7 @@ end subroutine get_bound
 !################################################################
 !################################################################
 !################################################################
-subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
+subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
   use amr_parameters, only: ndim, twotondim, nvector
   use hydro_parameters, only: nvar, nener
   use rt_parameters, only: nrtvar, nrtgrp
@@ -75,9 +44,10 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
   type(run_t)::r
   type(global_t)::g
   type(mesh_t)::m
-  type(oct)::grid, grid_ref
+  integer::igrid
+  integer::igrid_ref
   integer::ibound
-  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
+  real(kind=8)::scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   real(kind=8)::scale_np, scale_fp, dx_cgs, dt_cgs
 
   integer,dimension(1:8,1:3)::ref_right=reshape(&
@@ -111,28 +81,33 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
   real(kind=8),dimension(1:nvector,1:ndim)::xx
   real(kind=8),dimension(1:nvector,1:nvar)::uu
   real(kind=8),dimension(1:nvector,1:nvar)::qq
+  real(kind=8),dimension(1:nvector,1:ndim)::ff
+  real(kind=8),dimension(1:nvector)::phi
   real(kind=8)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
 
   type = r%bound_type(ibound)
   dir = r%bound_dir(ibound)
   shift = r%bound_shift(ibound)
 
+  ! Mesh size at level ilevel in code units
+  dx=r%boxlen/2**m%grid(igrid)%lev
+
   ! Set refinement map
   if(shift==+1)then
      do ind=1,twotondim
         if(ref_right(ind,dir)>0)then
-           grid%refined(ind)=grid_ref%refined(ref_right(ind,dir))
+           m%grid(igrid)%refined(ind)=m%grid(igrid_ref)%refined(ref_right(ind,dir))
         else
-           grid%refined(ind)=.false.
+           m%grid(igrid)%refined(ind)=.false.
         endif
      end do
   end if
   if(shift==-1)then
      do ind=1,twotondim
         if(ref_left(ind,dir)>0)then
-           grid%refined(ind)=grid_ref%refined(ref_left(ind,dir))
+           m%grid(igrid)%refined(ind)=m%grid(igrid_ref)%refined(ref_left(ind,dir))
         else
-           grid%refined(ind)=.false.
+           m%grid(igrid)%refined(ind)=.false.
         endif
      end do
   end if
@@ -147,24 +122,24 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
            reverse=1
            if(ivar==1+dir)reverse=-1
            do ind=1,twotondim
-              grid%uold(ind,ivar)=grid_ref%uold(ind1_right(ind,dir),ivar)*reverse
+              m%uold(ind,ivar,igrid)=m%uold(ind1_right(ind,dir),ivar,igrid_ref)*reverse
            end do
         end do
 #ifdef MHD
 #if NDIM==1
         do ind=1,twotondim
-           grid%bold(ind,1)=r%A_ave
-           grid%bold(ind,4)=r%A_ave
-           grid%bold(ind,2)=grid_ref%bold(ind1_right(ind,dir),2)
-           grid%bold(ind,5)=grid_ref%bold(ind1_right(ind,dir),5)
-           grid%bold(ind,3)=grid_ref%bold(ind1_right(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind1_right(ind,dir),6)
+           m%bold(ind,1,igrid)=r%A_ave
+           m%bold(ind,4,igrid)=r%A_ave
+           m%bold(ind,2,igrid)=m%bold(ind1_right(ind,dir),2,igrid_ref)
+           m%bold(ind,5,igrid)=m%bold(ind1_right(ind,dir),5,igrid_ref)
+           m%bold(ind,3,igrid)=m%bold(ind1_right(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind1_right(ind,dir),6,igrid_ref)
         end do
 #endif
 #if NDIM==2
         do ind=1,twotondim
-           grid%bold(ind,3)=grid_ref%bold(ind1_right(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind1_right(ind,dir),6)
+           m%bold(ind,3,igrid)=m%bold(ind1_right(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind1_right(ind,dir),6,igrid_ref)
         end do
 #endif
 #endif
@@ -173,7 +148,7 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
            reverse=1
            if(mod(ivar-1, ndim+1) == dir) reverse=-1
            do ind=1,twotondim
-              grid%rtuold(ind,ivar)=grid_ref%rtuold(ind1_right(ind,dir),ivar)*reverse
+              m%rtuold(ind,ivar,igrid)=m%rtuold(ind1_right(ind,dir),ivar,igrid_ref)*reverse
            end do
         end do
 #endif
@@ -184,24 +159,24 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
            reverse=1
            if(ivar==1+dir)reverse=-1
            do ind=1,twotondim
-              grid%uold(ind,ivar)=grid_ref%uold(ind1_left(ind,dir),ivar)*reverse
+              m%uold(ind,ivar,igrid)=m%uold(ind1_left(ind,dir),ivar,igrid_ref)*reverse
            end do
         end do
 #ifdef MHD
 #if NDIM==1
         do ind=1,twotondim
-           grid%bold(ind,1)=r%A_ave
-           grid%bold(ind,4)=r%A_ave
-           grid%bold(ind,2)=grid_ref%bold(ind1_left(ind,dir),2)
-           grid%bold(ind,5)=grid_ref%bold(ind1_left(ind,dir),5)
-           grid%bold(ind,3)=grid_ref%bold(ind1_left(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind1_left(ind,dir),6)
+           m%bold(ind,1,igrid)=r%A_ave
+           m%bold(ind,4,igrid)=r%A_ave
+           m%bold(ind,2,igrid)=m%bold(ind1_left(ind,dir),2,igrid_ref)
+           m%bold(ind,5,igrid)=m%bold(ind1_left(ind,dir),5,igrid_ref)
+           m%bold(ind,3,igrid)=m%bold(ind1_left(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind1_left(ind,dir),6,igrid_ref)
         end do
 #endif
 #if NDIM==2
         do ind=1,twotondim
-           grid%bold(ind,3)=grid_ref%bold(ind1_left(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind1_left(ind,dir),6)
+           m%bold(ind,3,igrid)=m%bold(ind1_left(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind1_left(ind,dir),6,igrid_ref)
         end do
 #endif
 #endif
@@ -210,7 +185,7 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
            reverse=1
            if(mod(ivar-1, ndim+1) == dir) reverse=-1
            do ind=1,twotondim
-              grid%rtuold(ind,ivar)=grid_ref%rtuold(ind1_left(ind,dir),ivar)*reverse
+              m%rtuold(ind,ivar,igrid)=m%rtuold(ind1_left(ind,dir),ivar,igrid_ref)*reverse
            end do
         end do
 #endif
@@ -224,31 +199,31 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
      if(shift==+1)then
         do ivar=1,nvar
            do ind=1,twotondim
-              grid%uold(ind,ivar)=grid_ref%uold(ind2_right(ind,dir),ivar)
+              m%uold(ind,ivar,igrid)=m%uold(ind2_right(ind,dir),ivar,igrid_ref)
            end do
         end do
 #ifdef MHD
 #if NDIM==1
         do ind=1,twotondim
-           grid%bold(ind,1)=r%A_ave
-           grid%bold(ind,4)=r%A_ave
-           grid%bold(ind,2)=grid_ref%bold(ind2_right(ind,dir),2)
-           grid%bold(ind,5)=grid_ref%bold(ind2_right(ind,dir),5)
-           grid%bold(ind,3)=grid_ref%bold(ind2_right(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind2_right(ind,dir),6)
+           m%bold(ind,1,igrid)=r%A_ave
+           m%bold(ind,4,igrid)=r%A_ave
+           m%bold(ind,2,igrid)=m%bold(ind2_right(ind,dir),2,igrid_ref)
+           m%bold(ind,5,igrid)=m%bold(ind2_right(ind,dir),5,igrid_ref)
+           m%bold(ind,3,igrid)=m%bold(ind2_right(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind2_right(ind,dir),6,igrid_ref)
         end do
 #endif
 #if NDIM==2
         do ind=1,twotondim
-           grid%bold(ind,3)=grid_ref%bold(ind2_right(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind2_right(ind,dir),6)
+           m%bold(ind,3,igrid)=m%bold(ind2_right(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind2_right(ind,dir),6,igrid_ref)
         end do
 #endif
 #endif
 #ifdef RT
         do ivar=1,nrtvar
            do ind=1,twotondim
-              grid%rtuold(ind,ivar)=grid_ref%rtuold(ind2_right(ind,dir),ivar)
+              m%rtuold(ind,ivar,igrid)=m%rtuold(ind2_right(ind,dir),ivar,igrid_ref)
            end do
         end do
 #endif
@@ -257,31 +232,31 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
      if(shift==-1)then
         do ivar=1,nvar
            do ind=1,twotondim
-              grid%uold(ind,ivar)=grid_ref%uold(ind2_left(ind,dir),ivar)
+              m%uold(ind,ivar,igrid)=m%uold(ind2_left(ind,dir),ivar,igrid_ref)
            end do
         end do
 #ifdef MHD
 #if NDIM==1
         do ind=1,twotondim
-           grid%bold(ind,1)=r%A_ave
-           grid%bold(ind,4)=r%A_ave
-           grid%bold(ind,2)=grid_ref%bold(ind2_left(ind,dir),2)
-           grid%bold(ind,5)=grid_ref%bold(ind2_left(ind,dir),5)
-           grid%bold(ind,3)=grid_ref%bold(ind2_left(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind2_left(ind,dir),6)
+           m%bold(ind,1,igrid)=r%A_ave
+           m%bold(ind,4,igrid)=r%A_ave
+           m%bold(ind,2,igrid)=m%bold(ind2_left(ind,dir),2,igrid_ref)
+           m%bold(ind,5,igrid)=m%bold(ind2_left(ind,dir),5,igrid_ref)
+           m%bold(ind,3,igrid)=m%bold(ind2_left(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind2_left(ind,dir),6,igrid_ref)
         end do
 #endif
 #if NDIM==2
         do ind=1,twotondim
-           grid%bold(ind,3)=grid_ref%bold(ind2_left(ind,dir),3)
-           grid%bold(ind,6)=grid_ref%bold(ind2_left(ind,dir),6)
+           m%bold(ind,3,igrid)=m%bold(ind2_left(ind,dir),3,igrid_ref)
+           m%bold(ind,6,igrid)=m%bold(ind2_left(ind,dir),6,igrid_ref)
         end do
 #endif
 #endif
 #ifdef RT
         do ivar=1,nrtvar
            do ind=1,twotondim
-              grid%rtuold(ind,ivar)=grid_ref%rtuold(ind2_left(ind,dir),ivar)
+              m%rtuold(ind,ivar,igrid)=m%rtuold(ind2_left(ind,dir),ivar,igrid_ref)
            end do
         end do
 #endif
@@ -294,37 +269,37 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
 
      do ind=1,twotondim
 
-        grid%uold(ind,1)=r%d_bound(ibound)
-        grid%uold(ind,2)=r%d_bound(ibound)*r%u_bound(ibound)
+        m%uold(ind,1,igrid)=r%d_bound(ibound)
+        m%uold(ind,2,igrid)=r%d_bound(ibound)*r%u_bound(ibound)
         ek_bound=0.5d0*r%d_bound(ibound)*r%u_bound(ibound)**2
-        grid%uold(ind,3)=r%d_bound(ibound)*r%v_bound(ibound)
+        m%uold(ind,3,igrid)=r%d_bound(ibound)*r%v_bound(ibound)
         ek_bound=ek_bound+0.5d0*r%d_bound(ibound)*r%v_bound(ibound)**2
-        grid%uold(ind,4)=r%d_bound(ibound)*r%w_bound(ibound)
+        m%uold(ind,4,igrid)=r%d_bound(ibound)*r%w_bound(ibound)
         ek_bound=ek_bound+0.5d0*r%d_bound(ibound)*r%w_bound(ibound)**2
 #if NENER>0
         do ivar=1,nener
-           grid%uold(ind,5+ivar)=r%prad_bound(ibound,ivar)/(r%gamma_rad(ivar)-1.0d0)
+           m%uold(ind,5+ivar,igrid)=r%prad_bound(ibound,ivar)/(r%gamma_rad(ivar)-1.0d0)
            ek_bound=ek_bound+r%prad_bound(ibound,ivar)/(r%gamma_rad(ivar)-1.0d0)
         enddo
 #endif
-        grid%uold(ind,5)=r%p_bound(ibound)/(r%gamma-1.0d0)+ek_bound
+        m%uold(ind,5,igrid)=r%p_bound(ibound)/(r%gamma-1.0d0)+ek_bound
 #if NVAR>5+NENER
         do ivar=6+nener,nvar
-           grid%uold(ind,ivar)=r%d_bound(ibound)*r%var_bound(ibound,ivar-5-nener)
+           m%uold(ind,ivar,igrid)=r%d_bound(ibound)*r%var_bound(ibound,ivar-5-nener)
         end do
 #endif
 #ifdef MHD
 #if NDIM==1
-        grid%bold(ind,1)=r%A_ave
-        grid%bold(ind,4)=r%A_ave
-        grid%bold(ind,2)=r%B_bound(ibound)
-        grid%bold(ind,5)=r%B_bound(ibound)
-        grid%bold(ind,3)=r%C_bound(ibound)
-        grid%bold(ind,6)=r%C_bound(ibound)
+        m%bold(ind,1,igrid)=r%A_ave
+        m%bold(ind,4,igrid)=r%A_ave
+        m%bold(ind,2,igrid)=r%B_bound(ibound)
+        m%bold(ind,5,igrid)=r%B_bound(ibound)
+        m%bold(ind,3,igrid)=r%C_bound(ibound)
+        m%bold(ind,6,igrid)=r%C_bound(ibound)
 #endif
 #if NDIM==2
-        grid%bold(ind,3)=r%C_bound(ibound)
-        grid%bold(ind,6)=r%C_bound(ibound)
+        m%bold(ind,3,igrid)=r%C_bound(ibound)
+        m%bold(ind,6,igrid)=r%C_bound(ibound)
 #endif
 #endif
      end do
@@ -333,13 +308,13 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
      call rt_units(r,g,scale_np,scale_fp)
      do ind=1,twotondim
         do ivar=1,nrtgrp
-            grid%rtuold(ind,1+(ivar-1)*(ndim+1))= &
-              r%rt_n_bound(ibound,ivar)/g%rt_c(grid%lev)/scale_fp
-            grid%rtuold(ind,2+(ivar-1)*(ndim+1))= &
+            m%rtuold(ind,1+(ivar-1)*(ndim+1),igrid)= &
+              r%rt_n_bound(ibound,ivar)/g%rt_c(m%grid(igrid)%lev)/scale_fp
+            m%rtuold(ind,2+(ivar-1)*(ndim+1),igrid)= &
               r%rt_n_bound(ibound,ivar)*r%rt_u_bound(ibound,ivar)/scale_fp
-            if(ndim>1) grid%rtuold(ind,3+(ivar-1)*(ndim+1))= &
+            if(ndim>1) m%rtuold(ind,3+(ivar-1)*(ndim+1),igrid)= &
                 r%rt_n_bound(ibound,ivar)*r%rt_v_bound(ibound,ivar)/scale_fp
-            if(ndim>2) grid%rtuold(ind,4+(ivar-1)*(ndim+1))= &
+            if(ndim>2) m%rtuold(ind,4+(ivar-1)*(ndim+1),igrid)= &
                 r%rt_n_bound(ibound,ivar)*r%rt_w_bound(ibound,ivar)/scale_fp
         end do
      end do
@@ -350,13 +325,10 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
   ! Imposed BC from condinit
   if(type == 4)then
 
-     ! Mesh size at level ilevel in code units
-     dx=r%boxlen/2**grid%lev
-
      do ind=1,twotondim
         do idim=1,ndim
            nstride=2**(idim-1)
-           xx(1,idim)=(2*grid%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+           xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
         end do
         ! Call initial condition routine
         call condinit(r,g,xx,qq,dx,1)
@@ -393,7 +365,7 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
         uu(1,5)=eint+ekin+erad+emag
         ! Convert to conservative variables
         do ivar=1,nvar
-           grid%uold(ind,ivar)=uu(1,ivar)
+           m%uold(ind,ivar,igrid)=uu(1,ivar)
         end do
      end do
 
@@ -402,19 +374,16 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
   ! Imposed BC from boundana
   if(type == 5)then
 
-     ! Mesh size at level ilevel in code units
-     dx=r%boxlen/2**grid%lev
-
      do ind=1,twotondim
         do idim=1,ndim
            nstride=2**(idim-1)
-           xx(1,idim)=(2*grid%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+           xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
         end do
         ! Call initial condition routine
         call boundana(r,g,xx,uu,dx,ibound,1)
         ! Scatter variables to main memory
         do ivar=1,nvar
-           grid%uold(ind,ivar)=uu(1,ivar)
+           m%uold(ind,ivar,igrid)=uu(1,ivar)
         end do
      end do
 
@@ -423,16 +392,23 @@ subroutine init_bound_refine(r,g,m,grid,grid_ref,ibound)
 #endif
 
 #ifdef GRAV
-  ! Isolated BC
-  do idim=1,ndim
-     do ind=1,twotondim
-        grid%f(ind,idim)=0.0d0
-     end do
-  end do
+
   do ind=1,twotondim
-     grid%phi(ind)=0.0d0
-     grid%phi_old(ind)=0.0d0
+     do idim=1,ndim
+        nstride=2**(idim-1)
+        xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+     end do
+     ! Call analytical acceleration routine
+     call gravana(r,g,xx,ff,dx,1)
+     do idim=1,ndim
+        m%f(ind,idim,igrid)=ff(1,idim)
+     end do
+     ! Call analytical potential routine
+     call phiana(r,g,xx,phi,dx,1)
+     m%phi(ind,igrid)=phi(1)
+     m%phi_old(ind,igrid)=phi(1)
   end do
+
 #endif
 
 end subroutine init_bound_refine
@@ -440,14 +416,118 @@ end subroutine init_bound_refine
 !################################################################
 !################################################################
 !################################################################
-subroutine init_bound_flag(r,g,m,grid,grid_ref,ibound)
-  use amr_parameters, only: ndim,twotondim
+subroutine init_bound_phi(r,g,m,igrid,igrid_ref,ibound)
+  use amr_parameters, only: ndim, twotondim, nvector
+  use amr_commons, only: run_t, global_t, mesh_t, oct
+  type(run_t)::r
+  type(global_t)::g
+  type(mesh_t)::m
+  integer::igrid
+  integer::igrid_ref
+  integer::ibound
+
+  integer::idim, ind, nstride
+  real(kind=8)::dx
+  real(kind=8),dimension(1:nvector,1:ndim)::xx
+  real(kind=8),dimension(1:nvector)::pp
+
+#ifdef GRAV
+
+  ! Mesh size at level ilevel in code units
+  dx=r%boxlen/2**m%grid(igrid)%lev
+
+  do ind=1,twotondim
+     do idim=1,ndim
+        nstride=2**(idim-1)
+        xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+     end do
+     ! Call analytical potential routine
+     call phiana(r,g,xx,pp,dx,1)
+     m%phi(ind,igrid)=pp(1)
+     m%phi_old(ind,igrid)=pp(1)
+     ! Set mask to -1
+     m%f(ind,3,igrid)=-1
+  end do
+
+#endif
+
+end subroutine init_bound_phi
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine init_bound_mg(r,g,m,igrid,igrid_ref,ibound)
+  use amr_parameters, only: ndim, twotondim, nvector
+  use amr_commons, only: run_t, global_t, mesh_t, oct
+  type(run_t)::r
+  type(global_t)::g
+  type(mesh_t)::m
+  integer::igrid
+  integer::igrid_ref
+  integer::ibound
+
+  integer::ind
+
+#ifdef GRAV
+  do ind=1,twotondim
+     m%phi(ind,igrid)=0.0
+     m%f(ind,3,igrid)=-1
+  end do
+#endif
+
+end subroutine init_bound_mg
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine init_bound_grav(r,g,m,igrid,igrid_ref,ibound)
+  use amr_parameters, only: ndim, twotondim, nvector
+  use amr_commons, only: run_t, global_t, mesh_t, oct
+  type(run_t)::r
+  type(global_t)::g
+  type(mesh_t)::m
+  integer::igrid
+  integer::igrid_ref
+  integer::ibound
+
+  integer::idim, ind, nstride
+  real(kind=8)::dx
+  real(kind=8),dimension(1:nvector,1:ndim)::xx
+  real(kind=8),dimension(1:nvector,1:ndim)::ff
+
+#ifdef GRAV
+
+  ! Mesh size at level ilevel in code units
+  dx=r%boxlen/2**m%grid(igrid)%lev
+
+  do ind=1,twotondim
+     do idim=1,ndim
+        nstride=2**(idim-1)
+        xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+     end do
+     ! Call analytical acceleration routine
+     call gravana(r,g,xx,ff,dx,1)
+     do idim=1,ndim
+        m%f(ind,idim,igrid)=ff(1,idim)
+     end do
+  end do
+
+#endif
+
+end subroutine init_bound_grav
+!################################################################
+!################################################################
+!################################################################
+!################################################################
+subroutine init_bound_flag(r,g,m,igrid,igrid_ref,ibound)
+  use amr_parameters, only: ndim, twotondim
   use hydro_parameters, only: nvar, nener
   use amr_commons, only: run_t, global_t, mesh_t, oct
   type(run_t)::r
   type(global_t)::g
   type(mesh_t)::m
-  type(oct)::grid, grid_ref
+  integer::igrid
+  integer::igrid_ref
   integer::ibound
 
   integer,dimension(1:8,1:3)::ref_right=reshape(&
@@ -470,18 +550,18 @@ subroutine init_bound_flag(r,g,m,grid,grid_ref,ibound)
   if(shift==+1)then
      do ind=1,twotondim
         if(ref_right(ind,dir)>0)then
-           grid%flag1(ind)=grid_ref%flag1(ref_right(ind,dir))
+           m%flag1(ind,igrid)=m%flag1(ref_right(ind,dir),igrid_ref)
         else
-           grid%flag1(ind)=0
+           m%flag1(ind,igrid)=0
         endif
      end do
   end if
   if(shift==-1)then
      do ind=1,twotondim
         if(ref_left(ind,dir)>0)then
-           grid%flag1(ind)=grid_ref%flag1(ref_left(ind,dir))
+           m%flag1(ind,igrid)=m%flag1(ref_left(ind,dir),igrid_ref)
         else
-           grid%flag1(ind)=0
+           m%flag1(ind,igrid)=0
         endif
      end do
   end if
@@ -491,14 +571,15 @@ end subroutine init_bound_flag
 !################################################################
 !################################################################
 !################################################################
-subroutine init_bound_flag2(r,g,m,grid,grid_ref,ibound)
-  use amr_parameters, only: ndim,twotondim
+subroutine init_bound_flag2(r,g,m,igrid,igrid_ref,ibound)
+  use amr_parameters, only: ndim, twotondim
   use hydro_parameters, only: nvar, nener
   use amr_commons, only: run_t, global_t, mesh_t, oct
   type(run_t)::r
   type(global_t)::g
   type(mesh_t)::m
-  type(oct)::grid, grid_ref
+  integer::igrid
+  integer::igrid_ref
   integer::ibound
 
   integer,dimension(1:8,1:3)::ref_right=reshape(&
@@ -521,18 +602,18 @@ subroutine init_bound_flag2(r,g,m,grid,grid_ref,ibound)
   if(shift==+1)then
      do ind=1,twotondim
         if(ref_right(ind,dir)>0)then
-           grid%flag2(ind)=grid_ref%flag2(ref_right(ind,dir))
+           m%flag2(ind,igrid)=m%flag2(ref_right(ind,dir),igrid_ref)
         else
-           grid%flag2(ind)=0
+          m%flag2(ind,igrid)=0
         endif
      end do
   end if
   if(shift==-1)then
      do ind=1,twotondim
         if(ref_left(ind,dir)>0)then
-           grid%flag2(ind)=grid_ref%flag2(ref_left(ind,dir))
+           m%flag2(ind,igrid)=m%flag2(ref_left(ind,dir),igrid_ref)
         else
-           grid%flag2(ind)=0
+           m%flag2(ind,igrid)=0
         endif
      end do
   end if

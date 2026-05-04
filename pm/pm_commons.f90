@@ -8,6 +8,7 @@ module pm_commons
      integer :: npart=0 ! Actual number of particles in processor
      integer(kind=8):: npart_tot=0 ! Total number of particles in all processors
      integer :: npart_max=0 ! Maximum number of particles in all processors
+     integer :: step_counter ! Step counter for high frequency csv dump
      integer :: nvaralloc ! Number of allocated variables
      integer :: norphan_peak ! Number of orphan particles outside of peak patch
      integer :: norphan_halo ! Number of orphan particles outside of halo patch
@@ -24,9 +25,12 @@ module pm_commons
      real(dp),allocatable,dimension(:)     ::tm       ! Merging time
      real(dp),allocatable,dimension(:)     ::up       ! Specific energy
      real(dp),allocatable,dimension(:)     ::phip     ! Potential
+     real(dp),allocatable,dimension(:)     ::charge   ! Charge
+     real(dp),allocatable,dimension(:)     ::size     ! Size
      integer ,allocatable,dimension(:)     ::levelp   ! Current level of particle
      integer(i8b),allocatable,dimension(:) ::idp      ! Particle unique identifier
      integer(i8b),allocatable,dimension(:) ::idm      ! Merging particle id
+     integer ,allocatable,dimension(:)     ::idt      ! Particle tracking (peak) id
      integer ,allocatable,dimension(:)     ::sortp    ! Sorted index
      integer ,allocatable,dimension(:)     ::workp    ! Work space
      integer ,allocatable,dimension(:)     ::pid      ! Peak ID

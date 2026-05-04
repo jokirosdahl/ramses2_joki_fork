@@ -12,6 +12,8 @@ module mdl_parameters
      enumerator::MDL_INIT_HYDRO
      enumerator::MDL_INIT_PART
      enumerator::MDL_INPUT_PART_GRAFIC
+     enumerator::MDL_INPUT_TRAC_GRAFIC
+     enumerator::MDL_INPUT_DUST_GRAFIC
      enumerator::MDL_INPUT_PART_ZOOM
      enumerator::MDL_INPUT_PART_ASCII
      enumerator::MDL_INPUT_STAR_ASCII
@@ -23,6 +25,7 @@ module mdl_parameters
      enumerator::MDL_NPART_MAX
      enumerator::MDL_INIT_FLAG
      enumerator::MDL_USER_FLAG
+     enumerator::MDL_ENSURE_SUBGRID
      enumerator::MDL_ENSURE_REF_RULES
      enumerator::MDL_COLLECT_NOCT
      enumerator::MDL_NOCT_TOT
@@ -85,8 +88,10 @@ module mdl_parameters
      enumerator::MDL_THERMAL_FEEDBACK
      enumerator::MDL_MECHANICAL_FEEDBACK
      enumerator::MDL_SINK_EVOLUTION
+     enumerator::MDL_SINK_MERGER
      enumerator::MDL_NEWDT_PART
      enumerator::MDL_BROADCAST_DT
+     enumerator::MDL_MAX_B_AND_Q
      enumerator::MDL_MAKE_INITIAL_PHI
      enumerator::MDL_RECURRENCE_ON_P
      enumerator::MDL_RECURRENCE_X_AND_R
@@ -125,6 +130,7 @@ module mdl_parameters
      enumerator::MDL_CHECK_PART_EMISSION
      enumerator::MDL_STAR_RT_FEEDBACK
      enumerator::MDL_SET_GRID_DEVICE
+     enumerator::MDL_TRANSFER_GRID_HOST
      enumerator::MDL_INIT_TURB
      enumerator::MDL_UPDATE_TURB
      enumerator::MDL_DRIVE_TURB

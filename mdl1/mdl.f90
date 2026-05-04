@@ -2,6 +2,8 @@ module mdl_module
 
   use mdl_parameters
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_FUNPTR, C_PTR
+  use amr_commons, only: mesh_t
+  use clfind_commons, only: clump_t
 
   type ::comm_buff
      integer(kind=4),dimension(:),allocatable::array
@@ -80,6 +82,10 @@ module mdl_module
      type(c_funptr),dimension(0:200)::callback
      type(c_ptr),dimension(0:200)::p1opaque
      integer(kind=4),dimension(0:200)::input_size, output_size
+
+     ! Pointers to data structurs
+     type(mesh_t),pointer::m
+     type(clump_t),pointer::c
 
   end type mdl_t
 
@@ -311,6 +317,7 @@ contains
 #endif
 #ifdef _CUDA
     integer::error_code
+    type(cudaDeviceProp) :: prop
 #endif
 #ifndef WITHOUTMPI
     call MPI_INIT(info)
@@ -330,6 +337,11 @@ contains
     mdl%mydev = mod(mdl%myid, mdl%ngpu) ! Determine which GPU this rank will use
     err_code = cudaSetDevice(mdl%mydev) ! Set the device for this rank
     if(mdl%myid==1)write(*,'(" Launching CUDA with ndevice/task =",I6)')mdl%ngpu
+    err_code = cudaGetDeviceProperties(prop,0)
+    write(*,'(" Device Name: ",A)')trim(prop%name)
+    write(*,'(" Compute Capability: ",i0,".",i0)')prop%major,prop%minor
+    write(*,'(" Shared Memory per Block: ",i16)')prop%sharedMemPerBlock
+    write(*,'(" Maximum Shared Memory per Block: ",i8)')prop%sharedMemPerBlockOptIn
 #endif
   end subroutine mdl_initialize
   !##############################################################

@@ -34,6 +34,12 @@ subroutine m_update_time(pst,ilevel,done)
 
   if(ttstart.eq.0.0) ttstart = mdl_wtime(mdl)
 
+  ! Update the outer lightcone shell boundary after restart
+  if(g%first_coarse_restart)then 
+      g%aexp_old = g%aexp
+      g%first_coarse_restart = .false.
+  end if
+
   !-------------------------------------------------------------
   ! At this point, IF nstep_coarse has JUST changed, all levels
   ! are synchronised, and all new refinements have been done.
@@ -80,7 +86,7 @@ subroutine m_update_time(pst,ilevel,done)
         !------------------------
         ! Output timing data
         !------------------------
-        if(r%verbose)call m_output_timer(pst,.false.,'dummy')
+        if(r%verbose)call m_output_timer(.false.,'dummy')
 
         !----------------------------------------------
         ! RT and non-equilibrium chemistry updates
@@ -109,10 +115,10 @@ subroutine m_update_time(pst,ilevel,done)
         ! Output fine step information and used memory
         !----------------------------------------------
         if(r%part)then
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(r%ngridmax)),&
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
         else
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(r%ngridmax))
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
         endif
         itest=1
      end if
@@ -139,10 +145,10 @@ subroutine m_update_time(pst,ilevel,done)
   if(mod(g%nstep,r%ncontrol)==0)then
      if(itest==0)then
         if(r%part)then
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(r%ngridmax)),&
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
         else
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(r%ngridmax))
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
         endif
      end if
   end if

@@ -1,10 +1,12 @@
 module rho_fine_module
+#ifdef _CUDA
+  use gpu_runner, only: gpu_multipole_leaf, gpu_multipole_split, gpu_reset_rho, gpu_cic_multipole
+#endif
 contains
 !###############################################
 !###############################################
 !###############################################
 !###############################################
-#ifdef GRAV
 subroutine m_rho_fine(pst,ilevel,rtype)
   use amr_parameters, only: ndim
   use ramses_commons, only: pst_t
@@ -26,66 +28,75 @@ subroutine m_rho_fine(pst,ilevel,rtype)
   integer,dimension(1:2)::input_array
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
-  if(.not. r%poisson)return
   if(m%noct_tot(ilevel)==0)return
-  if(r%verbose)write(*,'(" Entering rho_fine for level ",I2)')ilevel
+  if(.not. r%poisson .and. .not. r%pic)return
+
+  if(r%verbose)write(*,'("   Entering rho_fine for level ",I2)')ilevel
 
   !---------------------------
   ! Reset multipole to zero
   !---------------------------
-  if(ilevel==r%levelmin)then
-     multipole_tot%q=0d0
-     input_size=storage_size(multipole_tot)/32
-     call r_broadcast_multipole(pst,multipole_tot,input_size)
-  endif
-  
-  !-------------------------------------------------------
-  ! Initialize rho to analytical and baryon density field
-  !-------------------------------------------------------
-  ! Loop over all finer levels from fine to coarse
-  do i=r%nlevelmax,ilevel,-1
+#ifdef GRAV
+  if(r%poisson)then
+     if(ilevel==r%levelmin)then
+        multipole_tot%q=0d0
+        input_size=storage_size(multipole_tot)/32
+        call r_broadcast_multipole(pst,multipole_tot,input_size)
+     endif
+     !-------------------------------------------------------
+     ! Initialize rho to analytical and baryon density field
+     !-------------------------------------------------------
+     ! Loop over all finer levels from fine to coarse
+     do i=r%nlevelmax,ilevel,-1
 
-     ! Compute gas multipole expansion
-     if(r%hydro)then
+        ! Compute gas multipole expansion
+        if(r%hydro)then
 
-        ! Set multipoles in all leaf cells
-        if(m%noct_tot(i)>0)then
-           if(r%verbose)write(*,'(" Compute leaf multipoles for level ",I2)')i
-           call r_multipole_leaf_cells(pst,i,1)
-        endif
-
-        ! Average down multipoles in all split cells
-        if(i<r%nlevelmax)then
-           if(m%noct_tot(i+1)>0)then
-              if(r%verbose)write(*,'(" Compute split multipoles for level ",I2)')i
-              call r_multipole_split_cells(pst,i,1)
+           ! Set multipoles in all leaf cells
+           if(m%noct_tot(i)>0)then
+              if(r%verbose)write(*,'(" Compute leaf multipoles for level ",I2)')i
+              call r_multipole_leaf_cells(pst,i,1)
            endif
+
+           ! Average down multipoles in all split cells
+           if(i<r%nlevelmax)then
+              if(m%noct_tot(i+1)>0)then
+                 if(r%verbose)write(*,'(" Compute split multipoles for level ",I2)')i
+                 call r_multipole_split_cells(pst,i,1)
+              endif
+           endif
+
         endif
 
-     endif
-
-     ! Reset array rho to zero
-     if(m%noct_tot(i)>0)then
-        call r_reset_rho(pst,i,1)
-     endif
-
-     ! Mass deposition into array rho using gas pseudo-particles
-     if(r%hydro)then
-
-        if(m%noct_tot(i)>0.AND.(rtype==0 .or. rtype==4))then
-           if(r%verbose)write(*,'(" Compute rho from multipoles for level ",I2)')i
-           call r_cic_multipole(pst,i,1)
+        ! Reset array rho to zero
+        if(m%noct_tot(i)>0)then
+           call r_reset_rho(pst,i,1)
         endif
 
-     endif
+        ! Mass deposition into array rho using gas pseudo-particles
+        if(r%hydro)then
 
-  end do
+           if(m%noct_tot(i)>0.AND.(rtype==0 .or. rtype==4))then
+              if(r%verbose)write(*,'(" Compute rho from multipoles for level ",I2)')i
+              call r_cic_multipole(pst,i,1)
+           endif
+
+        endif
+
+     end do
+  endif
   ! End loop over finer levels
-
+#endif
   !-------------------------------------------------------
   ! Compute particle contribution to density field
   !-------------------------------------------------------
   if(r%pic)then
+
+     ! For non periodic BC, split particles that left the box
+     if(ilevel==r%levelmin.AND.ANY(.not.r%periodic(1:ndim)))then
+        call r_split_part(pst,ilevel-1,1)
+     endif
+
      ! Loop over all finer levels from coarse to fine
      do i=ilevel,r%nlevelmax
 
@@ -96,12 +107,14 @@ subroutine m_rho_fine(pst,ilevel,rtype)
         endif
 
         ! Mass deposition into array rho using all massive particle types
-        if(m%noct_tot(i)>0)then
+#ifdef GRAV
+        if(m%noct_tot(i)>0 .and. r%poisson)then
            if(r%verbose)write(*,'(" Compute rho from particles for level ",I2)')i
            input_array(1)=i
            input_array(2)=rtype
            call r_cic_part(pst,input_array,2)
         endif
+#endif
 
         ! Sort particles between coarse and fine levels
         if(m%noct_tot(i)>0.AND.i<r%nlevelmax)then
@@ -115,7 +128,8 @@ subroutine m_rho_fine(pst,ilevel,rtype)
   !---------------------------------------------------------------------
   ! Collect multipole contribution from all CPU and broadcast rho_tot
   !---------------------------------------------------------------------
-  if(ilevel==r%levelmin)then
+#ifdef GRAV
+  if(ilevel==r%levelmin .and. r%poisson)then
 
      ! Collect local multipole from all CPU
      call r_collect_multipole(pst,ilevel,1,multipole_tot,storage_size(multipole_tot)/32)
@@ -125,6 +139,7 @@ subroutine m_rho_fine(pst,ilevel,rtype)
 
      if(r%verbose)write(*,*)'rho_average=',g%rho_tot
   endif  
+#endif
 
   end associate
 
@@ -133,6 +148,7 @@ end subroutine m_rho_fine
 !################################################################
 !################################################################
 !################################################################
+#ifdef GRAV
 recursive subroutine r_multipole_leaf_cells(pst,ilevel,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
@@ -149,7 +165,15 @@ recursive subroutine r_multipole_leaf_cells(pst,ilevel,input_size)
      call r_multipole_leaf_cells(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        call gpu_multipole_leaf(pst%s, ilevel)
+     else
+        call multipole_leaf_cells(pst%s%r,pst%s%g,pst%s%m,ilevel)
+     endif
+#else
      call multipole_leaf_cells(pst%s%r,pst%s%g,pst%s%m,ilevel)
+#endif
   endif
 
 end subroutine r_multipole_leaf_cells
@@ -158,7 +182,7 @@ end subroutine r_multipole_leaf_cells
 !###########################################################
 !###########################################################
 subroutine multipole_leaf_cells(r,g,m,ilevel)
-  use amr_parameters, only: ndim, twotondim
+  use amr_parameters, only: ndim, twotondim, dp
   use amr_commons, only: run_t, global_t, mesh_t
   use cache_commons
   implicit none
@@ -178,7 +202,7 @@ subroutine multipole_leaf_cells(r,g,m,ilevel)
   logical::leaf_cell
 
   ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
+  dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
 
 #ifdef HYDRO
@@ -186,7 +210,7 @@ subroutine multipole_leaf_cells(r,g,m,ilevel)
   do igrid=m%head(ilevel),m%tail(ilevel)
      do ind=1,twotondim
         do idim=1,ndim+1
-           m%grid(igrid)%unew(ind,idim)=0.0D0
+           m%unew(ind,idim,igrid)=0.0D0
         end do
      end do
   end do
@@ -211,20 +235,20 @@ subroutine multipole_leaf_cells(r,g,m,ilevel)
            end do
 #ifdef HYDRO
            ! Add gas mass
-           mmm=max(m%grid(igrid)%uold(ind,1),r%smallr)*vol_loc
-           m%grid(igrid)%unew(ind,1)=m%grid(igrid)%unew(ind,1)+mmm
+           mmm=max(m%uold(ind,1,igrid),real(r%smallr,kind=dp))*vol_loc
+           m%unew(ind,1,igrid)=m%unew(ind,1,igrid)+mmm
            do idim=1,ndim
-              m%grid(igrid)%unew(ind,idim+1)=m%grid(igrid)%unew(ind,idim+1)+mmm*xx(idim)
+              m%unew(ind,idim+1,igrid)=m%unew(ind,idim+1,igrid)+mmm*xx(idim)
            end do
 #endif
            ! Add analytical density profile
-           if(r%gravity_type < 0)then
+           if(r%gravity_test)then
               call rho_ana(xx,dd,dx_loc,r%gravity_params)
               mmm=max(dd,r%smallr)*vol_loc
 #ifdef HYDRO
-              m%grid(igrid)%unew(ind,1)=m%grid(igrid)%unew(ind,1)+mmm
+              m%unew(ind,1,igrid)=m%unew(ind,1,igrid)+mmm
               do idim=1,ndim
-                 m%grid(igrid)%unew(ind,idim+1)=m%grid(igrid)%unew(ind,idim+1)+mmm*xx(idim)
+                 m%unew(ind,idim+1,igrid)=m%unew(ind,idim+1,igrid)+mmm*xx(idim)
               end do
 #endif
            end if
@@ -255,7 +279,15 @@ recursive subroutine r_multipole_split_cells(pst,ilevel,input_size)
      call r_multipole_split_cells(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        call gpu_multipole_split(pst%s, ilevel)
+     else
+        call multipole_split_cells(pst%s,ilevel)
+     endif
+#else
      call multipole_split_cells(pst%s,ilevel)
+#endif
   endif
 
 end subroutine r_multipole_split_cells
@@ -265,10 +297,8 @@ end subroutine r_multipole_split_cells
 !###########################################################
 subroutine multipole_split_cells(s,ilevel)
   use amr_parameters, only: ndim, twotondim
-  use amr_commons, only: oct
   use ramses_commons, only: ramses_t
   use nbors_utils
-  use hydro_flag_module, only: pack_fetch_hydro, unpack_fetch_hydro
   use cache_commons
   use cache
   implicit none
@@ -280,43 +310,40 @@ subroutine multipole_split_cells(s,ilevel)
   ! For pure particle runs, this is not necessary and the
   ! routine is not even called.
   !-------------------------------------------------------------------
-  integer::ind,idim,ivar,ioct,icell
+  integer::ind,idim,ivar,ioct,icell,igrid
   real(kind=8)::average
   integer(kind=8),dimension(0:ndim)::hash_key
   logical::leaf_cell
-  type(oct),pointer::gridp
   type(msg_realdp)::dummy_realdp
 
-  associate(r=>s%r,g=>s%g,m=>s%m)
-  
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
+
   !-------------------------------------------------------
   ! Perform Multigrid restriction from level ilevel+1
   !-------------------------------------------------------
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-                     hilbert=m%domain, pack_size=storage_size(dummy_realdp)/32,&
-                     pack=pack_fetch_hydro,unpack=unpack_fetch_hydro,&
-                     init=init_flush_multipole, flush=pack_flush_multipole, combine=unpack_flush_multipole)
+  call open_cache(mdl, m, pack_size=storage_size(dummy_realdp)/32, &
+       init=init_flush_multipole, flush=pack_flush_multipole, combine=unpack_flush_multipole)
 
   ! Loop over finer level grids
   hash_key(0)=ilevel+1
   do ioct=m%head(ilevel+1),m%tail(ilevel+1)
      hash_key(1:ndim)=m%grid(ioct)%ckey(1:ndim)
      ! Get parent cell using a write-only cache
-     call get_parent_cell(s,hash_key,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.false.)
+     call get_parent_cell(s,hash_key,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
 #ifdef HYDRO
      ! Average conservative variables
      do ivar=1,ndim+1
         average=0.0d0
         do ind=1,twotondim
-           average=average+m%grid(ioct)%unew(ind,ivar)
+           average=average+m%unew(ind,ivar,ioct)
         end do
         ! Scatter result to cell
-        gridp%unew(icell,ivar)=average
+        m%unew(icell,ivar,igrid)=average
      end do
 #endif
   end do
 
-  call close_cache(s,m%grid_dict)
+  call close_cache(mdl)
 
   end associate
 
@@ -325,34 +352,37 @@ end subroutine multipole_split_cells
 !################################################################
 !################################################################
 !################################################################
-subroutine init_flush_multipole(grid,hash_key)
-  use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
-  type(oct)::grid
+subroutine init_flush_multipole(mesh,igrid,hash_key)
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: mesh_t
+  type(mesh_t)::mesh
+  integer::igrid
   integer(kind=8),dimension(0:ndim)::hash_key
 
   integer::ind,ivar
-  
-  grid%lev=hash_key(0)
-  grid%ckey(1:ndim)=hash_key(1:ndim)
+
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
+
 #ifdef HYDRO
   do ivar=1,ndim+1
      do ind=1,twotondim
-        grid%unew(ind,ivar)=0.0
+        mesh%unew(ind,ivar,igrid)=0.0
      end do
   end do
 #endif
-  
+
 end subroutine init_flush_multipole
 !################################################################
 !################################################################
 !################################################################
 !################################################################
-subroutine pack_flush_multipole(grid,msg_size,msg_array)
-  use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
+subroutine pack_flush_multipole(mesh,igrid,msg_size,msg_array)
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
-  type(oct)::grid
+  type(mesh_t)::mesh
+  integer::igrid
   integer::msg_size
   integer,dimension(1:msg_size),optional::msg_array
 
@@ -362,7 +392,7 @@ subroutine pack_flush_multipole(grid,msg_size,msg_array)
 #ifdef HYDRO
   do ivar=1,ndim+1
      do ind=1,twotondim
-        msg%realdp(ind,ivar)=grid%unew(ind,ivar)
+        msg%realdp(ind,ivar)=mesh%unew(ind,ivar,igrid)
      end do
   end do
 #endif
@@ -374,11 +404,12 @@ end subroutine pack_flush_multipole
 !################################################################
 !################################################################
 !################################################################
-subroutine unpack_flush_multipole(grid,msg_size,msg_array,hash_key)
+subroutine unpack_flush_multipole(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
+  use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
-  type(oct)::grid
+  type(mesh_t)::mesh
+  integer::igrid
   integer::msg_size
   integer,dimension(1:msg_size),optional::msg_array
   integer(kind=8),dimension(0:ndim)::hash_key
@@ -386,15 +417,15 @@ subroutine unpack_flush_multipole(grid,msg_size,msg_array,hash_key)
   integer::ind,ivar
   type(msg_realdp)::msg
 
-  grid%lev=hash_key(0)
-  grid%ckey(1:ndim)=hash_key(1:ndim)
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
-  
+
 #ifdef HYDRO
   do ivar=1,ndim+1
      do ind=1,twotondim
-        if(grid%refined(ind))then
-           grid%unew(ind,ivar)=grid%unew(ind,ivar)+msg%realdp(ind,ivar)
+        if(mesh%grid(igrid)%refined(ind))then
+           mesh%unew(ind,ivar,igrid)=mesh%unew(ind,ivar,igrid)+msg%realdp(ind,ivar)
         endif
      end do
   end do
@@ -421,7 +452,15 @@ recursive subroutine r_reset_rho(pst,ilevel,input_size)
      call r_reset_rho(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        call gpu_reset_rho(pst%s, ilevel)
+     else
+        call reset_rho(pst%s%r,pst%s%g,pst%s%m,ilevel)
+     endif
+#else
      call reset_rho(pst%s%r,pst%s%g,pst%s%m,ilevel)
+#endif
   endif
 
 end subroutine r_reset_rho
@@ -450,8 +489,8 @@ subroutine reset_rho(r,g,m,ilevel)
   ! Initialize density field to zero
   do igrid=m%head(ilevel),m%tail(ilevel)
      do ind=1,twotondim
-        m%grid(igrid)%rho(ind)=0.0D0
-        m%grid(igrid)%nref(ind)=0.0D0
+        m%rho(ind,igrid)=0.0D0
+        m%nref(ind,igrid)=0.0D0
      end do
   end do
 #endif
@@ -477,7 +516,15 @@ recursive subroutine r_cic_multipole(pst,ilevel,input_size)
      call r_cic_multipole(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        call gpu_cic_multipole(pst%s, ilevel)
+     else
+        call cic_multipole(pst%s,ilevel)
+     endif
+#else
      call cic_multipole(pst%s,ilevel)
+#endif
   endif
 
 end subroutine r_cic_multipole
@@ -488,12 +535,10 @@ end subroutine r_cic_multipole
 subroutine cic_multipole(s,ilevel)
   use mdl_module
   use amr_parameters, only: ndim, twotondim
-  use amr_commons, only: oct
   use ramses_commons, only: ramses_t
   use nbors_utils
   use cache_commons
   use cache
-  use multigrid_fine_coarse, only:pack_fetch_phi, unpack_fetch_phi
   implicit none
   type(ramses_t)::s
   integer::ilevel
@@ -504,57 +549,51 @@ subroutine cic_multipole(s,ilevel)
   real(kind=8),dimension(1:twotondim)::vol
   integer,dimension(1:ndim,1:twotondim)::ckey
   integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer::inbor,igrid,ind,idim,icell
+  integer::inbor,ioct,ind,idim,icell,igrid
   real(kind=8)::dx_loc,vol_loc,mmm,mask
-  type(oct),pointer::gridp
   type(msg_twin_realdp)::dummy_twin_realdp
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
     
   ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
+  dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
 
   ! Use hash table directly for cells (not for grids)
   hash_nbor(0)=ilevel+1
 
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-                hilbert=m%domain,pack_size=storage_size(dummy_twin_realdp)/32,&
-                pack=pack_fetch_phi,unpack=unpack_fetch_phi,&
-                init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
+  call open_cache(mdl, m, pack_size=storage_size(dummy_twin_realdp)/32, &
+       init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
 
   ! Loop over grids
-  do igrid=m%head(ilevel),m%tail(ilevel)
+  do ioct=m%head(ilevel),m%tail(ilevel)
 
      ! Loop over cells
      do ind=1,twotondim
 
 #ifdef HYDRO        
         ! Compute pseudo particle mass
-        mmm=m%grid(igrid)%unew(ind,1)
+        mmm=m%unew(ind,1,ioct)
 
         ! Compute pseudo particle (centre of mass) position
         if(mmm==0)then
-           write(*,*)'Sorry divide by zero'
-           write(*,*)m%grid(igrid)%unew(ind,1:nvar)
-           write(*,*)m%grid(igrid)%uold(ind,1:nvar)
-           write(*,*)m%grid(igrid)%refined(ind)
+           write(*,*)'Sorry empty cell in cic_multipole'
            call mdl_abort(mdl)
         endif
-        x(1:ndim)=m%grid(igrid)%unew(ind,2:ndim+1)/mmm
-        
+        x(1:ndim)=m%unew(ind,2:ndim+1,ioct)/mmm
+
         ! Compute total multipole
         if(ilevel==r%levelmin)then
            do idim=1,ndim+1
-              g%multipole%q(idim)=g%multipole%q(idim)+m%grid(igrid)%unew(ind,idim)
+              g%multipole%q(idim)=g%multipole%q(idim)+m%unew(ind,idim,ioct)
            end do
         endif
 #endif
         ! Rescale particle position at level ilevel
         do idim=1,ndim
-           x(idim)=x(idim)/dx_loc
+           x(idim)=(x(idim)+m%skip(idim))/dx_loc
         end do
-     
+
         ! CIC at level ilevel (dd: right cloud boundary; dg: left cloud boundary)
         do idim=1,ndim
            dd(idim)=x(idim)+0.5D0
@@ -566,8 +605,10 @@ subroutine cic_multipole(s,ilevel)
 
         ! Periodic boundary conditions
         do idim=1,ndim
-           if(ig(idim)<0)ig(idim)=m%ckey_max(ilevel+1)-1
-           if(id(idim)==m%ckey_max(ilevel+1))id(idim)=0
+           if(r%periodic(idim))then
+              if(ig(idim)< m%box_ckey_min(idim,ilevel+1))ig(idim)=m%box_ckey_max(idim,ilevel+1)-1
+              if(id(idim)>=m%box_ckey_max(idim,ilevel+1))id(idim)=m%box_ckey_min(idim,ilevel+1)
+           endif
         enddo
 
         ! Compute cloud volumes
@@ -581,17 +622,19 @@ subroutine cic_multipole(s,ilevel)
         do inbor=1,twotondim
            hash_nbor(1:ndim)=ckey(1:ndim,inbor)
            ! Get parent cell using write-only cache
-           call get_parent_cell(s,hash_nbor,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.false.)
-           if(associated(gridp))then
-              gridp%rho(icell)=gridp%rho(icell)+mmm*vol(inbor)/vol_loc
+           call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
+           if(igrid>0)then
+              m%rho(icell,igrid)=m%rho(icell,igrid)+mmm*vol(inbor)/vol_loc
 #ifdef HYDRO
-              if(r%ivar_refine>0)then
-                 mask=m%grid(igrid)%uold(ind,r%ivar_refine)/m%grid(igrid)%uold(ind,1)
-                 if(mask.gt.r%var_cut_refine)then
-                    gridp%nref(icell)=gridp%nref(icell)+mmm*vol(inbor)/r%mass_sph
+              if(r%m_refine(ilevel)>=0)then
+                 if(r%ivar_refine>0)then
+                    mask=m%uold(ind,r%ivar_refine,ioct)/m%uold(ind,1,ioct)
+                    if(mask.gt.r%var_cut_refine)then
+                       m%nref(icell,igrid)=m%nref(icell,igrid)+mmm*vol(inbor)/r%mass_sph
+                    endif
+                 else
+                    m%nref(icell,igrid)=m%nref(icell,igrid)+mmm*vol(inbor)/r%mass_sph
                  endif
-              else
-                 gridp%nref(icell)=gridp%nref(icell)+mmm*vol(inbor)/r%mass_sph
               endif
 #endif
            end if
@@ -603,7 +646,7 @@ subroutine cic_multipole(s,ilevel)
   end do
   ! End loop over grids
 
-  call close_cache(s,m%grid_dict)
+  call close_cache(mdl)
 
   end associate
 
@@ -690,141 +733,11 @@ subroutine cic_part(s,p,ilevel,rtype)
   real(kind=8),dimension(1:twotondim)::vol
   integer,dimension(1:ndim,1:twotondim)::ckey
   integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer::i,ipart,icell,ind,idim
-  type(oct),pointer::gridp
+  integer::i,ipart,icell,igrid,ind,idim
   type(msg_twin_realdp)::dummy_twin_realdp
   logical::part,star,sink
 
-  associate(r=>s%r,g=>s%g,m=>s%m)
-
-  ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
-  vol_loc=dx_loc**ndim
-
-  ! Are particles dark matter, stars or sinks?
-  part = p%type.eq.PART_TYPE
-  star = p%type.eq.STAR_TYPE
-  sink = p%type.eq.SINK_TYPE
-
-  ! Don't deposit mass depending on rho action type and paticle type
-  if(part.and.rtype.NE.0.and.rtype.NE.1)return
-  if(star.and.rtype.NE.0.and.rtype.NE.2)return
-  if(sink.and.rtype.NE.0.and.rtype.NE.3)return
-
-  ! Compute contribution to multipole
-  if(ilevel==r%levelmin)then
-     do i=1,p%npart
-        g%multipole%q(1)=g%multipole%q(1)+p%mp(i)
-     end do
-     do idim=1,ndim
-        do i=1,p%npart
-           g%multipole%q(idim+1)=g%multipole%q(idim+1)+p%mp(i)*p%xp(i,idim)
-        end do
-     end do
-  endif
-
-  ! Open write-only cache for array rho
-  hash_nbor(0)=ilevel+1
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-       hilbert=m%domain,pack_size=storage_size(dummy_twin_realdp)/32,&
-       pack=pack_fetch_phi,unpack=unpack_fetch_phi,&
-       init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
-
-  ! Loop over particles in Hilbert order
-  do i=p%headp(ilevel),p%tailp(r%nlevelmax)
-     ipart=p%sortp(i)
-
-     ! Rescale particle position at level ilevel
-     do idim=1,ndim
-        x(idim)=p%xp(ipart,idim)/dx_loc
-     end do
-
-     ! CIC at level ilevel (dr: right cloud boundary; dl: left cloud boundary)
-     do idim=1,ndim
-        dr(idim)=x(idim)+0.5D0
-        ir(idim)=int(dr(idim))
-        dr(idim)=dr(idim)-ir(idim)
-        dl(idim)=1.0D0-dr(idim)
-        il(idim)=ir(idim)-1
-     end do
-     
-     ! Periodic boundary conditions
-     do idim=1,ndim
-        if(il(idim)<0)il(idim)=m%ckey_max(ilevel+1)-1
-        if(ir(idim)==m%ckey_max(ilevel+1))ir(idim)=0
-     enddo
-
-     ! Compute cloud volumes
-     vol = cic_weight(dl,dr)
-
-     ! Compute cells Cartesian key
-     ckey = cic_index(il,ir)
-
-#ifdef GRAV
-     ! Update mass density
-     do ind=1,twotondim
-        hash_nbor(1:ndim)=ckey(1:ndim,ind)
-        ! Get parent cell using write-only cache
-        call get_parent_cell(s,hash_nbor,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.false.)
-        if(associated(gridp))then
-           gridp%rho(icell)=gridp%rho(icell)+p%mp(ipart)*vol(ind)/vol_loc
-           if(star.or.sink)then
-              gridp%nref(icell)=gridp%nref(icell)+p%mp(ipart)*vol(ind)/r%mass_sph
-           endif
-           if(part)then
-              if(r%mass_cut_refine>0)then
-                 if(p%mp(ipart)<r%mass_cut_refine)then
-                    gridp%nref(icell)=gridp%nref(icell)+vol(ind)
-                 endif
-              else
-                 gridp%nref(icell)=gridp%nref(icell)+vol(ind)
-              endif
-           endif
-        endif
-     end do
-#endif
-
-  end do
-  ! End loop over particles
-
-  call close_cache(s,m%grid_dict)
-
-  end associate
-
-end subroutine cic_part
-!##############################################################################
-!##############################################################################
-!##############################################################################
-!##############################################################################
-subroutine tsc_part(s,p,ilevel,rtype)
-  use amr_parameters, only: ndim, twotondim, threetondim
-  use amr_commons, only: oct
-  use ramses_commons, only: ramses_t
-  use pm_parameters
-  use pm_commons, only: part_t
-  use nbors_utils
-  use cache_commons
-  use cache
-  use multigrid_fine_coarse, only:pack_fetch_phi,unpack_fetch_phi
-  use hilbert
-  implicit none
-  type(ramses_t)::s
-  type(part_t)::p
-  integer::ilevel,rtype
-  !
-  ! Local variables
-  integer,dimension(1:ndim)::ix,cl,cc,cr
-  real(kind=8)::dx_loc,vol_loc,xl,xc,xr
-  real(kind=8),dimension(1:ndim)::x,wl,wr,wc
-  real(kind=8),dimension(1:threetondim)::vol
-  integer,dimension(1:ndim,1:threetondim)::ckey
-  integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer::i,ipart,icell,ind,idim
-  type(oct),pointer::gridp
-  type(msg_twin_realdp)::dummy_twin_realdp
-  logical::part,star,sink
-
-  associate(r=>s%r,g=>s%g,m=>s%m)
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
   ! Mesh spacing in that level
   dx_loc=r%boxlen/2**ilevel
@@ -854,9 +767,7 @@ subroutine tsc_part(s,p,ilevel,rtype)
 
   ! Open write-only cache for array rho
   hash_nbor(0)=ilevel+1
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-       hilbert=m%domain,pack_size=storage_size(dummy_twin_realdp)/32,&
-       pack=pack_fetch_phi,unpack=unpack_fetch_phi,&
+  call open_cache(mdl, m, pack_size=storage_size(dummy_twin_realdp)/32, &
        init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
 
   ! Loop over particles in Hilbert order
@@ -865,7 +776,135 @@ subroutine tsc_part(s,p,ilevel,rtype)
 
      ! Rescale particle position at level ilevel
      do idim=1,ndim
-        x(idim)=p%xp(ipart,idim)/dx_loc
+        x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
+     end do
+
+     ! CIC at level ilevel (dr: right cloud boundary; dl: left cloud boundary)
+     do idim=1,ndim
+        dr(idim)=x(idim)+0.5D0
+        ir(idim)=int(dr(idim))
+        dr(idim)=dr(idim)-ir(idim)
+        dl(idim)=1.0D0-dr(idim)
+        il(idim)=ir(idim)-1
+     end do
+     
+     ! Periodic boundary conditions
+     do idim=1,ndim
+        if(r%periodic(idim))then
+           if(il(idim)< m%box_ckey_min(idim,ilevel+1))il(idim)=m%box_ckey_max(idim,ilevel+1)-1
+           if(ir(idim)>=m%box_ckey_max(idim,ilevel+1))ir(idim)=m%box_ckey_min(idim,ilevel+1)
+        endif
+     enddo
+
+     ! Compute cloud volumes
+     vol = cic_weight(dl,dr)
+
+     ! Compute cells Cartesian key
+     ckey = cic_index(il,ir)
+
+#ifdef GRAV
+     ! Update mass density
+     do ind=1,twotondim
+        hash_nbor(1:ndim)=ckey(1:ndim,ind)
+        ! Get parent cell using write-only cache
+        call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
+        if(igrid>0)then
+           m%rho(icell,igrid)=m%rho(icell,igrid)+p%mp(ipart)*vol(ind)/vol_loc
+           if(r%m_refine(ilevel)>=0)then
+              if(star.or.sink)then
+                 m%nref(icell,igrid)=m%nref(icell,igrid)+p%mp(ipart)*vol(ind)/r%mass_sph
+              endif
+              if(part)then
+                 if(r%mass_cut_refine>0)then
+                    if(p%mp(ipart)<r%mass_cut_refine)then
+                       m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
+                    endif
+                 else
+                    m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
+                 endif
+              endif
+           endif
+        endif
+     end do
+#endif
+
+  end do
+  ! End loop over particles
+
+  call close_cache(mdl)
+
+  end associate
+
+end subroutine cic_part
+!##############################################################################
+!##############################################################################
+!##############################################################################
+!##############################################################################
+subroutine tsc_part(s,p,ilevel,rtype)
+  use amr_parameters, only: ndim, twotondim, threetondim
+  use ramses_commons, only: ramses_t
+  use pm_parameters
+  use pm_commons, only: part_t
+  use nbors_utils
+  use cache_commons
+  use cache
+  use hilbert
+  implicit none
+  type(ramses_t)::s
+  type(part_t)::p
+  integer::ilevel,rtype
+  !
+  ! Local variables
+  integer,dimension(1:ndim)::ix,cl,cc,cr
+  real(kind=8)::dx_loc,vol_loc,xl,xc,xr
+  real(kind=8),dimension(1:ndim)::x,wl,wr,wc
+  real(kind=8),dimension(1:threetondim)::vol
+  integer,dimension(1:ndim,1:threetondim)::ckey
+  integer(kind=8),dimension(0:ndim)::hash_nbor
+  integer::i,ipart,icell,igrid,ind,idim
+  type(msg_twin_realdp)::dummy_twin_realdp
+  logical::part,star,sink
+
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
+
+  ! Mesh spacing in that level
+  dx_loc=r%boxlen/2**ilevel
+  vol_loc=dx_loc**ndim
+
+  ! Are particles dark matter, stars or sinks?
+  part = p%type.eq.PART_TYPE
+  star = p%type.eq.STAR_TYPE
+  sink = p%type.eq.SINK_TYPE
+
+  ! Don't deposit mass depending on rho action type and paticle type
+  if(part.and.rtype.NE.0.and.rtype.NE.1)return
+  if(star.and.rtype.NE.0.and.rtype.NE.2)return
+  if(sink.and.rtype.NE.0.and.rtype.NE.3)return
+
+  ! Compute contribution to multipole
+  if(ilevel==r%levelmin)then
+     do i=1,p%npart
+        g%multipole%q(1)=g%multipole%q(1)+p%mp(i)
+     end do
+     do idim=1,ndim
+        do i=1,p%npart
+           g%multipole%q(idim+1)=g%multipole%q(idim+1)+p%mp(i)*p%xp(i,idim)
+        end do
+     end do
+  endif
+
+  ! Open write-only cache for array rho
+  hash_nbor(0)=ilevel+1
+  call open_cache(mdl, m, pack_size=storage_size(dummy_twin_realdp)/32, &
+       init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
+
+  ! Loop over particles in Hilbert order
+  do i=p%headp(ilevel),p%tailp(r%nlevelmax)
+     ipart=p%sortp(i)
+
+     ! Rescale particle position at level ilevel
+     do idim=1,ndim
+        x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
      end do
 
      ! TSC at level ilevel; a particle contributes to 3 cells in each direction
@@ -883,8 +922,10 @@ subroutine tsc_part(s,p,ilevel,rtype)
 
      ! Periodic boundary conditions
      do idim=1,ndim
-        if(cl(idim)<0)cl(idim)=m%ckey_max(ilevel+1)-1
-        if(cr(idim)==m%ckey_max(ilevel+1))cr(idim)=0
+        if(r%periodic(idim))then
+           if(cl(idim)< m%box_ckey_min(idim,ilevel+1))cl(idim)=m%box_ckey_max(idim,ilevel+1)-1
+           if(cr(idim)>=m%box_ckey_max(idim,ilevel+1))cr(idim)=m%box_ckey_min(idim,ilevel+1)
+        endif
      enddo
 
      ! Compute cloud volumes
@@ -898,19 +939,21 @@ subroutine tsc_part(s,p,ilevel,rtype)
      do ind=1,threetondim
         hash_nbor(1:ndim)=ckey(1:ndim,ind)
         ! Get parent cell using write-only cache
-        call get_parent_cell(s,hash_nbor,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.false.)
-        if(associated(gridp))then
-           gridp%rho(icell)=gridp%rho(icell)+p%mp(ipart)*vol(ind)/vol_loc
-           if(star.or.sink)then
-              gridp%nref(icell)=gridp%nref(icell)+p%mp(ipart)*vol(ind)/r%mass_sph
-           endif
-           if(part)then
-              if(r%mass_cut_refine>0)then
-                 if(p%mp(ipart)<r%mass_cut_refine)then
-                    gridp%nref(icell)=gridp%nref(icell)+vol(ind)
+        call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
+        if(igrid>0)then
+           m%rho(icell,igrid)=m%rho(icell,igrid)+p%mp(ipart)*vol(ind)/vol_loc
+           if(r%m_refine(ilevel)>=0)then
+              if(star.or.sink)then
+                 m%nref(icell,igrid)=m%nref(icell,igrid)+p%mp(ipart)*vol(ind)/r%mass_sph
+              endif
+              if(part)then
+                 if(r%mass_cut_refine>0)then
+                    if(p%mp(ipart)<r%mass_cut_refine)then
+                       m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
+                    endif
+                 else
+                    m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
                  endif
-              else
-                 gridp%nref(icell)=gridp%nref(icell)+vol(ind)
               endif
            endif
         endif
@@ -920,7 +963,7 @@ subroutine tsc_part(s,p,ilevel,rtype)
   end do
   ! End loop over particles
 
-  call close_cache(s,m%grid_dict)
+  call close_cache(mdl)
 
   end associate
 
@@ -931,14 +974,12 @@ end subroutine tsc_part
 !##############################################################################
 subroutine pcs_part(s,p,ilevel,rtype)
   use amr_parameters, only: ndim, twotondim, fourtondim
-  use amr_commons, only: oct
   use ramses_commons, only: ramses_t
   use pm_parameters
   use pm_commons, only: part_t
   use nbors_utils
   use cache_commons
   use cache
-  use multigrid_fine_coarse, only:pack_fetch_phi,unpack_fetch_phi
   use hilbert
   implicit none
   type(ramses_t)::s
@@ -952,12 +993,11 @@ subroutine pcs_part(s,p,ilevel,rtype)
   real(kind=8),dimension(1:fourtondim)::vol
   integer,dimension(1:ndim,1:fourtondim)::ckey
   integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer::i,ipart,icell,ind,idim
-  type(oct),pointer::gridp
+  integer::i,ipart,icell,igrid,ind,idim
   type(msg_twin_realdp)::dummy_twin_realdp
   logical::part,star,sink
 
-  associate(r=>s%r,g=>s%g,m=>s%m)
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
   ! Mesh spacing in that level
   dx_loc=r%boxlen/2**ilevel
@@ -987,9 +1027,7 @@ subroutine pcs_part(s,p,ilevel,rtype)
 
   ! Open write-only cache for array rho
   hash_nbor(0)=ilevel+1
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-       hilbert=m%domain,pack_size=storage_size(dummy_twin_realdp)/32,&
-       pack=pack_fetch_phi,unpack=unpack_fetch_phi,&
+  call open_cache(mdl, m, pack_size=storage_size(dummy_twin_realdp)/32, &
        init=init_flush_rho, flush=pack_flush_rho, combine=unpack_flush_rho)
 
   ! Loop over particles in Hilbert order
@@ -998,7 +1036,7 @@ subroutine pcs_part(s,p,ilevel,rtype)
 
      ! Rescale particle position at level ilevel
      do idim=1,ndim
-        x(idim)=p%xp(ipart,idim)/dx_loc
+        x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
      end do
 
      ! PCS at level ilevel; a particle contributes to 4 cells in each direction
@@ -1019,10 +1057,12 @@ subroutine pcs_part(s,p,ilevel,rtype)
 
      ! Periodic boundary conditions
      do idim=1,ndim
-        if(cll(idim)<0)cll(idim)=cll(idim)+m%ckey_max(ilevel+1)
-        if(cl (idim)<0)cl (idim)=cl (idim)+m%ckey_max(ilevel+1)
-        if(cr (idim)>=m%ckey_max(ilevel+1))cr (idim)=cr (idim)-m%ckey_max(ilevel+1)
-        if(crr(idim)>=m%ckey_max(ilevel+1))crr(idim)=crr(idim)-m%ckey_max(ilevel+1)
+        if(r%periodic(idim))then
+           if(cll(idim)< m%box_ckey_min(idim,ilevel+1))cll(idim)=cll(idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+           if(cl (idim)< m%box_ckey_min(idim,ilevel+1))cl (idim)=cl (idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+           if(cr (idim)>=m%box_ckey_max(idim,ilevel+1))cr (idim)=cr (idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+           if(crr(idim)>=m%box_ckey_max(idim,ilevel+1))crr(idim)=crr(idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+        endif
      enddo
 
      ! Compute cloud volumes
@@ -1036,19 +1076,21 @@ subroutine pcs_part(s,p,ilevel,rtype)
      do ind=1,fourtondim
         hash_nbor(1:ndim)=ckey(1:ndim,ind)
         ! Get parent cell using write-only cache
-        call get_parent_cell(s,hash_nbor,m%grid_dict,gridp,icell,flush_cache=.true.,fetch_cache=.false.)
-        if(associated(gridp))then
-           gridp%rho(icell)=gridp%rho(icell)+p%mp(ipart)*vol(ind)/vol_loc
-           if(star.or.sink)then
-              gridp%nref(icell)=gridp%nref(icell)+p%mp(ipart)*vol(ind)/r%mass_sph
-           endif
-           if(part)then
-              if(r%mass_cut_refine>0)then
-                 if(p%mp(ipart)<r%mass_cut_refine)then
-                    gridp%nref(icell)=gridp%nref(icell)+vol(ind)
+        call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
+        if(igrid>0)then
+           m%rho(icell,igrid)=m%rho(icell,igrid)+p%mp(ipart)*vol(ind)/vol_loc
+           if(r%m_refine(ilevel)>=0)then
+              if(star.or.sink)then
+                 m%nref(icell,igrid)=m%nref(icell,igrid)+p%mp(ipart)*vol(ind)/r%mass_sph
+              endif
+              if(part)then
+                 if(r%mass_cut_refine>0)then
+                    if(p%mp(ipart)<r%mass_cut_refine)then
+                       m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
+                    endif
+                 else
+                    m%nref(icell,igrid)=m%nref(icell,igrid)+vol(ind)
                  endif
-              else
-                 gridp%nref(icell)=gridp%nref(icell)+vol(ind)
               endif
            endif
         endif
@@ -1058,7 +1100,7 @@ subroutine pcs_part(s,p,ilevel,rtype)
   end do
   ! End loop over particles
 
-  call close_cache(s,m%grid_dict)
+  call close_cache(mdl)
 
   end associate
 
@@ -1067,20 +1109,22 @@ end subroutine pcs_part
 !################################################################
 !################################################################
 !################################################################
-subroutine init_flush_rho(grid,hash_key)
+subroutine init_flush_rho(mesh,igrid,hash_key)
   use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
-  type(oct)::grid
+  use amr_commons, only: mesh_t
+  type(mesh_t)::mesh
+  integer::igrid
   integer(kind=8),dimension(0:ndim)::hash_key
 
   integer::ind
 
-  grid%lev=hash_key(0)
-  grid%ckey(1:ndim)=hash_key(1:ndim)
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
+
 #ifdef GRAV
   do ind=1,twotondim
-     grid%rho(ind)=0.0
-     grid%nref(ind)=0.0
+     mesh%rho(ind,igrid)=0.0
+     mesh%nref(ind,igrid)=0.0
   end do
 #endif
 
@@ -1089,11 +1133,12 @@ end subroutine init_flush_rho
 !################################################################
 !################################################################
 !################################################################
-subroutine pack_flush_rho(grid,msg_size,msg_array)
+subroutine pack_flush_rho(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: twotondim
-  use amr_commons, only: oct
+  use amr_commons, only: mesh_t
   use cache_commons, only: msg_twin_realdp
-  type(oct)::grid
+  type(mesh_t)::mesh
+  integer::igrid
   integer::msg_size
   integer,dimension(1:msg_size),optional::msg_array
 
@@ -1102,8 +1147,8 @@ subroutine pack_flush_rho(grid,msg_size,msg_array)
 
 #ifdef GRAV
   do ind=1,twotondim
-     msg%realdp_phi(ind)=grid%rho(ind)
-     msg%realdp_dis(ind)=grid%nref(ind)
+     msg%realdp_phi(ind)=mesh%rho(ind,igrid)
+     msg%realdp_dis(ind)=mesh%nref(ind,igrid)
   end do
 #endif
 
@@ -1114,11 +1159,12 @@ end subroutine pack_flush_rho
 !################################################################
 !################################################################
 !################################################################
-subroutine unpack_flush_rho(grid,msg_size,msg_array,hash_key)
-  use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
+subroutine unpack_flush_rho(mesh,igrid,msg_size,msg_array,hash_key)
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: mesh_t
   use cache_commons, only: msg_twin_realdp
-  type(oct)::grid
+  type(mesh_t)::mesh
+  integer::igrid
   integer::msg_size
   integer,dimension(1:msg_size),optional::msg_array
   integer(kind=8),dimension(0:ndim)::hash_key
@@ -1126,14 +1172,14 @@ subroutine unpack_flush_rho(grid,msg_size,msg_array,hash_key)
   integer::ind
   type(msg_twin_realdp)::msg
 
-  grid%lev=hash_key(0)
-  grid%ckey(1:ndim)=hash_key(1:ndim)
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
   
 #ifdef GRAV
   do ind=1,twotondim
-     grid%rho(ind)=grid%rho(ind)+msg%realdp_phi(ind)
-     grid%nref(ind)=grid%nref(ind)+msg%realdp_dis(ind)
+     mesh%rho(ind,igrid)=mesh%rho(ind,igrid)+msg%realdp_phi(ind)
+     mesh%nref(ind,igrid)=mesh%nref(ind,igrid)+msg%realdp_dis(ind)
   end do
 #endif
 
@@ -1163,63 +1209,10 @@ recursive subroutine r_split_part(pst,ilevel,input_size)
      if(pst%s%r%star)call split_part(pst%s,pst%s%star,ilevel)
      if(pst%s%r%sink)call split_part(pst%s,pst%s%sink,ilevel)
      if(pst%s%r%tree)call split_part(pst%s,pst%s%tree,ilevel)
+     if(pst%s%r%trac)call split_part(pst%s,pst%s%trac,ilevel)
   endif
 
 end subroutine r_split_part
-!##############################################################################
-!##############################################################################
-!##############################################################################
-!##############################################################################
-subroutine pack_fetch_split(grid,msg_size,msg_array)
-  use amr_parameters, only: twotondim
-  use amr_commons, only: oct
-  use cache_commons, only: msg_int4
-  type(oct)::grid
-  integer::msg_size
-  integer,dimension(1:msg_size),optional::msg_array
-
-  integer::ind
-  type(msg_int4)::msg
-
-  do ind=1,twotondim
-     if(grid%refined(ind))then
-        msg%int4(ind)=1
-     else
-        msg%int4(ind)=0
-     endif
-  enddo
-  msg_array=transfer(msg,msg_array)
-  
-end subroutine pack_fetch_split
-!##############################################################################
-!##############################################################################
-!##############################################################################
-!##############################################################################
-subroutine unpack_fetch_split(grid,msg_size,msg_array,hash_key)
-  use amr_parameters, only: ndim,twotondim
-  use amr_commons, only: oct
-  use cache_commons, only: msg_int4
-  type(oct)::grid
-  integer::msg_size
-  integer,dimension(1:msg_size),optional::msg_array
-  integer(kind=8),dimension(0:ndim)::hash_key
-
-  integer::ind
-  type(msg_int4)::msg
-
-  grid%lev=hash_key(0)
-  grid%ckey(1:ndim)=hash_key(1:ndim)
-  msg=transfer(msg_array,msg)
-
-  do ind=1,twotondim
-     if(msg%int4(ind)==1)then
-        grid%refined(ind)=.true.
-     else
-        grid%refined(ind)=.false.
-     endif
-  enddo
-
-end subroutine unpack_fetch_split
 !##############################################################################
 !##############################################################################
 !##############################################################################
@@ -1242,81 +1235,105 @@ subroutine split_part(s,p,ilevel)
   real(kind=8),dimension(1:ndim)::x,xp_tmp,vp_tmp,fp_tmp,jp_tmp
   integer,dimension(1:ndim)::ii,ix,ix_ref
   integer(kind=8),dimension(0:ndim)::hash_key
-  integer::i,ipart,jpart,idim,icell,ilev
+  integer::i,ipart,jpart,idim,icell,igrid,ilev
   integer::npart_coarse,npart_fine
   real(kind=8)::dx_loc,vol_loc
   real(kind=8)::mp_tmp
   integer::levelp_tmp
   integer(i8b)::idp_tmp
-  type(oct),pointer::gridp
   type(msg_int4)::dummy_int4
+  logical::in_domain
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
-  ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
-  vol_loc=dx_loc**ndim
+  if(ilevel==r%levelmin-1)then
 
-  ! Open read-only cache for array refined
-  hash_key(0)=ilevel
-  call open_cache(s,table=m%grid_dict,data_size=storage_size(m%grid(1))/32,&
-                hilbert=m%domain,pack_size=storage_size(dummy_int4)/32,&
-                pack=pack_fetch_split,unpack=unpack_fetch_split)
-
-  ! Loop over particles
-  ix_ref=-1
-  npart_coarse=0
-  do i=p%headp(ilevel),p%tailp(r%nlevelmax)
-     ipart=p%sortp(i)
-
-     ! Acquire grid using read-only cache
-     ix = int(p%xp(ipart,1:ndim)/(2*dx_loc))
-     if(.NOT. ALL(ix.EQ.ix_ref))then
-        hash_key(1:ndim)=ix(1:ndim)
-        call get_grid(s,hash_key,m%grid_dict,gridp,flush_cache=.false.,fetch_cache=.true.)
-        ix_ref=ix
-     endif
-
-     ! If particle sits outside current level,
-     ! then it is clearly not in a refined cell.
-     ! This can happen during second adaptive step
-     if(.not.associated(gridp))then
-        npart_coarse=npart_coarse+1
-        p%levelp(ipart)=-p%levelp(ipart)
-     else
-        ! Rescale particle position at level ilevel
+     ! Loop over particles
+     npart_coarse=0
+     do ipart=p%headp(ilevel),p%tailp(r%nlevelmax)
+        p%sortp(ipart)=ipart
+        in_domain=.true.
         do idim=1,ndim
-           x(idim)=p%xp(ipart,idim)/dx_loc
+           if(.not. r%periodic(idim))then
+              if(p%xp(ipart,idim)<0.0d0.or.p%xp(ipart,idim)>=r%box_size(idim))in_domain=.false.
+           endif
         end do
-
-        ! Shift particle position to to 2x2x2 grid corner
-        do idim=1,ndim
-           ii(idim)=int(x(idim)-2*ix_ref(idim))
-        end do
-
-        ! Compute parent cell index
-#if NDIM==1
-        icell=1+ii(1)
-#endif
-#if NDIM==2
-        icell=1+ii(1)+2*ii(2)
-#endif
-#if NDIM==3
-        icell=1+ii(1)+2*ii(2)+4*ii(3)
-#endif
-        ! Increase counter if cell is not refined
-        if(.NOT.gridp%refined(icell))then
+        if(.not. in_domain)then
            npart_coarse=npart_coarse+1
            p%levelp(ipart)=-p%levelp(ipart)
         else
-           p%sortp(i)=-p%sortp(i)
+           p%sortp(ipart)=-p%sortp(ipart)
         endif
-     endif
+     end do
+     ! End loop over particles
 
-  end do
-  ! End loop over particles
+  else
 
-  call close_cache(s,m%grid_dict)
+     ! Mesh spacing in that level
+     dx_loc=r%boxlen/2**ilevel
+     vol_loc=dx_loc**ndim
+
+     ! Open read-only cache for array refined
+     hash_key(0)=ilevel
+     call open_cache(mdl, m, pack_size=storage_size(dummy_int4)/32, &
+          pack=pack_fetch_split,unpack=unpack_fetch_split)
+
+     ! Loop over particles
+     ix_ref=-1
+     npart_coarse=0
+     do i=p%headp(ilevel),p%tailp(r%nlevelmax)
+        ipart=p%sortp(i)
+
+        ! Acquire grid using read-only cache
+        ix = int((p%xp(ipart,1:ndim)+m%skip(1:ndim))/(2*dx_loc))
+        if(.NOT. ALL(ix.EQ.ix_ref))then
+           hash_key(1:ndim)=ix(1:ndim)
+           call get_grid(s,hash_key,igrid,flush_cache=.false.,fetch_cache=.true.)
+           ix_ref=ix
+        endif
+
+        ! If particle sits outside current level,
+        ! then it is clearly not in a refined cell.
+        ! This can happen during second adaptive step
+        if(igrid==0)then
+           npart_coarse=npart_coarse+1
+           p%levelp(ipart)=-p%levelp(ipart)
+        else
+           ! Rescale particle position at level ilevel
+           do idim=1,ndim
+              x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
+           end do
+
+           ! Shift particle position to to 2x2x2 grid corner
+           do idim=1,ndim
+              ii(idim)=int(x(idim)-2*ix_ref(idim))
+           end do
+
+           ! Compute parent cell index
+#if NDIM==1
+           icell=1+ii(1)
+#endif
+#if NDIM==2
+           icell=1+ii(1)+2*ii(2)
+#endif
+#if NDIM==3
+           icell=1+ii(1)+2*ii(2)+4*ii(3)
+#endif
+           ! Increase counter if cell is not refined
+           if(.NOT.m%grid(igrid)%refined(icell))then
+              npart_coarse=npart_coarse+1
+              p%levelp(ipart)=-p%levelp(ipart)
+           else
+              p%sortp(i)=-p%sortp(i)
+           endif
+        endif
+
+     end do
+     ! End loop over particles
+
+     call close_cache(mdl)
+
+  endif
 
   p%tailp(ilevel)=p%headp(ilevel)+npart_coarse-1
   do ilev=ilevel+1,r%nlevelmax
@@ -1409,6 +1426,22 @@ subroutine split_part(s,p,ilevel)
            p%idm(ipart)=p%idm(jpart)
            p%idm(jpart)=idp_tmp
         endif
+        ! Swap tracking ids
+        if(allocated(p%idt))then
+           idp_tmp=p%idt(ipart)
+           p%idt(ipart)=p%idt(jpart)
+           p%idt(jpart)=idp_tmp
+        endif
+        if(allocated(p%size))then
+           mp_tmp=p%size(ipart)
+           p%size(ipart)=p%size(jpart)
+           p%size(jpart)=mp_tmp
+        endif
+        if(allocated(p%charge))then
+           mp_tmp=p%charge(ipart)
+           p%charge(ipart)=p%charge(jpart)
+           p%charge(jpart)=mp_tmp
+        endif
      end do
   end do
 
@@ -1419,6 +1452,63 @@ end subroutine split_part
 !##############################################################################
 !##############################################################################
 !##############################################################################
+subroutine pack_fetch_split(mesh,igrid,msg_size,msg_array)
+  use amr_parameters, only: twotondim
+  use amr_commons, only: mesh_t
+  use cache_commons, only: msg_int4
+  type(mesh_t)::mesh
+  integer::igrid
+  integer::msg_size
+  integer,dimension(1:msg_size),optional::msg_array
+
+  integer::ind
+  type(msg_int4)::msg
+
+  do ind=1,twotondim
+     if(mesh%grid(igrid)%refined(ind))then
+        msg%int4(ind)=1
+     else
+        msg%int4(ind)=0
+     endif
+  enddo
+  msg_array=transfer(msg,msg_array)
+  
+end subroutine pack_fetch_split
+!##############################################################################
+!##############################################################################
+!##############################################################################
+!##############################################################################
+subroutine unpack_fetch_split(mesh,igrid,msg_size,msg_array,hash_key)
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: mesh_t
+  use cache_commons, only: msg_int4
+  type(mesh_t)::mesh
+  integer::igrid
+  integer::msg_size
+  integer,dimension(1:msg_size),optional::msg_array
+  integer(kind=8),dimension(0:ndim)::hash_key
+
+  integer::ind
+  type(msg_int4)::msg
+
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
+  msg=transfer(msg_array,msg)
+
+  do ind=1,twotondim
+     if(msg%int4(ind)==1)then
+        mesh%grid(igrid)%refined(ind)=.true.
+     else
+        mesh%grid(igrid)%refined(ind)=.false.
+     endif
+  enddo
+
+end subroutine unpack_fetch_split
+!##############################################################################
+!##############################################################################
+!##############################################################################
+!##############################################################################
+#ifdef GRAV
 recursive subroutine r_collect_multipole(pst,ilevel,input_size,multipole,output_size)
   use mdl_module
   use amr_parameters, only: ndim
@@ -1467,11 +1557,11 @@ recursive subroutine r_broadcast_multipole(pst,multipole,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
      pst%s%g%multipole=multipole
-     pst%s%g%rho_tot=pst%s%g%multipole%q(1)/pst%s%r%boxlen**ndim
-!!!     pst%s%g%rho_tot=0d0 ! For non-periodic BC
+     pst%s%g%rho_tot=pst%s%g%multipole%q(1)/PRODUCT(pst%s%r%box_size(1:ndim))
   endif
 
 end subroutine r_broadcast_multipole
+#endif
 !##############################################################################
 !##############################################################################
 !##############################################################################
@@ -1860,6 +1950,7 @@ recursive subroutine r_sort_part(pst,ilevel,input_size)
      if(pst%s%r%star)call sort_part(pst%s,pst%s%star,ilevel)
      if(pst%s%r%sink)call sort_part(pst%s,pst%s%sink,ilevel)
      if(pst%s%r%tree)call sort_part(pst%s,pst%s%tree,ilevel)
+     if(pst%s%r%trac)call sort_part(pst%s,pst%s%trac,ilevel)
   endif
 
 end subroutine r_sort_part
@@ -1893,7 +1984,7 @@ subroutine sort_part(s,p,ilevel)
      p%sortp(i)=i
   end do
   ix=0
-  call sort_hilbert(r,g,p,p%headp(ilevel),p%tailp(r%nlevelmax),ix,0,1,ilevel-1)
+  call sort_hilbert(r,g,m,p,p%headp(ilevel),p%tailp(r%nlevelmax),ix,0,1,ilevel-1)
 
   end associate
 
@@ -1902,38 +1993,39 @@ end subroutine sort_part
 !##############################################################################
 !##############################################################################
 !##############################################################################
-recursive subroutine sort_hilbert(r,g,p,head_part, tail_part, ix_coarse, cstate_coarse, ilevel, final_level)
+recursive subroutine sort_hilbert(r,g,m,p,head_part, tail_part, ix_coarse, cstate_coarse, ilevel, final_level)
   use amr_parameters, only: ndim, twotondim
-  use amr_commons, only: run_t, global_t
+  use amr_commons, only: run_t, global_t, mesh_t
   use pm_commons, only: part_t
   use hilbert, only: next_state_diagram_reverse, one_digit_diagram
   implicit none
-  
+
   type(run_t),intent(in)::r
   type(global_t),intent(in)::g
+  type(mesh_t)::m
   type(part_t)::p
   integer, intent(in) :: ilevel, final_level
   integer, intent(in) :: head_part, tail_part
   integer, dimension(1:ndim), intent(in) :: ix_coarse
   integer, intent(in) :: cstate_coarse
-  
+
   ! Description:
   ! This subroutine sort particles along the Hilbert key at the resolution
   ! set by final_level. It should be called first with ilevel=levelmin.
-  
+
   ! Iputs: 
   ! - Head_part and tail_part are head and tail of particle distribution to work on.
   ! - Array sortp must be initialized with sortp(i)=i between head_part and tail_part.
   ! - Cartesian key of coarse cell in which these particles are contained.
   ! - State of the coarse cell for Hilbert ordering
   ! - Current and final level
-  
+
   ! Example: 
   ! ix=(/0,0,0/)
   ! call sort_hilbert(1, npart, ix, 0, 1, nlevelmax) 
   ! will sort all particles according to their Hilbert key at levelmax.
   ! On output, array sortp is modified.
-  
+
   ! Local variables
   integer :: ip, ind_part, idim, ipart, new_ipart
   integer :: ckey_max, cstate_fine, ind_cart_part, head_fine, tail_fine
@@ -1942,38 +2034,38 @@ recursive subroutine sort_hilbert(r,g,p,head_part, tail_part, ix_coarse, cstate_
   integer, dimension(0:twotondim-1) :: nstate, sdigit, ind, ind_cart, ind_hilbert
   integer, dimension(0:twotondim-1) :: numb_part, offset
   real(kind=8) :: ckey_factor
-  
+
   ! Compute particle position to cartesian key factor
   ckey_max = 2**ilevel
   ckey_factor = 2.0**ilevel / r%boxlen
-  
+
   ! Initial Cartesian offset for fine cells
   do idim = 1, ndim
      ix_ref(idim) = ISHFT(ix_coarse(idim),1)
   end do
-  
+
   ! Compute the Hilbert index for fine cells
   do ip = 0, twotondim-1
      sdigit(ip) = ip
   end do
-  
+
   ! Compute lookup index in state diagrams
   do ip = 0, twotondim-1
      ind(ip) = cstate_coarse * twotondim + sdigit(ip)
   end do
-  
+
   ! Save next state
   do ip = 0, twotondim-1
      nstate(ip) = next_state_diagram_reverse(ind(ip))
   end do
-  
+
   ! Add one integer key digit each
   do idim = 1, ndim
      do ip = 0, twotondim-1
         ix(ip, idim) = one_digit_diagram(ind(ip), idim)
      end do
   end do
-  
+
   ! Compute Cartesian index for children cells
   ind_cart = 0
   do idim = 1, ndim
@@ -1982,38 +2074,38 @@ recursive subroutine sort_hilbert(r,g,p,head_part, tail_part, ix_coarse, cstate_
         ind_cart(ip) = ind_cart(ip) + ix(ip, idim) * 2**(idim-1)
      end do
   end do
-  
+
   ! Compute mapping from Cartesian to Hilbert order
   ind_hilbert = 0
   do ip = 0, twotondim-1
      ind_hilbert(ind_cart(ip))=ip
   end do
-  
+
   ! Count particles per children cell
   numb_part = 0
   do ipart = head_part, tail_part
      ind_part = p%sortp(ipart)
      ind_cart_part = 0
      do idim = 1,ndim
-        ix_part(idim) = int(p%xp(ind_part,idim)*ckey_factor) - ix_ref(idim)
+        ix_part(idim) = int((p%xp(ind_part,idim)+m%skip(idim))*ckey_factor) - ix_ref(idim)
         ind_cart_part = ind_cart_part + ix_part(idim) * 2**(idim-1)
      end do
      ip = ind_hilbert(ind_cart_part)
      numb_part(ip) = numb_part(ip) + 1
   end do
-  
+
   offset = head_part-1
   do ip = 1, twotondim-1
      offset(ip) = offset(ip-1) + numb_part(ip-1)
   end do
-  
+
   ! Compute new sortp array
   numb_part = 0
   do ipart = head_part, tail_part
      ind_part = p%sortp(ipart)
      ind_cart_part = 0
      do idim = 1,ndim
-        ix_part(idim) = int(p%xp(ind_part,idim)*ckey_factor) - ix_ref(idim)
+        ix_part(idim) = int((p%xp(ind_part,idim)+m%skip(idim))*ckey_factor) - ix_ref(idim)
         ind_cart_part = ind_cart_part + ix_part(idim) * 2**(idim-1)
      end do
      ip = ind_hilbert(ind_cart_part)
@@ -2024,7 +2116,7 @@ recursive subroutine sort_hilbert(r,g,p,head_part, tail_part, ix_coarse, cstate_
   do ipart = head_part,tail_part
      p%sortp(ipart) = p%workp(ipart)
   end do
-  
+
   ! Recursive call
   if(ilevel < final_level)then
      do ip = 0, twotondim-1
@@ -2033,11 +2125,11 @@ recursive subroutine sort_hilbert(r,g,p,head_part, tail_part, ix_coarse, cstate_
            tail_fine = offset(ip) + numb_part(ip)
            ix_fine(1:ndim) = ix_child(ip,1:ndim)
            cstate_fine = nstate(ip)
-           call sort_hilbert(r,g,p,head_fine,tail_fine,ix_fine,cstate_fine,ilevel+1,final_level)
+           call sort_hilbert(r,g,m,p,head_fine,tail_fine,ix_fine,cstate_fine,ilevel+1,final_level)
         endif
      end do
   endif
-  
+
 end subroutine sort_hilbert
 !###############################################
 !###############################################

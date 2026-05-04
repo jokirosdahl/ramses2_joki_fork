@@ -29,7 +29,8 @@ subroutine m_dump_all(pst,write_bkp_file)
   integer,dimension(1:flen/4)::input_array
   type(in_output_poisson_t)::in_output_poisson
 
-  associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,star=>pst%s%star,sink=>pst%s%sink,tree=>pst%s%tree,mdl=>pst%s%mdl)
+  associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,star=>pst%s%star, &
+   & sink=>pst%s%sink,tree=>pst%s%tree,trac=>pst%s%trac,dust=>pst%s%dust,mdl=>pst%s%mdl)
 
   if(g%nstep_coarse==g%nstep_coarse_old.and.g%nstep_coarse>0)return
   if(g%nstep_coarse==0.and.r%nrestart>0)return
@@ -100,6 +101,14 @@ subroutine m_dump_all(pst,write_bkp_file)
         filename=TRIM(filedir)//'tree_header.txt'
         call output_header(r,g,tree,filename)
      endif
+     if(r%trac)then
+        filename=TRIM(filedir)//'trac_header.txt'
+        call output_header(r,g,trac,filename)
+     endif
+     if(r%dust)then
+        filename=TRIM(filedir)//'dust_header.txt'
+        call output_header(r,g,dust,filename)
+     endif
      if(r%hydro)then
         filename=TRIM(filedir)//'hydro_header.txt'
         call file_descriptor_hydro(r,filename,write_bkp_file)
@@ -130,7 +139,7 @@ subroutine m_dump_all(pst,write_bkp_file)
      filename=TRIM(filedir)//'params.bin'
      call output_params(r,g,m,filename)
      filename=TRIM(filedir)//'timer.txt'
-     call m_output_timer(pst,.true.,filename)
+     call m_output_timer(.true.,filename)
 
      !-----------------------
      ! All slave processes
@@ -422,6 +431,7 @@ subroutine input_params(mdl,r,g,filename,ncpu_file,levelmin_file,nlevelmax_file)
   ! Read various constants
   read(ilun)g%const,g%mass_tot_0,g%rho_tot
   read(ilun)g%omega_m,g%omega_l,g%omega_k,g%omega_b,g%h0,g%aexp_ini,g%boxlen_ini
+  g%omega_k=1-g%omega_m-g%omega_l
   read(ilun)g%aexp,g%texp,g%hexp
   read(ilun)g%aexp_old,g%epot_tot_int,g%epot_tot_old
   read(ilun)mass_sph_file
@@ -663,6 +673,9 @@ subroutine output_header(r,g,p,filename)
   ! Keep track of what particle fields are present
   write(ilun,*)'Particle fields'
   write(ilun,'(a)',advance='no')'pos vel mass '
+  if(allocated(p%phip))then
+     write(ilun,'(a)',advance='no')'potential '
+  endif
   if(allocated(p%zp))then
      write(ilun,'(a)',advance='no')'metallicity '
   endif
@@ -673,18 +686,24 @@ subroutine output_header(r,g,p,filename)
      write(ilun,'(a)',advance='no')'angmom '
   end if
   if(allocated(p%tp))then
-     write(ilun,'(a)',advance='no')'age '
+     write(ilun,'(a)',advance='no')'birth_date '
   endif
   if(allocated(p%tm))then
-     write(ilun,'(a)',advance='no')'merging_age '
+     write(ilun,'(a)',advance='no')'merging_date '
   endif
-  write(ilun,'(a)',advance='no')'level id '
+  write(ilun,'(a)',advance='no')'level birth_id '
   if(allocated(p%idm))then
      write(ilun,'(a)',advance='no')'merging_id '
   endif
-#ifdef OUTPUT_PARTICLE_POTENTIAL
-  write(ilun,'(a)',advance='no')'phi '
-#endif
+  if(allocated(p%idt))then
+     write(ilun,'(a)',advance='no')'tracking_id '
+  endif
+  if(allocated(p%size))then
+     write(ilun,'(a)',advance='no')'size '
+  endif
+  if(allocated(p%charge))then
+     write(ilun,'(a)',advance='no')'charge '
+  endif
   close(ilun)
 
 end subroutine output_header

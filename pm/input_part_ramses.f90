@@ -386,6 +386,30 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
         iskip=iskip+4*npart_file(icpu)
      endif
 
+     ! Read size
+     if(allocated(p%size))then
+        ipos=iskip+4*(istart-1)
+        read(10,POS=ipos)xsp
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%size(ipart)=xsp(i)
+        end do
+        iskip=iskip+4*npart_file(icpu)
+     endif
+
+     ! Read charge
+     if(allocated(p%charge))then
+        ipos=iskip+4*(istart-1)
+        read(10,POS=ipos)xsp
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%charge(ipart)=xsp(i)
+        end do
+        iskip=iskip+4*npart_file(icpu)
+     endif
+
      deallocate(xsp)
 
      allocate(isp(istart:iend))
@@ -442,6 +466,26 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
 #endif
      endif
 
+     ! Read tracking identity
+     if(allocated(p%idt))then
+#ifndef LONGINT
+        ipos=iskip+4*(istart-1)
+#else
+        ipos=iskip+8*(istart-1)
+#endif
+        read(10,POS=ipos)isp8
+        ipart=ipart_old
+        do i=istart,iend
+           ipart=ipart+1
+           p%idt(ipart)=isp8(i)
+        end do
+#ifndef LONGINT
+        iskip=iskip+4*npart_file(icpu)
+#else
+        iskip=iskip+8*npart_file(icpu)
+#endif
+     endif
+
      deallocate(isp8)
 
      ! Close the particle file
@@ -451,12 +495,26 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
   end do
   ! End loop over files
 
+  ! Periodic box
+  do ipart=1,p%npart
+     do idim=1,ndim
+        if(r%periodic(idim))then
+           if(p%xp(ipart,idim)< 0.0d0           )p%xp(ipart,idim)=p%xp(ipart,idim)+r%box_size(idim)
+           if(p%xp(ipart,idim)>=r%box_size(idim))p%xp(ipart,idim)=p%xp(ipart,idim)-r%box_size(idim)
+        endif
+     end do
+  end do
+
   ! Put all particles in levelmin
   p%headp=p%npart+1
   p%tailp=p%npart
   p%headp(r%levelmin)=1
   p%tailp(r%levelmin)=p%npart
-        
+  if(ANY(.not.r%periodic(1:ndim)))then
+     p%headp(r%levelmin-1)=1
+     p%tailp(r%levelmin-1)=0
+  endif
+
 end subroutine input_part_ramses
 !#########################################################################
 !#########################################################################

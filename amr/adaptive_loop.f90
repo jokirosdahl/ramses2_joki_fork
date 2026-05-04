@@ -10,6 +10,7 @@ subroutine adaptive_loop(pst)
   use init_xion_module, only: m_init_xion
   use input_part_module, only: m_input_part
   use init_refine_basegrid_module, only: m_init_refine_basegrid
+  use init_refine_adaptive_module, only: m_init_refine_adaptive
   use init_refine_restart_module, only: m_init_refine_restart
   use init_refine_ramses_module, only: m_init_refine_ramses
   use turb_init_module, only: r_init_turb
@@ -30,7 +31,7 @@ subroutine adaptive_loop(pst)
   double precision::tt1,tt2
   real(kind=4)::core_mem
 
-  associate(mdl=>pst%s%mdl,r=>pst%s%r,m=>pst%s%m,g=>pst%s%g)
+  associate(r=>pst%s%r,g=>pst%s%g,mdl=>pst%s%mdl)
 
   tt1 = mdl_wtime(mdl)
 
@@ -68,6 +69,7 @@ subroutine adaptive_loop(pst)
      endif
   else
      call m_init_refine_restart(pst) ! Build AMR grid from restart file
+     g%first_coarse_restart = .true. ! Indicate the initial course step post restart
   endif
 
   ! Initialization of ionization fractions
@@ -78,10 +80,9 @@ subroutine adaptive_loop(pst)
   print '(A,F14.7)',' Time elapsed since startup:',tt2-tt1
 
   ! Output mesh structure
-  write(*,*)'Initial mesh structure'
   do ilevel=r%levelmin,r%nlevelmax
-     if(m%noct_tot(ilevel)>0)write(*,999)&
-          & ilevel,m%noct_tot(ilevel),m%noct_min(ilevel),m%noct_max(ilevel),m%noct_tot(ilevel)/mdl_threads(mdl)
+     if(pst%s%m%noct_tot(ilevel)>0)write(*,999)&
+          & ilevel,pst%s%m%noct_tot(ilevel),pst%s%m%noct_min(ilevel),pst%s%m%noct_max(ilevel),pst%s%m%noct_tot(ilevel)/mdl_threads(mdl)
   end do
 999 format(' Level ',I2,' has ',I11,' grids (',3(I8,','),')')
 
@@ -131,10 +132,10 @@ subroutine adaptive_loop(pst)
 
      call getmem(core_mem)
      call writemem(core_mem)
-     
+
   end do
 
-  call m_output_timer(pst,.false.,'dummy')
+  call m_output_timer(.false.,'dummy')
 
 !  call r_hash_stats(pst)
 

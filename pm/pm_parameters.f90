@@ -9,5 +9,7 @@ module pm_parameters
   integer,parameter :: STAR_TYPE = 1
   integer,parameter :: SINK_TYPE = 2
   integer,parameter :: TREE_TYPE = 3
+  integer,parameter :: TRAC_TYPE = 4
+  integer,parameter :: DUST_TYPE = 5
 
 end module pm_parameters

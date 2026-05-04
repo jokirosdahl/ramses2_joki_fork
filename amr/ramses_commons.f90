@@ -12,13 +12,16 @@ module ramses_commons
 
      type(run_t)::r
      type(global_t)::g
-     type(mesh_t)::m
+     type(mesh_t),pointer::m => null()
+     type(mesh_t),pointer::m_mg => null()
      type(part_t)::p
      type(part_t)::star
      type(part_t)::sink
      type(part_t)::tree
+     type(part_t)::trac
+     type(part_t)::dust
      type(part_t)::gas
-     type(clump_t)::c
+     type(clump_t),pointer::c => null()
      type(turb_t)::turb
      type(cooling_t)::cool
      type(neq_cooling_t)::tables
@@ -89,7 +92,7 @@ subroutine open_file(s,filename,nskip,ilun)
 
 #ifndef WITHOUTMPI
   if(g%myid.EQ.istart(ifile+1)-1)then
-     noct=m%noct
+     noct=m%noct(s%r%levelmin:s%r%nlevelmax)
      if(g%myid.GT.istart(ifile))then
      call MPI_ISEND(noct,r%nlevelmax-r%levelmin+1,MPI_INTEGER8,g%myid-2,tag1,MPI_COMM_WORLD,reqsend,info)
      call MPI_WAIT(reqsend,reqstatus,info)
@@ -97,18 +100,18 @@ subroutine open_file(s,filename,nskip,ilun)
   elseif(g%myid.GT.istart(ifile))then
      call MPI_IRECV(noct,r%nlevelmax-r%levelmin+1,MPI_INTEGER8,g%myid,tag1,MPI_COMM_WORLD,reqrecv,info)
      call MPI_WAIT(reqrecv,reqstatus,info)
-     noct=noct+m%noct
+     noct=noct+m%noct(s%r%levelmin:s%r%nlevelmax)
      call MPI_ISEND(noct,r%nlevelmax-r%levelmin+1,MPI_INTEGER8,g%myid-2,tag1,MPI_COMM_WORLD,reqsend,info)
      call MPI_WAIT(reqsend,reqstatus,info)
   elseif(g%myid.EQ.istart(ifile))then
      call MPI_IRECV(noct,r%nlevelmax-r%levelmin+1,MPI_INTEGER8,g%myid,tag1,MPI_COMM_WORLD,reqrecv,info)
      call MPI_WAIT(reqrecv,reqstatus,info)
-     noct=noct+m%noct
+     noct=noct+m%noct(s%r%levelmin:s%r%nlevelmax)
   else
      write(*,*)'Problem in open_file'
   endif
 #else
-  noct=m%noct
+  noct=m%noct(s%r%levelmin:s%r%nlevelmax)
 #endif
 
   if(g%myid.EQ.istart(ifile))then
@@ -372,6 +375,11 @@ subroutine open_part_file(s,p,filename,nskip,ilun)
      ! Masses
      ivar=2*ndim+1
      nskip(ivar+1)=nskip(ivar)+4*npart
+     ! Potentials
+     if(allocated(p%phip))then
+        ivar=ivar+1
+        nskip(ivar+1)=nskip(ivar)+4*npart
+     endif
      ! Metallicities
      if(allocated(p%zp))then
         ivar=ivar+1
@@ -412,11 +420,19 @@ subroutine open_part_file(s,p,filename,nskip,ilun)
         ivar=ivar+1
         nskip(ivar+1)=nskip(ivar)+i8b*npart
      endif
-#ifdef OUTPUT_PARTICLE_POTENTIAL
-     ! Potentials
-     ivar=ivar+1
-     nskip(ivar+1)=nskip(ivar)+4*npart
-#endif
+     ! Tracking identities
+     if(allocated(p%idt))then
+        ivar=ivar+1
+        nskip(ivar+1)=nskip(ivar)+i8b*npart
+     endif
+     if(allocated(p%size))then
+        ivar=ivar+1
+        nskip(ivar+1)=nskip(ivar)+4*npart
+     endif
+     if(allocated(p%charge))then
+        ivar=ivar+1
+        nskip(ivar+1)=nskip(ivar)+4*npart
+     endif
 
   elseif(g%myid.GT.istart(ifile))then
 
@@ -498,6 +514,11 @@ subroutine close_part_file(s,p,filename,nskip,ilun)
      ! Masses
      ivar=2*ndim+1
      nskip(ivar)=nskip(ivar)+4*p%npart
+     ! Potentials
+     if(allocated(p%phip))then
+        ivar=ivar+1
+        nskip(ivar)=nskip(ivar)+4*p%npart
+     endif
      ! Metallicities
      if(allocated(p%zp))then
         ivar=ivar+1
@@ -538,11 +559,19 @@ subroutine close_part_file(s,p,filename,nskip,ilun)
         ivar=ivar+1
         nskip(ivar)=nskip(ivar)+i8b*p%npart
      endif
-#ifdef OUTPUT_PARTICLE_POTENTIAL
-     ! Potentials
-     ivar=ivar+1
-     nskip(ivar)=nskip(ivar)+4*p%npart
-#endif
+     ! Tracking identities
+     if(allocated(p%idt))then
+        ivar=ivar+1
+        nskip(ivar)=nskip(ivar)+i8b*p%npart
+     endif
+     if(allocated(p%size))then
+        ivar=ivar+1
+        nskip(ivar)=nskip(ivar)+4*p%npart
+     endif
+     if(allocated(p%charge))then
+        ivar=ivar+1
+        nskip(ivar)=nskip(ivar)+4*p%npart
+     endif
 
 #ifndef WITHOUTMPI
      call MPI_ISEND(nskip,p%nvaralloc+1,MPI_INTEGER8,g%myid,tag2,MPI_COMM_WORLD,reqsend,info)
@@ -558,4 +587,3 @@ end subroutine close_part_file
 !#########################################################################
 !#########################################################################
 end module ramses_commons
-

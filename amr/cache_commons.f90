@@ -33,12 +33,17 @@ module cache_commons
   end type msg_int4
   type msg_realdp
      integer(kind=4),dimension(1:twotondim)::int4
+#ifdef HYDRO
      real(kind=8),dimension(1:twotondim,1:nvar)::realdp
-#ifdef RT
-     real(kind=8),dimension(1:twotondim,1:nrtvar)::realdp_rt
+#ifdef TRCFLX
+     real(kind=8),dimension(1:twotondim,1:2*ndim+1)::realdp_mflux
+#endif
 #endif
 #ifdef MHD
      real(kind=8),dimension(1:twotondim,1:6)::realdp_mhd
+#endif
+#ifdef RT
+     real(kind=8),dimension(1:twotondim,1:nrtvar)::realdp_rt
 #endif
   end type msg_realdp
   type msg_small_realdp
@@ -58,9 +63,31 @@ module cache_commons
      real(kind=8),dimension(1:twotondim)::realdp_phi_old
      real(kind=8),dimension(1:twotondim)::realdp_dis
   end type msg_three_realdp
-  type msg_large_realdp
+  type msg_nvar_realdp
+     real(kind=8),dimension(1:twotondim,1:nvar)::realdp_hydro
+  end type msg_nvar_realdp
+  ! Explicit mflux message types (keep mflux transfers self-contained)
+  type msg_hydro_mflux
+     real(kind=8),dimension(1:twotondim,1:nvar)::realdp_hydro
+#ifdef TRCFLX
+     real(kind=8),dimension(1:twotondim,1:2*ndim+1)::realdp_mflux
+#endif
+  end type msg_hydro_mflux
+  type msg_upload_hydro_mflux_mhd
      integer(kind=4),dimension(1:twotondim)::int4
      real(kind=8),dimension(1:twotondim,1:nvar)::realdp_hydro
+#ifdef TRCFLX
+     real(kind=8),dimension(1:twotondim,1:2*ndim+1)::realdp_mflux
+#endif
+#ifdef MHD
+     real(kind=8),dimension(1:twotondim,1:6)::realdp_mhd
+#endif
+  end type msg_upload_hydro_mflux_mhd
+  type msg_large_realdp
+     integer(kind=4),dimension(1:twotondim)::int4
+#ifdef HYDRO
+     real(kind=8),dimension(1:twotondim,1:nvar)::realdp_hydro
+#endif
 #ifdef RT
      real(kind=8),dimension(1:twotondim,1:nrtvar)::realdp_rt
 #endif
@@ -69,6 +96,9 @@ module cache_commons
 #endif
 #ifdef GRAV
      real(kind=8),dimension(1:twotondim,1:ndim+2)::realdp_poisson
+#endif
+#ifdef TRCFLX
+     real(kind=8),dimension(1:twotondim,1:2*ndim+1)::realdp_mflux
 #endif
   end type msg_large_realdp
   type msg_rt_emissivity_realdp
@@ -88,6 +118,7 @@ module cache_commons
      real(kind=8)::dens
      real(kind=8)::mass
      real(kind=8)::vol
+     real(kind=8)::rad
      real(kind=8),dimension(1:ndim)::pos
      real(kind=8),dimension(1:ndim)::vel
   end type msg_prop_clump
@@ -99,15 +130,14 @@ module cache_commons
      integer::npart
      integer::lev
      integer(kind=8)::ind
-     real(kind=8)::dens
-     real(kind=8)::mass
+     real(kind=8)::rad
      real(kind=8),dimension(1:ndim)::pos
      real(kind=8),dimension(1:nbin)::mbin
   end type msg_mbin_clump
   type msg_unbind_clump
      integer::lev
      integer(kind=8)::ind
-     real(kind=8)::dens
+     real(kind=8)::rad
      real(kind=8)::mass
      real(kind=8),dimension(1:ndim)::pos
      real(kind=8),dimension(1:ndim)::vel
@@ -122,6 +152,7 @@ module cache_commons
   type msg_tree_clump
      integer::id
      integer::lev
+     real(kind=8)::rad
      real(kind=8)::mass
      real(kind=8),dimension(1:ndim)::pos
      real(kind=8),dimension(1:ndim)::vel

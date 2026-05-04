@@ -273,12 +273,12 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
   ! Compute starting grid index at that level
   if(ilevel.EQ.r%levelmin)then
      igrid_start=1
-     m%head_clean(ilevel)=1
-     m%head_dirty(ilevel)=1
+!!$     m%head_clean(ilevel)=1
+!!$     m%head_dirty(ilevel)=1
   else
      igrid_start=m%tail(ilevel-1)+1
-     m%head_clean(ilevel)=m%head_clean(ilevel-1)+m%noct_clean(ilevel-1)
-     m%head_dirty(ilevel)=m%head_dirty(ilevel-1)+m%noct_dirty(ilevel-1)
+!!$     m%head_clean(ilevel)=m%head_clean(ilevel-1)+m%noct_clean(ilevel-1)
+!!$     m%head_dirty(ilevel)=m%head_dirty(ilevel-1)+m%noct_dirty(ilevel-1)
   endif
 
   ! Set grid at current level
@@ -371,7 +371,7 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
 
         ! Create new oct in memory
         igrid=igrid+1
-        if(igrid.GT.r%ngridmax)then
+        if(igrid.GT.m%ngridmax)then
            write(*,*)'No more free memory'
            write(*,*)'Increase ngridmax'
            call mdl_abort(mdl)
@@ -389,15 +389,15 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
         if(r%hydro)then
 #ifdef HYDRO
            do ind=1,twotondim
-              m%grid(igrid)%uold(ind,1:5)=qout(ind,1:5) ! Density, velocity, pressure
+              m%uold(ind,1:5,igrid)=qout(ind,1:5) ! Density, velocity, pressure
 #if NENER>0
               do irad=1,nener ! Non-thermal pressures
-                 m%grid(igrid)%uold(ind,5+irad)=qout(ind,ie+irad)
+                 m%uold(ind,5+irad,igrid)=qout(ind,ie+irad)
               end do
 #endif
 #if NVAR>5+NENER
               do n=1,nvar-5-nener ! Passive scalar mass fraction
-                 m%grid(igrid)%uold(ind,5+nener+n)=qout(ind,ie+nener+n)
+                 m%uold(ind,5+nener+n,igrid)=qout(ind,ie+nener+n)
               end do
 #endif
            end do
@@ -407,16 +407,16 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
         ! Set flag1 to preserve refinements
         do ind=1,twotondim
            if(m%grid(igrid)%refined(ind))then
-              m%grid(igrid)%flag1(ind)=1
+              m%flag1(ind,igrid)=1
            else
-              m%grid(igrid)%flag1(ind)=0
+              m%flag1(ind,igrid)=0
            endif
         end do
         
         ! Insert in hash table
         hash_key(0)=ilevel
         hash_key(1:ndim)=ckey
-        call hash_setp(m%grid_dict,hash_key,m%grid(igrid))
+        call hash_setp(m%grid_dict,hash_key,igrid)
         
         ! Compute Hilbert keys of new octs
         ix(1:ndim)=ckey(1:ndim)
@@ -464,40 +464,40 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
      end do
   end do
 
-  !---------------------
-  ! Clean and dirty octs
-  !---------------------
-  m%noct_clean(ilevel)=0
-  m%noct_dirty(ilevel)=0
-  hash_key(0)=ilevel
-  do ioct=m%head(ilevel),m%tail(ilevel)
-     clean=.true.
-#if NDIM>2
-     do k1=-1,1
-     hash_key(3)=m%grid(ioct)%ckey(3)+k1
-#endif
-#if NDIM>1
-     do j1=-1,1
-     hash_key(2)=m%grid(ioct)%ckey(2)+j1
-#endif
-     do i1=-1,1
-        hash_key(1)=m%grid(ioct)%ckey(1)+i1
-        clean=clean.and.hash_is_clean(m%grid_dict,hash_key)
-     end do
-#if NDIM>1
-     end do
-#endif
-#if NDIM>2
-     end do
-#endif
-     if(clean)then
-        m%indx_clean(m%head_clean(ilevel)+m%noct_clean(ilevel))=ioct
-        m%noct_clean(ilevel)=m%noct_clean(ilevel)+1
-     else
-        m%indx_dirty(m%head_dirty(ilevel)+m%noct_dirty(ilevel))=ioct
-        m%noct_dirty(ilevel)=m%noct_dirty(ilevel)+1
-     endif
-  end do
+!!$  !---------------------
+!!$  ! Clean and dirty octs
+!!$  !---------------------
+!!$  m%noct_clean(ilevel)=0
+!!$  m%noct_dirty(ilevel)=0
+!!$  hash_key(0)=ilevel
+!!$  do ioct=m%head(ilevel),m%tail(ilevel)
+!!$     clean=.true.
+!!$#if NDIM>2
+!!$     do k1=-1,1
+!!$     hash_key(3)=m%grid(ioct)%ckey(3)+k1
+!!$#endif
+!!$#if NDIM>1
+!!$     do j1=-1,1
+!!$     hash_key(2)=m%grid(ioct)%ckey(2)+j1
+!!$#endif
+!!$     do i1=-1,1
+!!$        hash_key(1)=m%grid(ioct)%ckey(1)+i1
+!!$        clean=clean.and.hash_is_clean(m%grid_dict,hash_key)
+!!$     end do
+!!$#if NDIM>1
+!!$     end do
+!!$#endif
+!!$#if NDIM>2
+!!$     end do
+!!$#endif
+!!$     if(clean)then
+!!$        m%indx_clean(m%head_clean(ilevel)+m%noct_clean(ilevel))=ioct
+!!$        m%noct_clean(ilevel)=m%noct_clean(ilevel)+1
+!!$     else
+!!$        m%indx_dirty(m%head_dirty(ilevel)+m%noct_dirty(ilevel))=ioct
+!!$        m%noct_dirty(ilevel)=m%noct_dirty(ilevel)+1
+!!$     endif
+!!$  end do
 
   end associate
 

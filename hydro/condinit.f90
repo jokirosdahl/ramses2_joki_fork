@@ -21,7 +21,7 @@ subroutine condinit(r,g,x,q,dx,nn)
   !================================================================
   ! This routine generates initial conditions for RAMSES.
   ! Positions are in user (aka code) units:
-  ! x(i,1:ndim) are in [0,boxlen]**ndim.
+  ! x(i,1:ndim) are in [0,box_size]**ndim.
   ! Q is the primitive variable vector. Conventions are here:
   ! Q(i,1): d, Q(i,2:4):u,v,w and Q(i,5): P.
   ! If nvar >= 6, remaining variables are treated as passive
@@ -39,6 +39,7 @@ subroutine condinit(r,g,x,q,dx,nn)
 #define CURRENTSHEET 7
 #define RTZEQM 8
 #define PANCAKE 9
+#define ALFVENWAVE 10
 
   integer::i
 #if INIT==COEUR
@@ -62,6 +63,9 @@ subroutine condinit(r,g,x,q,dx,nn)
 #elif INIT==RTZEQM
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
 #elif INIT==PANCAKE
+  real(kind=8)::pi,del_ini
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
+#elif INIT==ALFVENWAVE
   real(kind=8)::pi,del_ini
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
 #else
@@ -91,9 +95,9 @@ subroutine condinit(r,g,x,q,dx,nn)
   omega_const=0.1*sqrt(1./r2_trunc+invr2_vortex)*sqrt(M/r_trunc)
   c2=(18939.2/(scale_l/scale_t))**2
   do i=1,nn
-     rx=x(i,1)-r%boxlen/2.
-     ry=x(i,2)-r%boxlen/2.
-     rz=x(i,3)-r%boxlen/2.
+     rx=x(i,1)-r%box_size(1)/2.
+     ry=x(i,2)-r%box_size(2)/2.
+     rz=x(i,3)-r%box_size(3)/2.
      !density
      r2=rx**2+ry**2+rz**2
      d=sigma/(r2+r2_min)
@@ -202,8 +206,8 @@ subroutine condinit(r,g,x,q,dx,nn)
   do i=1,nn
      q(i,1)=1.0
      q(i,5)=1.0*(r%gamma-1.0)
-     xx=x(i,1)-r%boxlen/2.
-     yy=x(i,2)-r%boxlen/2.
+     xx=x(i,1)-r%box_size(1)/2.
+     yy=x(i,2)-r%box_size(2)/2.
      rr = SQRT(xx**2+yy**2)
      if(rr < 1.0)then
         omega=0.609711
@@ -236,9 +240,9 @@ subroutine condinit(r,g,x,q,dx,nn)
   do i=1,nn
      q(i,1)=1.0
      q(i,5)=1.0*(r%gamma-1.0)
-     xx=x(i,1)-r%boxlen/2.
-     yy=x(i,2)-r%boxlen/2.
-     zz=x(i,3)-r%boxlen/2.
+     xx=x(i,1)-r%box_size(1)/2.
+     yy=x(i,2)-r%box_size(2)/2.
+     zz=x(i,3)-r%box_size(3)/2.
      vx=A0*(cos(twopi*yy)+sin(twopi*zz))
      vy=A0*(sin(twopi*xx)+cos(twopi*zz))
      vz=A0*(cos(twopi*xx)+sin(twopi*yy))
@@ -282,7 +286,7 @@ subroutine condinit(r,g,x,q,dx,nn)
 #if INIT==PANCAKE
   pi = acos(-1.0d0)
   del_ini = 0.1
-  ! get cbs units
+  ! get cgs units
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   do i = 1,nn
      q(i,1) = g%omega_b/g%omega_m/(1+del_ini*COS(2.0d0*pi*x(i,1)))
@@ -290,6 +294,22 @@ subroutine condinit(r,g,x,q,dx,nn)
      q(i,3) = 0.0 ! Vy
      q(i,4) = 0.0 ! Vz
      q(i,5) = 100./scale_T2 ! Temperature is 10^2 K
+  end do
+#endif
+
+#if INIT==ALFVENWAVE
+  pi = acos(-1.0d0)
+  del_ini = 0.1
+  ! get cgs units
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  do i = 1,nn
+     q(i,1) = 1 ! rho
+     q(i,2) = 0 ! Vx
+     q(i,3) = 0.1*SIN(2.0d0*pi*x(i,1)) ! Vy
+     q(i,4) = 0.1*COS(2.0d0*pi*x(i,1)) ! Vz
+     q(i,5) = 0.1 ! Pressure
+     q(i,6) = 0.1*SIN(2.0d0*pi*x(i,1)) ! By
+     q(i,7) = 0.1*COS(2.0d0*pi*x(i,1)) ! Bz
   end do
 #endif
 

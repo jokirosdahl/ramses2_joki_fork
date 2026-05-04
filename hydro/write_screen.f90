@@ -19,7 +19,7 @@ subroutine write_screen(r,m)
 #endif
   integer::igrid,ind
   logical::leaf
-  real(kind=8)::ekin,emag,erad
+  real(kind=8)::ekin,emag,erad,dx
   
 #ifdef HYDRO
 
@@ -59,33 +59,34 @@ subroutine write_screen(r,m)
      nleaf=0
      do ilevel=r%levelmin,r%nlevelmax
         if(m%noct_tot(ilevel)>0)then
+           dx=r%boxlen/2**ilevel
            do igrid=m%head(ilevel),m%tail(ilevel)
               do ind=1,2
-                 leaf = .not. m%grid(igrid)%refined(ind)
+                 leaf=.not.m%grid(igrid)%refined(ind)
                  if(leaf)then
                     nleaf=nleaf+1
                     ll(nleaf)=m%grid(igrid)%lev
-                    xx(nleaf)=(2*(m%grid(igrid)%ckey(1)-m%box_ckey_min(1,ilevel))+ind-0.5)/(2.*m%ckey_max(ilevel))*r%boxlen
-                    dd(nleaf)=m%grid(igrid)%uold(ind,1)
-                    uu(nleaf)=m%grid(igrid)%uold(ind,2)/m%grid(igrid)%uold(ind,1)
-                    vv(nleaf)=m%grid(igrid)%uold(ind,3)/m%grid(igrid)%uold(ind,1)
-                    ww(nleaf)=m%grid(igrid)%uold(ind,4)/m%grid(igrid)%uold(ind,1)
+                    xx(nleaf)=(2*m%grid(igrid)%ckey(1)+ind-0.5)*dx-m%skip(1)
+                    dd(nleaf)=m%uold(ind,1,igrid)
+                    uu(nleaf)=m%uold(ind,2,igrid)/m%uold(ind,1,igrid)
+                    vv(nleaf)=m%uold(ind,3,igrid)/m%uold(ind,1,igrid)
+                    ww(nleaf)=m%uold(ind,4,igrid)/m%uold(ind,1,igrid)
                     ekin=0.5*dd(nleaf)*(uu(nleaf)**2+vv(nleaf)**2+ww(nleaf)**2)
                     emag=0.0
 #ifdef MHD
-                    AA(nleaf)=0.5*(m%grid(igrid)%bold(ind,1)+m%grid(igrid)%bold(ind,4))
-                    BB(nleaf)=0.5*(m%grid(igrid)%bold(ind,2)+m%grid(igrid)%bold(ind,5))
-                    CC(nleaf)=0.5*(m%grid(igrid)%bold(ind,3)+m%grid(igrid)%bold(ind,6))
+                    AA(nleaf)=0.5*(m%bold(ind,1,igrid)+m%bold(ind,4,igrid))
+                    BB(nleaf)=0.5*(m%bold(ind,2,igrid)+m%bold(ind,5,igrid))
+                    CC(nleaf)=0.5*(m%bold(ind,3,igrid)+m%bold(ind,6,igrid))
                     emag=0.5*(AA(nleaf)**2+BB(nleaf)**2+CC(nleaf)**2)
 #endif
                     erad=0.0d0
 #if NENER>0
                     do irad=1,nener
-                       erad=erad+m%grid(igrid)%uold(ind,5+irad)
-                       prad(irad,nleaf)=(r%gamma_rad(irad)-1)*m%grid(igrid)%uold(ind,5+irad)
+                       erad=erad+m%uold(ind,5+irad,igrid)
+                       prad(irad,nleaf)=(r%gamma_rad(irad)-1)*m%uold(ind,5+irad,igrid)
                     end do
 #endif
-                    pp(nleaf)=m%grid(igrid)%uold(ind,5)-ekin-emag-erad
+                    pp(nleaf)=m%uold(ind,5,igrid)-ekin-emag-erad
                     pp(nleaf)=(r%gamma-1)*pp(nleaf)
 
                     if(ABS(uu(nleaf))<1d-99)uu(nleaf)=0.0D0
