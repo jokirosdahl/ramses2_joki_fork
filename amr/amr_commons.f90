@@ -20,6 +20,7 @@ module amr_commons
      logical::poisson =.false.   ! Poisson solver activated
      logical::hydro   =.false.   ! Hydro activated
      logical::rt      =.false.   ! RT activated
+     logical::cr      =.false.   ! Cosmic rays activated
      logical::part    =.false.   ! Dark matter particles activated
      logical::star    =.false.   ! Stars and star formation activated
      logical::sink    =.false.   ! Sinks and sink formation activated
