@@ -1446,8 +1446,8 @@ subroutine m_read_params(pst)
   s%r%rt_refine_aexp=rt_refine_aexp
 #endif
 #ifdef CR
-  s%r%cr_err_grad_cn=cr_err_grad_cn
-  s%r%cr_floor_cn=cr_floor_cn
+  s%r%cr_err_grad_e=cr_err_grad_e
+  s%r%cr_floor_e=cr_floor_e
   s%r%cr_refine_aexp=cr_refine_aexp
 #endif
 
