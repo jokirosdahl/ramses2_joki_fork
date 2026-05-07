@@ -157,6 +157,7 @@ function worker_init(mdl) result(pst)
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold,r_set_emissivity
   use update_rt_c_module, only: r_rt_neq_updates
   use rt_star_feedback, only: r_star_rt_feedback
+  use update_cr_c_module, only: r_cr_updates
 #ifdef _CUDA
   use gpu_manager, only: r_set_grid_device, r_transfer_grid_host
 #endif
@@ -319,6 +320,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_ADD_CR_SOURCE_TERMS,    pst,C_FUNLOC(r_add_cr_source_terms),1,0,"add_cr_source_terms")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUNEW,             pst,C_FUNLOC(r_set_crunew),1,0,"set_crunew")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
+  call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
 #ifdef _CUDA
   call mdl_add_service(pst%s%mdl,MDL_SET_GRID_DEVICE,        pst,C_FUNLOC(r_set_grid_device),0,0,"set_grid_device")
   call mdl_add_service(pst%s%mdl,MDL_TRANSFER_GRID_HOST,     pst,C_FUNLOC(r_transfer_grid_host),0,0,"transfer_grid_host")

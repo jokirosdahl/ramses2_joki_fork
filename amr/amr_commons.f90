@@ -697,6 +697,9 @@ module amr_commons
      real(kind=8),dimension(1:MAXLEVEL)::rt_c=1d0            ! Reduced lightspeed in code units
      real(kind=8),dimension(1:MAXLEVEL)::rt_c_cgs            ! Reduced lightspeed in [cm s-1]
 
+     ! CR global variables
+     real(kind=8),dimension(1:MAXLEVEL)::cr_c=1d0            ! Reduced lightspeed in code units
+
   end type global_t
 
   type mesh_t
