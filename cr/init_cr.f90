@@ -16,10 +16,10 @@ recursive subroutine r_init_cr(pst)
 
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_INIT_CR,pst%iUpper+1)
-     call r_init_rt(pst%pLower)
+     call r_init_cr(pst%pLower)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call init_rt(pst%s%r,pst%s%m)
+     call init_cr(pst%s%r,pst%s%m)
   endif
 
 end subroutine r_init_cr
@@ -34,7 +34,7 @@ subroutine init_cr(r,m)
   type(mesh_t)::m
   
   ! Initialise workspace for hydro kernels
-  associate(h => m%rt_w)
+  associate(h => m%cr_w)
     call h%kernel_1%init(2)
     if(r%nsuperoct>0) call h%kernel_2%init(4)
     if(r%nsuperoct>1) call h%kernel_4%init(8)

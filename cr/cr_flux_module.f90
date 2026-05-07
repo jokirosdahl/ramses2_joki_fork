@@ -270,9 +270,8 @@ FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
 END FUNCTION cmp_cr_face
 
 !************************************************************************
-SUBROUTINE cmp_cr_faces(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
+SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      ,iu1,iu2,ju1,ju2,ku1,ku2,if1,if2,jf1,jf2,kf1,kf2)
-! WARNING cmp_cr_faces is rt_unsplit
   
 !  Compute intercell fluxes for one CR group in all dimensions,
 !  using the Eddington tensor with the Yiang+Peng'17 closure relation.
