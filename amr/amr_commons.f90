@@ -750,6 +750,9 @@ module amr_commons
      ! RT kernel workspace
      type(rt_workspace_t)::rt_w
 
+     ! CR kernel workspace
+     type(cr_workspace_t)::cr_w
+
   end type mesh_t
 
 contains
