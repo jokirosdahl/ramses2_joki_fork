@@ -526,6 +526,57 @@ module amr_commons
      ! HK note --> OTSA required for RTZ
      integer,dimension(nIon)::spec2group=0                 ! Ion -> group # in recombinations
 
+     ! CR parameters.
+     logical::cr_advect=.false.              ! Advection of cosmic rays?                       !
+     logical::cr_streaming_diffusion=.false. ! Streaming diffusion of cosmic rays?             !
+     logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
+     logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
+     real(dp)::cr_c_fraction=1.0       
+     real(dp)::cr_dmax=1.0                   ! Maximum allowed CR streaming diffusion coefficient in cgs
+     real(dp),dimension(1:ncrgrp)::cr_d=1.0d29 ! Classical value, in cm^2/s (e.g., Jockipii 1999)
+     real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perpendicular diffusion suppression of CRs
+     real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+     real(dp),dimension(1:ncrgrp)::fecr=0d0             ! SN fraction of CR energy
+
+     ! Initial condition CR regions parameters----------------------------------------------
+     integer                           ::cr_nregion=0
+     character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_x_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_y_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_z_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_x=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_y=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_z=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_exp_region=2.0
+     integer,dimension(1:MAXREGION)        ::cr_reg_group=1
+     real(kind=8),dimension(1:MAXREGION)   ::cr_e_region=0.                     ! CR density
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fx_region=0.                    ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fy_region=0.                    ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fz_region=0.                    ! CR flux
+
+     ! RT source regions parameters----------------------------------------------------------
+     integer                           ::cr_nsource=0
+     character(LEN=10),dimension(1:MAXREGION):: cr_source_type='square'
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_x_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_y_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_z_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_x=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_y=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_z=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_exp_source=2.0
+     integer, dimension(1:MAXREGION)       ::cr_src_group=1  
+     real(kind=8),dimension(1:MAXREGION)   ::cr_e_source=0.                      ! CR density
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fx_source=0.                     ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fy_source=0.                     ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fz_source=0.                     ! CR flux
+
+     ! RT boundary condition parameters-------------------------------------------------------
+     real(kind=8),dimension(1:MAXBOUND,1:nrcgrp)::cr_e_bound=0.0d0
+     real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
+     real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
+     real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
+
+
      ! Turbulence driving parameters
      logical  :: turb=.false.            ! Use turbulence?
      integer  :: turb_seed=-1            ! Turbulent seed (-1=random)
