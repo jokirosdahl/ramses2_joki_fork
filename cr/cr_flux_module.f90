@@ -14,7 +14,7 @@ MODULE cr_flux_module
 CONTAINS
 
 !************************************************************************
-subroutine cmp_cr_flux_tensors(uin, iGrp, nGrid, ftens, vmax, bfield & 
+subroutine cmp_cr_flux_tensors(r,uin, iGrp, ftens, vmax, bfield & 
      &                     ,iu1,iu2,ju1,ju2,ku1,ku2,if2,jf2,kf2)
   
   ! Compute central fluxes for a CR group, for each cell in a vector 
@@ -25,12 +25,12 @@ subroutine cmp_cr_flux_tensors(uin, iGrp, nGrid, ftens, vmax, bfield &
   ! input/output:
   ! uin       => uold variables of all cells in a vector of grids
   ! igrp      => CR group number
-  ! ngrid     => Number of 'valid' grids in uin.
   ! ftens     <=  Group flux tensors for all the cells.
   !------------------------------------------------------------------------
+  type(run_t) :: r
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:nvar+3+ncrvars)::uin
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:nDim+1,1:ndim) ::ftens
-  integer::iGrp, nGrid!---------------------------------------------------
+  integer::iGrp !----------------------------------------------------------
   real(dp),dimension(1:ndim)::crflux
   real(dp)::Ecr, vmax, nedge
   integer::i, j, k, idim, jdim, n, icrE
@@ -61,7 +61,7 @@ subroutine cmp_cr_flux_tensors(uin, iGrp, nGrid, ftens, vmax, bfield &
      endif
      ftens(i,j,k,1,1:ndim)= crflux  !   First row is CR flux
      ! Rest is Eddington tensor
-     if(isotropic_pressure) then
+     if(r%isotropic_pressure) then
         ftens(i,j,k,2:ndim+1,1:ndim) = 0d0
         do idim = 1, ndim
            ftens(i,j,k,idim+1,idim) = 1.0d0  !Ecr*vmax2/3d0
@@ -94,16 +94,14 @@ subroutine cmp_cr_flux_tensors(uin, iGrp, nGrid, ftens, vmax, bfield &
 end subroutine cmp_cr_flux_tensors
 
 !************************************************************************
-SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
+SUBROUTINE cmp_cr_wavespeeds(r, uin, iGrp,  lmax, cr_vmax, dx, dt)
 
   !  Compute CR wavespeeds for given vector of sub-grids.
   !
   !  inputs/outputs
   !  uin         => input cell states
   !  iGrp        => CR group number
-  !  ngrid       => number of sub-grids of 3^ndim cells
   !  lmax       <=  return maximum cell wavespeeds
-  !  ilevel     <=  current refinement level
   !  dt         <=  current CR timestep length
   !
   !  other vars
@@ -111,24 +109,20 @@ SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
   !  ju1,ju2     |cell centered,
   !  ku1,ku2     |including buffer cells.
   !------------------------------------------------------------------------
+  type(run_t) :: r
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:nvar+3+ncrvars), &
        intent(in)::uin 
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,ndim)::   lmax
-  integer,intent(in)::iGrp, ngrid, ilevel
+  integer,intent(in)::iGrp
   real(dp),intent(in)::dt !----------------------------------------------
-  real(dp)::scale_kappa, dx, dx_loc, scale, Ecr, va, oneovertwodxloc
-  integer::icrE, i, j, k, n, nx_loc, idim, nedge
+  real(dp)::scale_kappa, dx, scale, Ecr, va, oneovertwodxloc
+  integer::icrE, i, j, k, n, idim, nedge
   real(dp),dimension(1:3)::B_field, gradEcr, Dcr_vec
   real(dp)::norm,bdotgradE,cosp,sinp,cost,sint,bxby,Dcr_dir
   !------------------------------------------------------------------------
   icrE = icrU+(ndim+1)*(iGrp-1) ! starting index of cr variables
+  oneovertwodxloc=1d0/(2d0*dx)
 
-  ! Cell width in ilevel
-  dx=0.5D0**ilevel
-  nx_loc=(icoarse_max-icoarse_min+1)
-  scale=boxlen/dble(nx_loc)
-  dx_loc=dx*scale
-  oneovertwodxloc=1d0/(2d0*dx_loc)
   do k=kfcr1,kf2                                !
   do j=jfcr1,jf2                                !  Loop each cell in grid
   do i=ifcr1,if2                                !
@@ -168,8 +162,8 @@ SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
      B_field = B_field/norm
 
      va=0.
-     if(mom_streaming_diffusion) va=norm/sqrt(uin(i,j,k,1))
-     if(mom_streaming_diffusion .and. v_alfven.gt.0.0) va = v_alfven
+     if(r%mom_streaming_diffusion) va=norm/sqrt(uin(i,j,k,1))
+     if(r%mom_streaming_diffusion .and. r%v_alfven.gt.0.0) va = v_alfven
 
      ! Calculate grad Pcr
      gradEcr(1) = (uin(i+1,j  ,k  ,icrE)-uin(i-1,j  ,k  ,icrE))*oneovertwodloc
@@ -188,7 +182,7 @@ SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
 
      ! Diffusion, eq 10 in JO17
      Dcr_vec = (/ Dcr_code(igrp), Dcr_code(igrp)*Dcr_perp_factor(iGrp), Dcr_code(igrp)*Dcr_perp_factor(iGrp) /)
-     if(mom_streaming_diffusion) &
+     if(r%mom_streaming_diffusion) &
           Dcr_vec(1) = Dcr_vec(1) + &
           min(DCRmax_code, 3./max(abs(bdotgradE),1d-50) * va * gamma_cr(iGrp) * max(Ecr,smallcr))
 
@@ -200,18 +194,18 @@ SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
      ! Calculate wavespeeds
      Dcr_dir = abs(Dcr_vec(1)) ! x component of rotated Dcr
      lmax(i,j,k,1) = &
-          cmp_cr_lmax(dx_loc, Dcr_dir, cr_vmax(ilevel), dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, cr_vmax, dt)
 
 #if NDIM>1
      Dcr_dir = abs(Dcr_vec(2)) ! y component of rotated Dcr
      lmax(i,j,k,2) = &
-          cmp_cr_lmax(dx_loc, Dcr_dir, cr_vmax(ilevel), dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, cr_vmax, dt)
 #endif
 
 #if NDIM>2
      Dcr_dir = abs(Dcr_vec(3)) ! z component of rotated Dcr
      lmax(i,j,k,3) = &
-          cmp_cr_lmax(dx_loc, Dcr_dir, cr_vmax(ilevel), dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, cr_vmax, dt)
 #endif
 
   end do
@@ -221,20 +215,21 @@ SUBROUTINE cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
 END SUBROUTINE cmp_cr_wavespeeds
 
 !************************************************************************
-FUNCTION cmp_cr_lmax(dx_loc, dcoeff, vmax, dt)
+FUNCTION cmp_cr_lmax(r, dx, dcoeff, vmax, dt)
   
 ! Compute maximum local wavespeed
 !------------------------------------------------------------------------
-  real(dp)::dx_loc, cmp_cr_lmax, vmax, dt
+  type(run_t) :: r
+  real(dp)::dx, cmp_cr_lmax, vmax, dt
   real(dp)::tau, dcoeff, r_factor
 !------------------------------------------------------------------------
-  tau = cr_f_taucell * 0.5d0 * dx_loc**2 / dcoeff / dt
+  tau = cr_f_taucell * 0.5d0 * dx**2 / dcoeff / dt
   if(tau.lt.1e-3) then
     r_factor = sqrt((1.0 - 0.5*tau**2))
   else
     r_factor = sqrt((1.-exp(-min(tau,10.)**2))/min(tau,1e8)**2) ! Capital R on p 6 in YP17
   endif
-  if(isotropic_pressure) then
+  if(r%isotropic_pressure) then
      cmp_cr_lmax = r_factor * vmax / sqrt(3d0)
   else
      cmp_cr_lmax = r_factor * vmax
@@ -242,7 +237,7 @@ FUNCTION cmp_cr_lmax(dx_loc, dcoeff, vmax, dt)
 
 END FUNCTION cmp_cr_lmax
 !************************************************************************
-FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
+FUNCTION cmp_cr_face(r, fdn, fup, udn, uup, lminus, lplus)
   
 ! Compute HLLE intercell fluxes for all (four) CR variables.
 ! fdn    => flux function in the cell downwards from the border
@@ -254,10 +249,11 @@ FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
 ! returns      flux vector for the given state variables, i.e. line nr dim
 !              in the 3*4 flux function tensor
 !------------------------------------------------------------------------
+  type(run_t) :: r
   real(kind=8),dimension(nDim+1)::fdn, fup, udn, uup, cmp_cr_face
   real(dp)::lminus, lplus, coeff, llmax
 !------------------------------------------------------------------------
-  if (cr_HLLE) then
+  if (r%cr_HLLE) then
     coeff = 0D0
     if (abs(lplus - lminus) > 1D-20) coeff = 0.5D0 * (lplus + lminus) / (lplus - lminus)
     cmp_cr_face = 0.5D0 * (fdn + fup - lminus * udn - lplus * uup) &
@@ -270,8 +266,9 @@ FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
 END FUNCTION cmp_cr_face
 
 !************************************************************************
-SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
-     ,iu1,iu2,ju1,ju2,ku1,ku2,if1,if2,jf1,jf2,kf1,kf2)
+SUBROUTINE cr_unsplit(r,uin,iFlx &
+     & ,cr_vmax,dx,dt &
+     & ,iu1,iu2,ju1,ju2,ku1,ku2,if1,if2,jf1,jf2,kf1,kf2)
   
 !  Compute intercell fluxes for one CR group in all dimensions,
 !  using the Eddington tensor with the Yiang+Peng'17 closure relation.
@@ -287,8 +284,6 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
 !  dx          => cell width
 !  dt          => time step
 !  iGrp        => CR group number
-!  ngrid       => number of sub-grids
-!  ilevel      => level being updated
 !
 !  other vars
 !  iu1,iu2     |First and last index of input array,
@@ -302,11 +297,12 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
   use amr_commons
   use const
   implicit none
+  type(run_t) :: r
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:nvar+3+ncrvars)::uin 
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:ncrvars)::cru 
   real(dp),dimension(if1:if2,jf1:jf2,kf1:kf2,1:ncrvars,1:ndim)::iFlx
   real(dp)::dx, dt
-  integer,intent(in)::iGrp, nGrid, ilevel
+  integer,intent(in)::iGrp
   integer::iP0, iP1, icrE
   real(dp),save, &                                     !   Central fluxes
            dimension(iu1:iu2,ju1:ju2,ku1:ku2, ndim+1, ndim)::cFlx
@@ -322,7 +318,8 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
   real(dp),save::vslopeLM,vslopeRM,vslopeM
   real(dp),save::vslopeLL,vslopeL,vprod
   real(dp):: vup,vdn,meanadv,meandiffv,aup,adn
-  REAL(dp)::fred, fred_dn, fred_up, c_tilde
+  real(dp)::fred, fred_dn, fred_up, c_tilde
+  real(dp)::cr_vmax
   real(dp),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::bfield
   integer::idim
 !------------------------------------------------------------------------
@@ -336,10 +333,10 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
   end do
 
   ! compute flux tensors for all the cells with correction
-  call cmp_cr_flux_tensors(uin, iGrp, ngrid, cFlx, cr_vmax(ilevel),bfield)!  flux tensors
+  call cmp_cr_flux_tensors(r, uin, iGrp, cFlx, cr_vmax, bfield)!  flux tensors
 
   ! Wavespeeds in each cell
-  call cmp_cr_wavespeeds(uin, iGrp, ngrid, lmax, ilevel, dt)
+  call cmp_cr_wavespeeds(r, uin, iGrp, lmax, dx, dt)
 
   ! Solve for 1D flux in X direction
   !----------------------------------------------------------------------
@@ -356,7 +353,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      vdn  = uin( i-1, j, k, 2) / uin(i-1,j,k,1) ! left velocity
      vup  = uin( i,   j, k, 2) / uin(i  ,j,k,1) ! right velocity
      
-     if(cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
+     if(r%cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
         ! interpolation of U
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i+1, j, k, :, 1) - fup)/dx
@@ -396,7 +393,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
         !vdn = vdn+vslopeL*0.5d0*dx
         !vup = vup-vslopeM*0.5d0*dx
 
-     else if(cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
+     else if(r%cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i+1, j, k, :, 1) - fup)/dx
         slopeM  = minmod(slopeLM,slopeRM)
@@ -433,7 +430,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      iFlx( i, j, k, iP0:iP1, 1)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if (reduced_CR_flux_correction) then
+     if(r%reduced_CR_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
@@ -461,7 +458,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      vdn  = uin( i, j-1, k,3) / uin(i,j-1,k,1) ! left velocity
      vup  = uin( i ,j,   k,3) / uin(i,j,  k,1) ! right velocity
 
-     if(cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
+     if(r%cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
         ! interpolation of U
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i, j+1, k, :, 2) - fup)/dx
@@ -501,7 +498,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
         !vdn = vdn+vslopeL*0.5d0*dx
         !vup = vup-vslopeM*0.5d0*dx
 
-     else if(cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
+     else if(r%cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i, j+1, k, :, 2) - fup)/dx
         slopeM  = minmod(slopeLM,slopeRM)
@@ -538,7 +535,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      iFlx( i, j, k, iP0:iP1, 2)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if (reduced_CR_flux_correction) then
+     if(r%reduced_CR_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
@@ -566,7 +563,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      vdn  = uin( i, j, k-1, 4) / uin(i,  j,k-1,1) ! left velocity
      vup  = uin( i ,j, k,   4) / uin(i  ,j,k,  1) ! right velocity
 
-     if(cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
+     if(r%cr_interpolation) then ! Second-order interpolation with using Van-Leer slope Limiter
         ! interpolation of U
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i, j, k+1, :, 3) - fup)/dx
@@ -606,7 +603,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
         !vdn = vdn+vslopeL*0.5d0*dx
         !vup = vup-vslopeM*0.5d0*dx
 
-     else if(cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
+     else if(r%cr_use_minmod) then ! Second-order interpolation with using minmod slope Limiter
         slopeLM = (fup-fdn)/dx
         slopeRM = (cFlx( i, j, k+1, :, 3) - fup)/dx
         slopeM  = minmod(slopeLM,slopeRM)
@@ -644,7 +641,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
      iFlx( i, j, k, iP0:iP1, 3)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if (reduced_CR_flux_correction) then
+     if (r%reduced_CR_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
@@ -658,7 +655,7 @@ SUBROUTINE cr_unsplit(uin,iFlx,dx,dt,iGrp,ngrid,ilevel &
   end do
 #endif
 
-end subroutine cmp_cr_faces
+end subroutine cr_unsplit
 
 !************************************************************************
 SUBROUTINE rotatevec(sint, cost, sinp, cosp, v1, v2, v3)
