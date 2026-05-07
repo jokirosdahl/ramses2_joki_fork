@@ -1,12 +1,12 @@
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine get_rt_courant_dt(r,g,dt,ilevel)
+subroutine get_cr_courant_dt(r,g,dt,ilevel)
 !-------------------------------------------------------------------------
-! Determine the coarse RT timestep length set by the Courant condition
+! Determine the coarse CR timestep length set by the Courant condition
 !-------------------------------------------------------------------------
   use amr_parameters
-  use rt_parameters
+  use cr_parameters
   use amr_commons, only: run_t, global_t
   implicit none
   type(run_t)::r
@@ -16,8 +16,8 @@ subroutine get_rt_courant_dt(r,g,dt,ilevel)
 !-------------------------------------------------------------------------
   ! Mesh spacing at coarse level
   dx=r%boxlen/2**ilevel
-  dt=r%rt_courant_factor*dx/3d0/g%rt_c(ilevel)
-end subroutine get_rt_courant_dt
+  dt=r%courant_factor*dx/3d0/g%cr_c(ilevel)
+end subroutine get_cr_courant_dt
 
 !###########################################################
 !###########################################################
