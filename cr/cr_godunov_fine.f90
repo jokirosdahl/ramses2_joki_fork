@@ -122,7 +122,7 @@ subroutine set_crunew(m,ilevel)
   integer::i
 
   ! Set crunew to cruold for myid cells
-#ifdef CR
+#ifdef CRS
   do i=m%head(ilevel),m%tail(ilevel)
      m%crunew(:,:,i)=m%cruold(:,:,i)
   end do
@@ -157,7 +157,7 @@ end subroutine r_set_cruold
 !###########################################################
 !###########################################################
 subroutine set_cruold(r, g, m, ilevel)
-  use cr_parameters, only: ncrgrp, smallcr
+  use cr_parameters, only: ncrgrp, smallecr
   use amr_parameters, only: ndim, twotondim
   use amr_commons, only: run_t, global_t, mesh_t
   implicit none
@@ -172,14 +172,14 @@ subroutine set_cruold(r, g, m, ilevel)
   !---------------------------------------------------------
   integer :: i, j, ig, iE
 
-  if(r%isotropic_pressure)then
+  if(r%cr_isotropic_pressure)then
      sqrt3=sqrt(3d0)
   else
      sqrt3=1.0d0
   endif
    
  ! Set cruold to crunew
-#ifdef CR
+#ifdef CRS
   if (r%reduced_CR_flux_correction) then
      ! Make a CR conservation fix (prevent CR explosions)
      do ig = 1, ncrgrp
@@ -187,7 +187,7 @@ subroutine set_cruold(r, g, m, ilevel)
         do i = m%head(ilevel), m%tail(ilevel)
            do j = 1, twotondim
               ! No negative CR densities:
-              m%crunew(j,iE,i) = max(m%crunew(j,iE,i),smallcr)
+              m%crunew(j,iE,i) = max(m%crunew(j,iE,i),smallecr)
               Ecrc=m%crunew(j,iE,i)*g%cr_c(ilevel)
               ! Reduced flux, should always be .le. 1
               fred = sqrt(sum((m%crunew(j,iE+1:iE+ndim,i))**2))/Ecrc*sqrt3
@@ -215,19 +215,22 @@ end subroutine set_cruold
 subroutine cr_godfine1(s,ind_grid,ilevel,h)
   use mdl_module
   use amr_parameters, only: ndim, twondim, twotondim
+  use hydro_parameters, only: nvar
   use cr_parameters, only: ncrvar
   use ramses_commons, only: ramses_t
   use nbors_utils
   use cr_commons
   use hash
+#ifdef CRS
   use cr_flux_module, only: cr_unsplit
+#endif
   implicit none
   type(ramses_t)::s
   integer::ind_grid,ilevel
   type(cr_kernel_t)::h
   !-------------------------------------------------------------------
   ! This routine gathers first CR variables from neighboring grids
-  ! to set initial conditions in a 6x6x6 grid. It interpolate from
+  ! to set initial conditions in a 6x6x6 grid. It interpolates from
   ! coarser level missing grid variables. It then calls the
   ! Godunov solver that computes fluxes. These fluxes are zeroed at 
   ! coarse-fine boundaries, since contribution from finer levels has
@@ -235,7 +238,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   ! and stored in array crunew(:), both at the current level and at the 
   ! coarser level if necessary.
   !-------------------------------------------------------------------
-  integer::ivar,idim,ind_son,ind_oct
+  integer::ivar,idim,ind_son,ind_oct,ind
   integer::icell,inbor,ipass
   integer::igrid,ichild
   integer::i0,j0,k0,i1,j1,k1,i2,j2,k2,i3,j3,k3
@@ -244,13 +247,30 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   integer::ii1min,ii1max,jj1min,jj1max,kk1min,kk1max
   integer::i2min,i2max,j2min,j2max,k2min,k2max
   integer::i3min,i3max,j3min,j3max,k3min,k3max
+#ifdef MHD
+  integer,dimension(1:8,1:3)::jj
+  real(kind=8),dimension(0:twondim  ,1:6)::b1
+  real(kind=8),dimension(1:twotondim,1:6)::b2
+  real(kind=8),dimension(1:twondim,1:twotondim,1:6)::b3
+  logical,dimension(1:twondim)::refined
+  integer,dimension(1:3,1:6),save::shift=reshape(&
+       & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
+  integer::igrid1,igrid2,igrid3,igridn
+  integer::icell1,icell2,icell3
+  real(kind=8)::dflux,dflux_x,dflux_y,dflux_z,weight
+  integer,dimension(1:twondim)::igrid_son_nbor
+#endif
   integer,dimension(1:ndim)::ckey_corner,ckey
-  integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer,dimension(0:twondim)::icell_nbor
+  integer(kind=8),dimension(0:ndim)::hash_nbor,hash_son_nbor
+  integer,dimension(0:twondim)::ind_nbor
   integer,dimension(0:twondim)::igrid_nbor
-  real(kind=8)::dx,oneontwotondim,cr_c_diff
-  real(kind=8),dimension(0:twondim  ,1:ncrvar)::u1
-  real(kind=8),dimension(1:twotondim,1:ncrvar)::u2
+  real(kind=8)::dx,oneontwotondim
+#ifdef CRS
+  real(kind=8),dimension(0:twondim  ,1:ncrvar)::cr1 ! CR vars
+  real(kind=8),dimension(1:twotondim,1:ncrvar)::cr2
+#endif
+  real(kind=8),dimension(0:twondim  ,1:nvar)::u1    ! Hydro vars
+  real(kind=8),dimension(1:twotondim,1:nvar)::u2
   logical::okx,oky,okz,oknbor
 
   i2min=0; i2max=0; j2min=0; j2max=0; k2min=0; k2max=0
@@ -365,12 +385,22 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #if NDIM>2
                        k3=1+2*(kk1-1)+k2
 #endif             
+                       ! Gather hydro variables
+                       do ivar=1,nvar
+                          h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ind_oct)
+                       end do
+#ifdef MHD
+                       ! Gather MHD variables
+                       do ivar=1,6
+                          h%bloc(i3,j3,k3,ivar)=m%bold(ind_son,ivar,ind_oct)
+                       end do
+#endif
+#ifdef CRS
                        ! Gather CR variables
                        do ivar=1,ncrvar
-#ifdef CR
                           h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ind_oct)
-#endif
                        end do
+#endif
                        ! Gather refinement flag
                        h%okloc(i3,j3,k3)=m%grid(ind_oct)%refined(ind_son)
                     end do
@@ -407,6 +437,11 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
               do inbor=0,twondim
                  igrid_nbor(inbor)=0
               end do
+#ifdef MHD
+              do inbor=1,twondim
+                 igrid_son_nbor(inbor)=0
+              end do
+#endif
               ! Get neighboring grid index with read-only cache
               call get_grid(s,hash_nbor,ichild,flush_cache=.false.,fetch_cache=.true.,lock=.true.)
 
@@ -425,7 +460,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 
                  ! Get 2ndim neighboring father cells with read-write cache
                  ! Note that possible cache grids are locked inside the routine
-                 call get_twondim_nbor_parent_cell(s,hash_nbor,igrid_nbor,icell_nbor,flush_cache=.true.,fetch_cache=.true.)
+                 call get_twondim_nbor_parent_cell(s,hash_nbor,igrid_nbor,ind_nbor,flush_cache=.true.,fetch_cache=.true.)
                  oknbor=.true.
                  do inbor=0,twondim
                     oknbor=oknbor.and.(igrid_nbor(inbor)>0)
@@ -441,28 +476,17 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                     call mdl_abort(mdl)
                  endif
 
-#ifdef CR
-                 ! Gather CR variables
-                 do inbor=0,twondim
-                    do ivar=1,ncrvar
-                       u1c(inbor,ivar)=m%cruold(icell_nbor(inbor),ivar,igrid_nbor(inbor))
-                    end do
-                 end do
-                 ! Interpolate using cr variables
-                 call interpol_cr(u1c,u2c,r%interpol_var,r%interpol_type)
-#endif
-
                  ! Gather hydro variables
                  do inbor=0,twondim
                     do ivar=1,nvar
-                       u1h(inbor,++ivar)=m%uold(icell_nbor(inbor),ivar,igrid_nbor(inbor))
+                       u1(inbor,ivar)=m%uold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
                     end do
                  end do
 #ifdef MHD
                  ! Gather B field variables
                  do inbor=0,twondim
                     do ivar=1,6
-                       b1(inbor,ivar)=m%bold(icell_nbor(inbor),ivar,igrid_nbor(inbor))
+                       b1(inbor,ivar)=m%bold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
                     end do
                  end do
                  ! Get neighboring children grids
@@ -489,15 +513,21 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                  end do
 
                  ! Interpolate using MHD variables
-                 call interpol_mhd(u1h,u2h,b1,b2,b3,refined,r%interpol_var,r%interpol_type,r%smallr)
+                 call interpol_mhd(u1,u2,b1,b2,b3,refined,r%interpol_var,r%interpol_type,r%smallr)
+#else
+                 ! Interpolate using hydro variables
+                 call interpol_hydro(u1,u2,r%interpol_var,r%interpol_type,r%smallr)
 #endif
-
-!!$                 ! Interpolate using cr variables
-!!$                 call interpol_hydro(u1h,u2h,r%interpol_var,r%interpol_type)
-
-!!$                 ! Wrap up in the same u2 array
-!!$                 u2(:,1     :nvar         )=u2h(:,1:nvar  )
-!!$                 u2(:,nvar+1:nvar+1+ncrvar)=u2c(:,1:ncrvar)
+#ifdef CRS
+                 ! Gather CR variables
+                 do inbor=0,twondim
+                    do ivar=1,ncrvar
+                       cr1(inbor,ivar)=m%cruold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
+                    end do
+                 end do
+                 ! Interpolate using cr variables
+                 call interpol_cr(cr1,cr2,r%interpol_var,r%interpol_type)
+#endif
               endif
 
               ! Store grid index
@@ -527,15 +557,6 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                        !----------------------------------------------------
                        if(ichild>0)then
 
-                          ! Gather refinement flag
-                          h%okloc(i3,j3,k3)=m%grid(ichild)%refined(ind_son)
-                          ! Gather CR variables
-                          do ivar=1,ncrvar
-#ifdef CR
-                             h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ichild)
-#endif
-                          end do
-
                           ! Gather hydro variables
                           do ivar=1,nvar
                              h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ichild)
@@ -546,30 +567,23 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                              h%bloc(i3,j3,k3,ivar)=m%bold(ind_son,ivar,ichild)
                           end do
 #endif
+#ifdef CRS
+                          ! Gather CR variables
+                          do ivar=1,ncrvar
+                             h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ichild)
+                          end do
+#endif
+                          ! Gather refinement flag
+                          h%okloc(i3,j3,k3)=m%grid(ichild)%refined(ind_son)
 
                        !-----------------------------------------------------------
                        ! If neighboring grid doesn't exist, use interpolated values
                        !-----------------------------------------------------------
                        else
 
-                          ! Gather refinement flag
-                          h%okloc(i3,j3,k3)=.false.
-                          ! Gather interpolated hydro variables
-                          do ivar=1,ncrvar
-#ifdef CR
-                             h%cruloc(i3,j3,k3,ivar)=u2c(ind_son,ivar)
-                             if(mod(ivar,ndim+1)==1) then
-                                ! Variable light speed correction for coarser level
-                                h%cruloc(i3,j3,k3,ivar)           &
-                                  = h%cruloc(i3,j3,k3,ivar)       &
-                                  * g%cr_c(ilevel-1)/g%cr_c(ilevel)
-                             endif
-#endif
-                          end do
-
                           ! Gather interpolated hydro variables
                           do ivar=1,nvar
-                             h%uloc(i3,j3,k3,ivar)=u2h(ind_son,ivar)
+                             h%uloc(i3,j3,k3,ivar)=u2(ind_son,ivar)
                           end do
 #ifdef MHD
                           ! Gather interpolated MHD variables
@@ -577,7 +591,13 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                              h%bloc(i3,j3,k3,ivar)=b2(ind_son,ivar)
                           end do
 #endif
-                          
+#ifdef CRS
+                          do ivar=1,ncrvar
+                             h%cruloc(i3,j3,k3,ivar)=cr2(ind_son,ivar)
+                          end do
+#endif
+                          ! Gather refinement flag
+                          h%okloc(i3,j3,k3)=.false.                          
                        end if
 
                     end do
@@ -594,11 +614,8 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   !-------------------------------------------------
   ! Compute flux using second-order Godunov method
   !-------------------------------------------------
-#ifdef CR
-  call cr_unsplit(r,h%uloc,u%bloc,h%cruloc,h%crflux,h%cFlx, &
-       & g%cr_c(ilevel),dx,g%dtnew(ilevel),                 &
-       & h%iu1,h%iu2,h%ju1,h%ju2,h%ku1,h%ku2,               &
-       & h%if1,h%if2,h%jf1,h%jf2,h%kf1,h%kf2)
+#ifdef CRS
+  call cr_unsplit(r,h,g%cr_c(ilevel),dx,g%dtnew(ilevel))
 #endif
 
   !-------------------------------------------------
@@ -615,7 +632,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
            do i3=i3min,i3max+i0
               if(h%okloc(i3-i0,j3-j0,k3-k0) .or. h%okloc(i3,j3,k3))then
                  do ivar=1,ncrvar
-#ifdef CR
+#ifdef CRS
                     h%crflux(i3,j3,k3,ivar,idim)=0.0d0
 #endif
                  end do
@@ -663,7 +680,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
                        ! Update conservative variables new state vector
                        do ivar=1,ncrvar
-#ifdef CR
+#ifdef CRS
                           m%crunew(ind_son,ivar,ichild)=m%crunew(ind_son,ivar,ichild)+ &
                                & (h%crflux(i3   ,j3   ,k3   ,ivar,idim) &
                                & -h%crflux(i3+i0,j3+j0,k3+k0,ivar,idim))
@@ -738,16 +755,9 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
                           ! Conservative update of new state variables
                           do ivar=1,ncrvar
-                             ! For VSLA, when updating coarser level, rescale radiation flux
-                             ! to the expression which would be seen from there.
-                             cr_c_diff = g%cr_c(ilevel-1)/g%cr_c(ilevel)
-                             if (mod(ivar,ndim+1)==1) then
-                                cr_c_diff=1.d0
-                             end if
-#ifdef CR
+#ifdef CRS
                              m%crunew(icell,ivar,igrid)=m%crunew(icell,ivar,igrid) &
-                                  & -h%crflux(i3,j3,k3,ivar,idim)              &
-                                  & * oneontwotondim * cr_c_diff
+                                  & -h%crflux(i3,j3,k3,ivar,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -794,15 +804,9 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
                           ! Conservative update of new state variables
                           do ivar=1,ncrvar
-                             ! Rescale for VSLA, as above
-                             cr_c_diff = g%cr_c(ilevel-1)/g%cr_c(ilevel)
-                             if (mod(ivar,ndim+1)==1) then
-                                cr_c_diff=1.d0
-                             end if
-#ifdef CR
+#ifdef CRS
                              m%crunew(icell,ivar,igrid)=m%crunew(icell,ivar,igrid) &
-                                  & +h%crflux(i3+i0,j3+j0,k3+k0,ivar,idim)     &
-                                  & *oneontwotondim * cr_c_diff
+                                  & +h%crflux(i3+i0,j3+j0,k3+k0,ivar,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -867,7 +871,7 @@ subroutine init_flush_cr_godunov(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-#ifdef CR
+#ifdef CRS
   do ivar=1,ncrvar
      do ind=1,twotondim
         mesh%crunew(ind,ivar,igrid)=0.0d0
@@ -893,13 +897,13 @@ subroutine pack_flush_cr_godunov(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_large_realdp)::msg
 
-#ifdef CR
   do ivar=1,ncrvar
      do ind=1,twotondim
+#ifdef CRS
         msg%realdp_cr(ind,ivar)=mesh%crunew(ind,ivar,igrid)
+#endif
      end do
   end do
-#endif
 
   msg_array=transfer(msg,msg_array)
 
@@ -926,13 +930,13 @@ subroutine unpack_flush_cr_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef CR
   do ivar=1,ncrvar
      do ind=1,twotondim
+#ifdef CRS
         mesh%crunew(ind,ivar,igrid)=mesh%crunew(ind,ivar,igrid)+msg%realdp_cr(ind,ivar)
+#endif
      end do
   end do
-#endif
 
 end subroutine unpack_flush_cr_godunov
 !###########################################################

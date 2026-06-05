@@ -138,10 +138,11 @@ module mdl_parameters
      enumerator::MDL_INIT_CR
      enumerator::MDL_CR_INPUT_CONDINIT
      enumerator::MDL_CR_INPUT_SOURCE_REGIONS
+     enumerator::MDL_CR_UPDATES
      enumerator::MDL_CR_UPLOAD_FINE
      enumerator::MDL_OUTPUT_CR
      enumerator::MDL_CR_GODUNOV_FINE
-     enumerator::MDL_ADD_CR_SOURCE_TERMS
+     enumerator::MDL_CR_SOURCE_TERMS
      enumerator::MDL_SET_CRUNEW
      enumerator::MDL_SET_CRUOLD
   end enum

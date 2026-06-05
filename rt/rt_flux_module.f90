@@ -678,7 +678,7 @@ END FUNCTION cmp_face
 SUBROUTINE rt_unsplit(uin,flux,cFlx,rt_c,dx,dy,dz,dt &
      ,iu1,iu2,ju1,ju2,ku1,ku2,if1,if2,jf1,jf2,kf1,kf2)
 
-!  Compute intercell fluxes for one photon group in all dimensions,
+!  Compute intercell fluxes for all photon groups in all dimensions,
 !  using the Eddington tensor with the M1 closure relation.
 !  The intercell fluxes are the right-hand sides of the equations:
 !      dN/dt = - nabla(F),
@@ -707,7 +707,6 @@ SUBROUTINE rt_unsplit(uin,flux,cFlx,rt_c,dx,dy,dz,dt &
   real(kind=8)::dx, dy, dz, dt, rt_c
   integer::iu1,iu2,ju1,ju2,ku1,ku2
   integer::if1,if2,jf1,jf2,kf1,kf2
-  ! Central fluxes:
   ! Upwards and downwards fluxes and states of the group
   real(kind=8),dimension(nDim+1),save:: fdn, fup, udn, uup
   real(kind=8)::dtdx

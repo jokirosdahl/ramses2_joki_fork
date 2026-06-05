@@ -7,6 +7,7 @@ contains
 subroutine m_cr_step(pst,ilevel)
   use ramses_commons, only: pst_t
   use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
+  use cr_source_terms_module, only: r_cr_source_terms
   use cr_upload_module, only: m_cr_upload_fine
   use cr_input_condinit_module, only: r_cr_input_source_regions  
   type(pst_t)::pst
@@ -49,7 +50,7 @@ subroutine m_cr_step(pst,ilevel)
 
      ! Hyperbolic CR solver
      if(r%cr_advect)call r_cr_godunov_fine(pst,ilevel,1)
-     if(r%cr_advect)call r_add_cr_source_terms(pst,ilevel,1)
+     if(r%cr_advect)call r_cr_source_terms(pst,ilevel,1)
 
      ! Add anisotropic radiation from other sources
      if(r%cr_nsource>0)call r_cr_input_source_regions(pst,ilevel,1)

@@ -30,18 +30,15 @@ subroutine cr_flag(s,ilevel)
   real(kind=8),dimension(1:ncrvar)::uug,uum,uud
   logical::ok, do_cr_refine
   integer,dimension(1:twondim)::igridn
-  real(kind=8),dimension(1:twondim)::c_factor
   type(msg_realdp)::dummy_realdp
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
   do_cr_refine=.false.
   do igroup=1, ncrgrp
-    if( r%cr_err_grad_e(igroup) .ne. -1.0 ) do_cr_refine=.true.
+    if( r%cr_err_grad_ecr(igroup) .ne. -1.0 ) do_cr_refine=.true.
   end do
   if(.not. do_cr_refine) return ! No refinement done on radiation vars
-
-  c_factor(:)=g%cr_c(ilevel)
 
   hash_key(0)=ilevel+1
 
@@ -77,14 +74,12 @@ subroutine cr_flag(s,ilevel)
            if(igridp>0)then
               igridn(i_nbor)=igridp
               icelln(i_nbor)=icellp
-              c_factor(i_nbor)=g%cr_c(ilevel)
            else
               hash_nbor(0)=hash_nbor(0)-1
               hash_nbor(1:ndim)=hash_nbor(1:ndim)/2
               call get_parent_cell(s,hash_nbor,igridp,icellp,flush_cache=.false.,fetch_cache=.true.,lock=.true.)
               igridn(i_nbor)=igridp
               icelln(i_nbor)=icellp
-              c_factor(i_nbor)=g%cr_c(ilevel-1)
            endif
         end do
 
@@ -96,10 +91,10 @@ subroutine cr_flag(s,ilevel)
               icelld=icelln(2*idim  )
               igridg=igridn(2*idim-1)
               igridd=igridn(2*idim  )
-#ifdef CR
-              uug(ivar)=m%cruold(icellg,1+(ivar-1)*(ndim+1),igridg)
-              uum(ivar)=m%cruold(ind   ,1+(ivar-1)*(ndim+1),ivar,igrid )
-              uud(ivar)=m%cruold(icelld,1+(ivar-1)*(ndim+1),ivar,igridd)
+#ifdef CRS
+              uug(ivar)=m%cruold(icellg,ivar,igridg)
+              uum(ivar)=m%cruold(ind   ,ivar,igrid )
+              uud(ivar)=m%cruold(icelld,ivar,igridd)
 #endif 
            end do
            call cr_refine(r,uug,uum,uud,ok)
@@ -148,13 +143,13 @@ subroutine pack_fetch_cr(mesh,igrid,msg_size,msg_array)
      endif
   end do
 
-#ifdef CR
   do ivar=1,ncrvar
      do ind=1,twotondim
+#ifdef CRS
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
+#endif
      end do
   end do
-#endif
 
   msg_array=transfer(msg,msg_array)
 
@@ -189,13 +184,13 @@ subroutine unpack_fetch_cr(mesh,igrid,msg_size,msg_array,hash_key)
      endif
   end do
 
-#ifdef CR
   do ivar=1,ncrvar
      do ind=1,twotondim
+#ifdef CRS
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
+#endif
      end do
   end do
-#endif
 
 end subroutine unpack_fetch_cr
 !#####################################################################

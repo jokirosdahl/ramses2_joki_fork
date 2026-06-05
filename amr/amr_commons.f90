@@ -2,9 +2,11 @@ module amr_commons
   use amr_parameters
   use hydro_parameters
   use rt_parameters
+  use cr_parameters
   use oct_commons
   use hydro_commons
   use rt_commons
+  use cr_commons
   use hash
   use domain_m
 
@@ -120,8 +122,8 @@ module amr_commons
      real(kind=8)::tendmov=0.
      real(kind=8)::aendmov=0.
      character(LEN=5)::proj_axis='z' ! x->x, y->y, projection along z
-     integer,dimension(0:NVAR+2+nrtgrp)::movie_vars=0
-     character(len=5),dimension(0:NVAR+2+nrtgrp)::movie_vars_txt=''
+     integer,dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars=0
+     character(len=5),dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars_txt=''
 
      ! Hydro solver parameters
      real(kind=8)::gamma=1.4d0
@@ -526,34 +528,6 @@ module amr_commons
      ! HK note --> OTSA required for RTZ
      integer,dimension(nIon)::spec2group=0                 ! Ion -> group # in recombinations
 
-     ! CR parameters.
-     logical::cr_advect=.false.              ! Advection of cosmic rays?                       !
-     logical::cr_streaming_diffusion=.false. ! Streaming diffusion of cosmic rays?             !
-     logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
-     logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
-     real(dp)::cr_c_fraction=1.0       
-     real(dp)::cr_dmax=1.0                   ! Maximum allowed CR streaming diffusion coefficient in cgs
-     real(dp),dimension(1:ncrgrp)::cr_d=1.0d29 ! Classical value, in cm^2/s (e.g., Jockipii 1999)
-     real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perpendicular diffusion suppression of CRs
-     real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
-     real(dp),dimension(1:ncrgrp)::fecr=0d0             ! SN fraction of CR energy
-
-     ! Initial condition CR regions parameters----------------------------------------------
-     integer                           ::cr_nregion=0
-     character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_x_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_y_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_z_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_x=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_y=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_z=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_exp_region=2.0
-     integer,dimension(1:MAXREGION)        ::cr_reg_group=1
-     real(kind=8),dimension(1:MAXREGION)   ::cr_e_region=0.                     ! CR density
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fx_region=0.                    ! CR flux
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fy_region=0.                    ! CR flux
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fz_region=0.                    ! CR flux
-
      ! RT source regions parameters----------------------------------------------------------
      integer                           ::cr_nsource=0
      character(LEN=10),dimension(1:MAXREGION):: cr_source_type='square'
@@ -571,11 +545,52 @@ module amr_commons
      real(kind=8),dimension(1:MAXREGION)   ::cr_fz_source=0.                     ! CR flux
 
      ! RT boundary condition parameters-------------------------------------------------------
-     real(kind=8),dimension(1:MAXBOUND,1:nrcgrp)::cr_e_bound=0.0d0
+     real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_e_bound=0.0d0
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
 
+     ! CR namelist parameters.
+     logical::cr_advect=.false.              ! Advection of cosmic rays?                       !
+     logical::cr_streaming_diffusion=.false. ! Streaming diffusion of cosmic rays?             !
+     logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
+     logical::cr_cooling=.false.             ! CR cooling?                                     !
+     logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
+     logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
+     logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
+     logical::reduced_cr_flux_correction=.false.  ! Make sure F<c*E always?                    !
+     real(dp)::cr_c_fraction=1.0       
+     real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
+     integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
+     real(dp)::cr_varc_fudge=3.0
+     real(dp)::cr_smallr_decouple=1d-4       ! Density (over smallr) at which to decouple CRs  !
+     ! CR group parameters---------------------------------------------------------------------
+     real(dp),dimension(1:ncrgrp)::cr_d=1.0d29  ! Classical value, in cm^2/s (e.g., Jockipii 1999)
+     real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp diffusion suppression of CRs  !
+     real(dp),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
+     real(dp),dimension(1:ncrgrp)::fecr=0d0     ! SN fraction of CR energy
+     real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+     ! Initial condition CR regions parameters-------------------------------------------------
+     integer                           ::cr_nregion=0
+     character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_x_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_y_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_z_center=0.
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_x=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_y=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_z=1.E10
+     real(kind=8),dimension(1:MAXREGION)   ::cr_exp_region=2.0
+     integer,dimension(1:MAXREGION)        ::cr_reg_group=1
+     real(kind=8),dimension(1:MAXREGION)   ::cr_e_region=0.                     ! CR density
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fx_region=0.                    ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fy_region=0.                    ! CR flux
+     real(kind=8),dimension(1:MAXREGION)   ::cr_fz_region=0.                    ! CR flux
+     ! CR refinement parameters----------------------------------------------------------------
+     real(kind=8)::cr_err_grad_ecr(ncrgrp)=-1   ! E_CR gradient for refinement                !
+     real(kind=8)::cr_floor_ecr(ncrgrp)=1d-10   ! E_CR floor for refinement                   !
+     ! CR derived parameters.
+     real(dp),dimension(1:ncrgrp)::cr_d_code ! CR diffusion coefficients in code units        !
+     real(dp)::cr_dmax_code                  ! Max diffusion coefficient in code units        !
 
      ! Turbulence driving parameters
      logical  :: turb=.false.            ! Use turbulence?
@@ -699,6 +714,7 @@ module amr_commons
 
      ! CR global variables
      real(kind=8),dimension(1:MAXLEVEL)::cr_c=1d0            ! Reduced lightspeed in code units
+     real(kind=8),dimension(1:MAXLEVEL)::cr_c_cgs            ! Reduced lightspeed in [cm s-1]
 
   end type global_t
 
@@ -764,6 +780,10 @@ module amr_commons
      real(dp),allocatable,dimension(:,:,:)::rtuold
      real(dp),allocatable,dimension(:,:,:)::rtunew
      real(dp),allocatable,dimension(:,:,:)::emissivity
+#endif
+#ifdef CRS
+     real(dp),allocatable,dimension(:,:,:)::cruold
+     real(dp),allocatable,dimension(:,:,:)::crunew
 #endif
 #ifdef TURB
      real(dp),allocatable,dimension(:,:,:)::fturb

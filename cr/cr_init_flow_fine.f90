@@ -75,7 +75,7 @@ recursive subroutine r_cr_updates(pst, nstep_coarse, input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
      ! Update reduced speed of light
-     if(r%cr .and. r%cosmo) call update_cr_c(r, g)
+     if(r%cr .and. r%cosmo) call update_cr_vars(r, g)
   endif
 
   end associate
@@ -85,23 +85,30 @@ end subroutine r_cr_updates
 !##############################################################
 !##############################################################
 !##############################################################
-SUBROUTINE update_cr_c(r, g)
-  ! Update CR speed of light in code units
+subroutine update_cr_vars(r, g)
+  ! Update CR speed of light and diffusion coefficient in code units
   !-------------------------------------------------------------------------
   use amr_commons, only: run_t, global_t
+  use constants,only:c_cgs
+  use cr_parameters, only: ncrgrp
   implicit none
   type(run_t) :: r
   type(global_t) :: g
-  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  integer::i
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_kappa
+  integer::i,igrp
   !-------------------------------------------------------------------------
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   do i=r%nlevelmax,r%levelmin,-1
-    g%cr_vmax_cgs(i) = c_cgs * r%cr_c_fraction(i)
-    g%cr_vmax(i) = g%cr_vmax_cgs(i) / scale_v
+    g%cr_c_cgs(i) = c_cgs * r%cr_c_fraction
+    g%cr_c(i) = g%cr_c_cgs(i) / scale_v
   enddo
 
-END SUBROUTINE update_cr_c
+  scale_kappa = scale_l**2/scale_t
+  r%cr_dmax_code=r%cr_dmax/scale_kappa
+  do igrp=1,ncrgrp
+     r%cr_d_code(igrp)=r%cr_d(igrp)/scale_kappa*3d0
+  end do
 
+end subroutine update_cr_vars
 
 end module update_cr_c_module

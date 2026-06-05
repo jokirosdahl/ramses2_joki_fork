@@ -9,6 +9,7 @@ HYDRO = 1
 GRAV = 0
 MHD = 0
 RT = 0
+CRS = 0
 RTZ = 0
 INIT =
 UNITS =
@@ -30,6 +31,7 @@ N_IRON_IONS = 0
 NION = 0
 NPSCAL = 0
 NRTGRP = 0
+NCRGRP = 1
 NHILBERT = 1
 NVECTOR = 32
 NPRE = 8
@@ -94,6 +96,9 @@ ifeq ($(RT),1)
 endif
 ifeq ($(RTZ),1)
    DEFINES += -DRTZ
+endif
+ifeq ($(CRS),1)
+   DEFINES += -DMHD -DCRS -DNCRGRP=$(NCRGRP)
 endif
 ifneq ($(NVECTOR),32)
    DEFINES += -DNVECTOR=$(NVECTOR)
@@ -198,12 +203,13 @@ endif
 LIBS += $(LIBMPI) $(LIBFFTW)
 #############################################################################
 # Sources directories are searched in this exact order
-VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt:../lightcone
+VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:\
+../pm:../poisson:../amr:../clump:../mdl1:../rt:../cr:../lightcone
 #############################################################################
 # Modules
-MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o oct_commons.o \
+MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o cr_parameters.o oct_commons.o \
 	 hash.o pm_parameters.o pm_commons.o hilbert.o domain_hilbert.o \
-	 hydro_commons.o rt_commons.o amr_commons.o poisson_parameters.o rngstream.o \
+	 hydro_commons.o rt_commons.o cr_commons.o amr_commons.o poisson_parameters.o rngstream.o \
 	 constants.o cooling_module.o cooling_module_ism.o init_cooling.o \
 	 coolrates_module.o \
 	 collisional_ionization_module.o recombination_module.o \
@@ -217,18 +223,20 @@ endif
 MODOBJ += init_neq_chem.o clfind_commons.o turb_commons.o mdl_commons.o mdl.o \
 	 cross_sections_module.o rt_spectra.o  \
 	 ramses_commons.o call_back.o cache_commons.o cache.o gadgetreadfile.o \
-	 boundaries.o output_hydro.o output_poisson.o output_part.o output_rt.o output_amr.o movie.o \
-	 sort.o nbors_utils.o hydro_flag.o marshal.o
+	 boundaries.o output_hydro.o output_poisson.o output_part.o output_rt.o output_cr.o \
+	 output_amr.o movie.o sort.o nbors_utils.o hydro_flag.o marshal.o
 ifeq ($(COMPILER),NVHPC)
 MODOBJ += gpu_utils.o gpu_hydro.o gpu_cooling.o gpu_rho.o gpu_mg.o gpu_refine.o gpu_flag.o gpu_runner.o gpu_manager.o
 endif
 MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
 	 rt_condinit.o rt_flag.o rt_upload.o interpol_rt.o rt_godunov_utils.o read_rt_params.o \
+	 cr_flux_module.o cr_godunov_fine.o cr_source_terms.o cr_input_condinit.o cr_init_flow_fine.o  \
+	 cr_condinit.o cr_flag.o cr_upload.o interpol_cr.o cr_godunov_utils.o read_cr_params.o \
 	 turb_hydro.o turb_driving.o turb_init.o turb_update.o \
 	 lightcone_utils.o lightcone_buffer.o lightcone_io.o lightcone_test.o lightcone.o \
 	 init_hydro.o init_part.o init_amr.o smooth.o flag_utils.o init_time.o read_params.o \
-	 init_rt.o input_part_grafic.o input_part_zoom.o input_part_ascii.o \
+	 init_rt.o init_cr.o input_part_grafic.o input_part_zoom.o input_part_ascii.o \
 	 input_part_restart.o input_part_ramses.o input_part_gadget.o input_part.o input_hydro_grafic.o \
 	 interpol_hydro.o update_time.o timer.o init_refine_basegrid.o load_balance.o refine_utils.o \
 	 grav_ana.o interpol_phi.o phi_fine_cg.o force_fine.o poisson_flag.o multigrid_fine_commons.o \
@@ -239,8 +247,8 @@ MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 init_refine_ramses.o title.o units.o move_fine.o rho_ana.o \
 	 star_formation.o feedback.o clump_merger.o output_clump.o clump_finder.o \
 	 rt_star_feedback.o sink_formation.o tree_formation.o \
-	 sink_evolution.o sink_merger.o task_manager.o rt_step.o amr_step.o adaptive_loop.o \
-	 write_gitinfo.o
+	 sink_evolution.o sink_merger.o task_manager.o rt_step.o cr_step.o amr_step.o \
+	 adaptive_loop.o write_gitinfo.o
 #############################################################################
 ramses:	$(MODOBJ) ramses.o
 	$(F90) $(FFLAGS) $(MODOBJ) ramses.o -o $(EXEC)$(NDIM)d $(LIBS)

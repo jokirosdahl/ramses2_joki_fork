@@ -40,13 +40,13 @@ subroutine cr_refine(r,ug,um,ud,ok)
 
   ! Compute errors
   do igroup=1, ncrgrp
-    if(r%cr_err_grad_e(igroup) >= 0.)then
+    if(r%cr_err_grad_ecr(igroup) >= 0.)then
       ivar = 1+(igroup-1)*(ndim+1)
       ng=ug(ivar); nm=um(ivar); nd=ud(ivar)
       error=2.0d0*MAX( &
-          & ABS((nd-nm)/(nd+nm+r%cr_floor_e(igroup))) , &
-          & ABS((nm-ng)/(nm+ng+r%cr_floor_e(igroup))) )
-      ok = ok .or. error > r%cr_err_grad_e(igroup)
+          & ABS((nd-nm)/(nd+nm+r%cr_floor_ecr(igroup))) , &
+          & ABS((nm-ng)/(nm+ng+r%cr_floor_ecr(igroup))) )
+      ok = ok .or. error > r%cr_err_grad_ecr(igroup)
     end if
   end do
 

@@ -63,11 +63,11 @@ subroutine cr_input_condinit(r,g,m,ilevel)
            end do
         end do
         ! Call initial condition routine
-        call cr_condinit(r,g,xx,qq,dx,ngrid,ilevel)
+        call cr_condinit(r,g,xx,qq,dx,ngrid)
         ! Scatter primitive variables to main memory
         do ivar=1,ncrvar
            do i=1,ngrid
-#ifdef CR
+#ifdef CRS
               m%cruold(ind,ivar,igrid+i-1)=qq(i,ivar)
 #endif
            end do
@@ -82,19 +82,19 @@ end subroutine cr_input_condinit
 !################################################################
 !################################################################
 !################################################################
-subroutine cr_region_condinit(r,g,x,q,dx,nn,ilevel)
+subroutine cr_region_condinit(r,g,x,q,dx,nn)
   use amr_parameters, only: nvector, ndim
   use cr_parameters, only: ncrvar, ncrgrp
   use amr_commons, only: run_t, global_t
   implicit none
   type(run_t)::r
   type(global_t)::g
-  integer ::nn,ilevel,idim,igrp
+  integer ::nn,idim,igrp
   real(kind=8)::dx
   real(kind=8),dimension(1:nvector,1:ncrvar)::q
   real(kind=8),dimension(1:nvector,1:ndim)::x
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  real(kind=8)::scale_e
+  real(kind=8)::dx_cgs,scale_e
   !----------------------------------------------------
   ! This routine sets simple pre-defined initial
   ! conditions, like points, squares, etc.
@@ -246,19 +246,19 @@ subroutine cr_input_source_regions(r,g,m,ilevel)
         ! Add what is already in the grid
         do ivar=1,ncrvar
            do i=1,ngrid
-#ifdef CR
+#ifdef CRS
               qq(i,ivar) = m%crunew(ind,ivar,igrid+i-1)
 #endif
            end do
         end do
 
         ! Inject sources
-        call cr_source_regions_sweep(r,g,xx,qq,dx,g%dtnew(ilevel),ngrid, ilevel)
+        call cr_source_regions_sweep(r,g,xx,qq,dx,g%dtnew(ilevel),ngrid)
 
         ! Scatter primitive variables to main memory
         do ivar=1,ncrvar
            do i=1,ngrid
-#ifdef CR
+#ifdef CRS
               m%crunew(ind,ivar,igrid+i-1)=qq(i,ivar)
 #endif
            end do
@@ -274,14 +274,14 @@ end subroutine cr_input_source_regions
 !################################################################
 !################################################################
 !################################################################
-subroutine cr_source_regions_sweep(r,g,x,q,dx,dt,nn,ilevel)
+subroutine cr_source_regions_sweep(r,g,x,q,dx,dt,nn)
   use amr_parameters, only: nvector, ndim
   use cr_parameters, only: ncrvar, ncrgrp
   use amr_commons, only: run_t, global_t
   implicit none
   type(run_t)::r
   type(global_t)::g
-  integer ::nn, ilevel
+  integer ::nn
   real(kind=8)::dx,dt
   real(kind=8),dimension(1:nvector,1:ncrvar)::q
   real(kind=8),dimension(1:nvector,1:ndim)::x

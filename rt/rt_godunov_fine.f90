@@ -59,7 +59,6 @@ subroutine rt_godunov_fine(s,ilevel)
   igrid=m%head(ilevel)
   do while(igrid.LE.m%tail(ilevel))
      SELECT CASE (m%grid(igrid)%superoct)
-     ! For now just re-using the hydro kernel for RT. Might change this later.
      CASE(1)
         call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_1)
      CASE(2**ndim)

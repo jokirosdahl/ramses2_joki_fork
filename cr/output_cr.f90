@@ -46,21 +46,24 @@ subroutine output_cr(s,filename)
   !-----------------------------------
   ! Output CR data in file
   !-----------------------------------
-  integer::ilevel,igrid,ilun,igrp,idim,ind
+  integer::ilevel,igrid,ilun
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
   real(kind=4),dimension(1:twotondim,1:ncrvar)::qout
+#ifdef CRS
   real(kind=8),dimension(1:twotondim,1:ncrvar)::cruold
+#endif
   logical::overflow_reported=.false.
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-#ifdef CR
   call open_file(s,filename,nskip,ilun)
   overflow_reported=.false.
   do ilevel=r%levelmin,r%nlevelmax
      write(ilun,POS=nskip(ilevel))
      do igrid=m%head(ilevel),m%tail(ilevel)
+#ifdef CRS
         cruold=m%cruold(:,:,igrid)
         qout=real(max(cruold,tiny(0d0)),kind=4)
+#endif
         if(maxval(dble(qout)).gt.1d31 .and. s%g%myid==1 .and. .not. overflow_reported) then
             print*,'The CR variables have very high values and are overflowing in the outputs'
             overflow_reported=.true.
@@ -69,7 +72,6 @@ subroutine output_cr(s,filename)
      end do
   end do
   call close_file(s,filename,nskip,ilun)
-#endif
   end associate
 
 end subroutine output_cr
@@ -93,7 +95,6 @@ subroutine backup_cr(r,g,m,mdl,filename)
   character(LEN=5)::nchar
   character(LEN=flen)::fileloc
   logical::file_exist
-#ifdef CR
   ilun=10+mdl_core(mdl)
   call title(g%myid,nchar)
   fileloc=TRIM(filename)//TRIM(nchar)
@@ -112,24 +113,24 @@ subroutine backup_cr(r,g,m,mdl,filename)
   enddo
   do ilevel=r%levelmin,r%nlevelmax
      do igrid=m%head(ilevel),m%tail(ilevel)
+#ifdef CRS
         write(ilun)m%cruold(:,:,igrid)
+#endif
      end do
   enddo
   close(ilun)
-#endif
 end subroutine backup_cr
 !########################################################################
 !########################################################################
 !########################################################################
 !########################################################################
-subroutine file_descriptor_cr(r,filename,write_bkp_file)
+subroutine file_descriptor_cr(r,filename)
   use amr_parameters, only: ndim,flen
   use cr_parameters, only: ncrgrp
   use amr_commons, only: run_t
   implicit none
   type(run_t)::r
   character(LEN=flen)::filename
-  logical::write_bkp_file
   character(len=1), dimension(1:3), parameter :: dim_keys = ["x", "y", "z"]
   
   character(LEN=flen)::fileloc
@@ -165,14 +166,13 @@ subroutine output_crinfo(r, g, filename)
 !------------------------------------------------------------------------
   use amr_parameters, only: flen
   use amr_commons, only: run_t, global_t
-  use hydro_parameters, only: nion
   use cr_parameters, only: ncrvar, ncrgrp
+  use constants, only: c_cgs
   implicit none
   type(run_t)::r
   type(global_t)::g
   character(LEN=flen)::filename, fileloc
   integer :: ilun
-  real(kind=8)::scale_np,scale_fp
 !------------------------------------------------------------------------
   if (r%verbose) write(*,*)'Entering output_crinfo'
 
@@ -186,8 +186,9 @@ subroutine output_crinfo(r, g, filename)
   write(ilun,'("ncrvar       = ", I11)') ncrvar
   write(ilun,'("ncrgrp       = ", I11)') ncrgrp
 
+
   ! Write physical parameters
-  write(ilun,'("cr_c_fraction= ", 100(E15.7))') r%cr_c_fraction(r%levelmin:r%nlevelmax)
+  write(ilun,'("cr_c_fraction= ", 100(E15.7))') g%cr_c_cgs(r%levelmin:r%nlevelmax)/c_cgs
   write(ilun,*)
 
   ! Write photon group properties
@@ -212,7 +213,6 @@ subroutine write_cr_group_props(r, update, lun)
   type(run_t)::r
   logical :: update
   integer :: ip, lun
-  integer :: iE
 !------------------------------------------------------------------------
   if (.not. update) then
      write(lun,*) 'CR group properties=------------------------------ '

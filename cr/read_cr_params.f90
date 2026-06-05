@@ -19,6 +19,7 @@ subroutine m_read_cr_params(pst)
   ! Local variables
   !--------------------------------------------------
   character(LEN=80)::infile
+  logical::nml_ok
 
   !--------------------------------------------------
   ! CR namelist variables
@@ -27,13 +28,21 @@ subroutine m_read_cr_params(pst)
   logical::cr_advect=.false.              ! Advection of cosmic rays?                       !
   logical::cr_streaming_diffusion=.false. ! Streaming diffusion of cosmic rays?             !
   logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
+  logical::cr_cooling=.false.             ! CR cooling?                                     !
   logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
+  logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
+  logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
+  logical::reduced_cr_flux_correction=.false.  ! Make sure F<c*E always?                    !
   real(dp)::cr_c_fraction=1.0       
-  real(dp)::cr_dmax=1.0                   ! Maximum allowed CR streaming diffusion coefficient in cgs
+  real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
+  integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
+  real(dp)::cr_varc_fudge=3.0
+  real(dp)::cr_smallr_decouple=1d-4       ! Density (over smallr) at which to decouple CRs  !
   real(dp),dimension(1:ncrgrp)::cr_d=1.0d29 ! Classical value, in cm^2/s (e.g., Jockipii 1999)
   real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perpendicular diffusion suppression of CRs
-  real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+  real(dp),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
   real(dp),dimension(1:ncrgrp)::fecr=0d0             ! SN fraction of CR energy
+  real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
 
   ! CR source regions parameters----------------------------------------------------------
   integer                           ::cr_nsource=0
@@ -54,18 +63,19 @@ subroutine m_read_cr_params(pst)
   !--------------------------------------------------
   ! Namelist definitions
   !--------------------------------------------------
-  namelist/mhd_params/ &
-       &  cr_advect, cr_streaming_diffusion, cr_streaming_heating &
-       & ,cr_dmax, cooling_cr, cr_c_fraction, cr_varvmax &
-       & ,cr_varvmax_fudge, cr_varvmax_vdvs, cr_nsubcycle, cr_smallr_decouple &
-       & ,reduced_CR_flux_correction, &
-       & ,cr_isotropic_pressure &
-  namelist/cr_sources/cr_nsource, cr_source_type                  &
+  namelist/cr_params/ &
+       &  cr_advect, cr_streaming_diffusion, cr_streaming_heating        &
+       & ,cr_cooling, cr_isotropic_pressure, cr_varc, cr_varc_vdvs       &
+       & ,reduced_cr_flux_correction, cr_c_fraction, cr_dmax             &
+       & ,cr_nsubcycle, cr_varc_fudge, cr_smallr_decouple
+
+  namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr, v_alfven 
+
+  namelist/cr_sources/cr_nsource, cr_source_type                         &
        & ,cr_src_x_center, cr_src_y_center, cr_src_z_center              &
        & ,cr_src_length_x, cr_src_length_y, cr_src_length_z              &
        & ,cr_exp_source, cr_src_group                                    &
-       & ,cr_n_source, cr_u_source, cr_v_source, cr_w_source
-  namelist/cr_groups/cr_d, cr_d_perp_factor, gamma_cr, fecr, v_alfven 
+       & ,cr_e_source, cr_fx_source, cr_fy_source, cr_fz_source
 
   associate(s=>pst%s)
 
@@ -105,32 +115,24 @@ subroutine m_read_cr_params(pst)
 115 continue
   close(1)
 
-
-  namelist/cr_sources/cr_nsource, cr_source_type                  &
-       & ,cr_src_x_center, cr_src_y_center, cr_src_z_center              &
-       & ,cr_src_length_x, cr_src_length_y, cr_src_length_z              &
-       & ,cr_exp_source, cr_src_group                                    &
-       & ,cr_n_source, cr_u_source, cr_v_source, cr_w_source
-  namelist/cr_groups/cr_d, cr_d_perp_factor, gamma_cr, fecr, v_alfven 
-
   ! Fill in all run parameters in corresponding structure
   s%r%cr_advect=cr_advect
   s%r%cr_streaming_diffusion=cr_streaming_diffusion
   s%r%cr_streaming_heating=cr_streaming_heating
-  s%r%cr_dmax=cr_dmax
-  s%r%cooling_cr=cooling_cr
-  s%r%cr_c_fraction=cr_c_fraction
-  s%r%cr_varvmax=cr_varvmax
-  s%r%cr_varvmax_fudge=cr_varvmax_fudge
-  s%r%cr_nsubcycle=cr_nsubcycle
-  s%r%cr_smallr_decouple=cr_smallr_decouple
-  s%r%reduced_CR_flux_correction=reduced_CR_flux_correction
-  s%r%cr_HLLE=cr_HLLE
+  s%r%cr_cooling=cr_cooling
   s%r%cr_isotropic_pressure=cr_isotropic_pressure
+  s%r%cr_varc=cr_varc
+  s%r%cr_varc_vdvs=cr_varc_vdvs
+  s%r%reduced_cr_flux_correction=reduced_cr_flux_correction
+  s%r%cr_c_fraction=cr_c_fraction
+  s%r%cr_dmax=cr_dmax
+  s%r%cr_nsubcycle=cr_nsubcycle
+  s%r%cr_varc_fudge=cr_varc_fudge
+  s%r%cr_smallr_decouple=cr_smallr_decouple
 
   s%r%cr_d=cr_d
   s%r%cr_d_perp_factors=cr_d_perp_factors
-  s%r%gamma_cr=gamma_cr
+  s%r%cr_gamma=cr_gamma
   s%r%fecr=fecr
   s%r%v_alfven=v_alfven
 

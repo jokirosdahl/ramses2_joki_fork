@@ -157,7 +157,13 @@ function worker_init(mdl) result(pst)
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold,r_set_emissivity
   use update_rt_c_module, only: r_rt_neq_updates
   use rt_star_feedback, only: r_star_rt_feedback
+  use init_cr_module, only: r_init_cr
+  use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
+  use cr_source_terms_module, only: r_cr_source_terms
   use update_cr_c_module, only: r_cr_updates
+  use cr_input_condinit_module, only: r_cr_input_condinit, r_cr_input_source_regions
+  use cr_upload_module, only: r_cr_upload_fine
+  use output_cr_module, only: r_output_cr
 #ifdef _CUDA
   use gpu_manager, only: r_set_grid_device, r_transfer_grid_host
 #endif
@@ -317,7 +323,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_CR_INPUT_SOURCE_REGIONS,pst,C_FUNLOC(r_cr_input_source_regions),1,0,"cr_input_source_regions")
   call mdl_add_service(pst%s%mdl,MDL_OUTPUT_CR,              pst,C_FUNLOC(r_output_cr),flen,0,"output_cr")
   call mdl_add_service(pst%s%mdl,MDL_CR_GODUNOV_FINE,        pst,C_FUNLOC(r_cr_godunov_fine),1,0,"cr_godunov_fine")
-  call mdl_add_service(pst%s%mdl,MDL_ADD_CR_SOURCE_TERMS,    pst,C_FUNLOC(r_add_cr_source_terms),1,0,"add_cr_source_terms")
+  call mdl_add_service(pst%s%mdl,MDL_CR_SOURCE_TERMS,        pst,C_FUNLOC(r_cr_source_terms),1,0,"cr_source_terms")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUNEW,             pst,C_FUNLOC(r_set_crunew),1,0,"set_crunew")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
   call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
