@@ -40,6 +40,11 @@ subroutine m_init_refine_basegrid(pst)
   if(r%rt)call m_rt_init_flow_fine(pst,r%levelmin)
 #endif
 
+  ! Initialize cr variables on the base grid
+#ifdef CRS
+  if(r%cr)call m_cr_init_flow_fine(pst,r%levelmin)
+#endif
+
   ! Initialize refinement map on the base grid
   if(pst%s%r%filetype=='grafic_zoom'.and.pst%s%r%ivar_refine==0)then
      call r_input_refmap_grafic(pst,r%levelmin,1)
