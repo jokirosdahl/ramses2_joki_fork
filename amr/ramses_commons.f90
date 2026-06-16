@@ -49,6 +49,7 @@ contains
 subroutine open_file(s,filename,nskip,ilun)
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncrvar
   use amr_parameters, only: ndim,flen,twotondim
 #ifndef WITHOUTMPI
   use mpi
@@ -143,6 +144,7 @@ subroutine open_file(s,filename,nskip,ilun)
         if(index(filename,'grav').NE.0)write(ilun)ndim+1
         if(index(filename,'peak').NE.0)write(ilun)3
         if(index(filename,'rt').NE.0)write(ilun)nrtvar
+        if(index(filename,'cr').NE.0)write(ilun)ncrvar
         write(ilun)r%levelmin
         write(ilun)r%nlevelmax
         do ilevel=r%levelmin,r%nlevelmax
@@ -160,6 +162,7 @@ subroutine open_file(s,filename,nskip,ilun)
      if(index(filename,'grav').NE.0)iskip=17+(r%nlevelmax-r%levelmin+1)*4
      if(index(filename,'peak').NE.0)iskip=17+(r%nlevelmax-r%levelmin+1)*4
      if(index(filename,'rt').NE.0)iskip=17+(r%nlevelmax-r%levelmin+1)*4
+     if(index(filename,'cr').NE.0)iskip=17+(r%nlevelmax-r%levelmin+1)*4
 
      do ilevel=r%levelmin,r%nlevelmax
         nskip(ilevel)=iskip
@@ -172,6 +175,7 @@ subroutine open_file(s,filename,nskip,ilun)
         if(index(filename,'grav').NE.0)iskip=iskip+(4*twotondim*(ndim+1))*noct(ilevel)
         if(index(filename,'peak').NE.0)iskip=iskip+(4*twotondim*3)*noct(ilevel)
         if(index(filename,'rt').NE.0)iskip=iskip+(4*twotondim*nrtvar)*noct(ilevel)
+        if(index(filename,'cr').NE.0)iskip=iskip+(4*twotondim*ncrvar)*noct(ilevel)
      end do
 
   elseif(g%myid.GT.istart(ifile))then
@@ -207,6 +211,7 @@ end subroutine open_file
 subroutine close_file(s,filename,nskip,ilun)
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncrvar
   use amr_parameters, only: ndim,flen,twotondim
 #ifndef WITHOUTMPI
   use mpi
@@ -260,6 +265,7 @@ subroutine close_file(s,filename,nskip,ilun)
         if(index(filename,'grav').NE.0)iskip=iskip+(4*twotondim*(ndim+1))*m%noct(ilevel)
         if(index(filename,'peak').NE.0)iskip=iskip+(4*twotondim*3)*m%noct(ilevel)
         if(index(filename,'rt').NE.0)iskip=iskip+(4*twotondim*nrtvar)*m%noct(ilevel)
+        if(index(filename,'cr').NE.0)iskip=iskip+(4*twotondim*ncrvar)*m%noct(ilevel)
         nskip(ilevel)=iskip
      end do
 
