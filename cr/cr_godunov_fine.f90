@@ -180,7 +180,7 @@ subroutine set_cruold(r, g, m, ilevel)
    
  ! Set cruold to crunew
 #ifdef CRS
-  if (r%reduced_CR_flux_correction) then
+  if (r%cr_reduced_flux_correction) then
      ! Make a CR conservation fix (prevent CR explosions)
      do ig = 1, ncrgrp
         iE = 1 + (ig-1)*ndim

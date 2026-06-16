@@ -558,7 +558,7 @@ module amr_commons
      logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
      logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
      logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
-     logical::reduced_cr_flux_correction=.false.  ! Make sure F<c*E always?                    !
+     logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
      real(dp)::cr_c_fraction=1.0       
      real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
      integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !

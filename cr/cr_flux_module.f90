@@ -400,7 +400,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      kcr%crflux( i, j, k, iP0:iP1, 1)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if(r%reduced_CR_flux_correction) then
+     if(r%cr_reduced_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
@@ -478,7 +478,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      kcr%crflux( i, j, k, iP0:iP1, 2)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if(r%reduced_CR_flux_correction) then
+     if(r%cr_reduced_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
@@ -556,7 +556,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      kcr%crflux( i, j, k, iP0:iP1, 3)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
-     if (r%reduced_CR_flux_correction) then
+     if (r%cr_reduced_flux_correction) then
         fred = 1.0
         c_tilde = MIN(ABS(lplus), ABS(lminus))
         fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))

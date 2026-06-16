@@ -32,7 +32,7 @@ subroutine m_read_cr_params(pst)
   logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
   logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
   logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
-  logical::reduced_cr_flux_correction=.false.  ! Make sure F<c*E always?                    !
+  logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
   real(dp)::cr_c_fraction=1.0       
   real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
@@ -66,7 +66,7 @@ subroutine m_read_cr_params(pst)
   namelist/cr_params/ &
        &  cr_advect, cr_streaming_diffusion, cr_streaming_heating        &
        & ,cr_cooling, cr_isotropic_pressure, cr_varc, cr_varc_vdvs       &
-       & ,reduced_cr_flux_correction, cr_c_fraction, cr_dmax             &
+       & ,cr_reduced_flux_correction, cr_c_fraction, cr_dmax             &
        & ,cr_nsubcycle, cr_varc_fudge, cr_smallr_decouple
 
   namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr, v_alfven 
@@ -123,7 +123,7 @@ subroutine m_read_cr_params(pst)
   s%r%cr_isotropic_pressure=cr_isotropic_pressure
   s%r%cr_varc=cr_varc
   s%r%cr_varc_vdvs=cr_varc_vdvs
-  s%r%reduced_cr_flux_correction=reduced_cr_flux_correction
+  s%r%cr_reduced_flux_correction=cr_reduced_flux_correction
   s%r%cr_c_fraction=cr_c_fraction
   s%r%cr_dmax=cr_dmax
   s%r%cr_nsubcycle=cr_nsubcycle
