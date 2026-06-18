@@ -559,17 +559,18 @@ module amr_commons
      logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
      logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
      logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
-     real(dp)::cr_c_fraction=1.0       
-     real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
+     real(kind=8)::cr_c_fraction=1.0
+     real(kind=8)::cr_dmax=1.0               ! Max CR streaming diffusion coefficient in cgs   !
      integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
-     real(dp)::cr_varc_fudge=3.0
-     real(dp)::cr_smallr_decouple=1d-4       ! Density (over smallr) at which to decouple CRs  !
+     real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
+     real(kind=8)::cr_varc_fudge=3.0
+     real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
      ! CR group parameters---------------------------------------------------------------------
-     real(dp),dimension(1:ncrgrp)::cr_d=1.0d29  ! Classical value, in cm^2/s (e.g., Jockipii 1999)
-     real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp diffusion suppression of CRs  !
-     real(dp),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
-     real(dp),dimension(1:ncrgrp)::fecr=0d0     ! SN fraction of CR energy
-     real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+     real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29 !Classical value cm^2/s (e.g., Jockipii 1999)
+     real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp diffusion CR suppression  !
+     real(kind=8),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
+     real(kind=8),dimension(1:ncrgrp)::fecr=0d0     ! SN fraction of CR energy
+     real(kind=8),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
      ! Initial condition CR regions parameters-------------------------------------------------
      integer                           ::cr_nregion=0
      character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
@@ -589,8 +590,8 @@ module amr_commons
      real(kind=8)::cr_err_grad_ecr(ncrgrp)=-1   ! E_CR gradient for refinement                !
      real(kind=8)::cr_floor_ecr(ncrgrp)=1d-10   ! E_CR floor for refinement                   !
      ! CR derived parameters.
-     real(dp),dimension(1:ncrgrp)::cr_d_code ! CR diffusion coefficients in code units        !
-     real(dp)::cr_dmax_code                  ! Max diffusion coefficient in code units        !
+     real(kind=8),dimension(1:ncrgrp)::cr_d_code ! CR diffusion coefficients in code units    !
+     real(kind=8)::cr_dmax_code                  ! Max diffusion coefficient in code units    !
 
      ! Turbulence driving parameters
      logical  :: turb=.false.            ! Use turbulence?

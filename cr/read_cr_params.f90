@@ -33,16 +33,17 @@ subroutine m_read_cr_params(pst)
   logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
   logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
   logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
-  real(dp)::cr_c_fraction=1.0       
-  real(dp)::cr_dmax=1.0                   ! Max CR streaming diffusion coefficient in cgs   !
+  real(kind=8)::cr_c_fraction=1.0
+  real(kind=8)::cr_dmax=1.0               ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
-  real(dp)::cr_varc_fudge=3.0
-  real(dp)::cr_smallr_decouple=1d-4       ! Density (over smallr) at which to decouple CRs  !
-  real(dp),dimension(1:ncrgrp)::cr_d=1.0d29 ! Classical value, in cm^2/s (e.g., Jockipii 1999)
-  real(dp),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perpendicular diffusion suppression of CRs
-  real(dp),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
-  real(dp),dimension(1:ncrgrp)::fecr=0d0             ! SN fraction of CR energy
-  real(dp),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+  real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
+  real(kind=8)::cr_varc_fudge=3.0
+  real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
+  real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29
+  real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp CR diffusion suppression  !
+  real(kind=8),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
+  real(kind=8),dimension(1:ncrgrp)::fecr=0d0               ! SN fraction of CR energy       !
+  real(kind=8),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
 
   ! CR source regions parameters----------------------------------------------------------
   integer                           ::cr_nsource=0
@@ -67,7 +68,8 @@ subroutine m_read_cr_params(pst)
        &  cr_advect, cr_streaming_diffusion, cr_streaming_heating        &
        & ,cr_cooling, cr_isotropic_pressure, cr_varc, cr_varc_vdvs       &
        & ,cr_reduced_flux_correction, cr_c_fraction, cr_dmax             &
-       & ,cr_nsubcycle, cr_varc_fudge, cr_smallr_decouple
+       & ,cr_nsubcycle, cr_courant_factor, cr_varc_fudge                 &
+       & ,cr_smallr_decouple
 
   namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr, v_alfven 
 

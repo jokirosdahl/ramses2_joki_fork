@@ -120,6 +120,11 @@ subroutine m_newdt_fine(pst,ilevel)
      g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%rt_nsubcycle*r%rt_courant_factor*dx/3d0/g%rt_c(ilevel))
   endif
 
+  if(r%cr.and.r%cr_advect)then
+     if(r%verbose)write(*,'("   Entering newdt_cr for level ",I2)')ilevel
+     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%cr_nsubcycle*r%cr_courant_factor*dx/3d0/g%cr_c(ilevel))
+  endif
+
   ! Adaptive time step condition
   if(ilevel>r%levelmin)then
      g%dtnew(ilevel)=MIN(g%dtnew(ilevel-1)/real(r%nsubcycle(ilevel-1)),g%dtnew(ilevel))
