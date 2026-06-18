@@ -32,6 +32,9 @@ recursive subroutine r_set_grid_device(pst)
      if(pst%s%r%nlevelmax > pst%s%r%levelmin) flag1 = pst%s%m%flag1
 #ifdef HYDRO
      uold = pst%s%m%uold
+#ifdef MHD
+     bold = pst%s%m%bold
+#endif
 #endif
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
@@ -58,7 +61,8 @@ recursive subroutine r_set_grid_device(pst)
         star_tp     = pst%s%star%tp
         star_zp     = pst%s%star%zp
         star_levelp = pst%s%star%levelp
-        star_idp    = pst%s%star%idp
+        star_sortp  = pst%s%star%sortp
+        if (allocated(star_idp)) star_idp = pst%s%star%idp
         call GPU_Error_Check(__FILE__, __LINE__)
         call nvtxEndRange()
      endif
@@ -119,6 +123,9 @@ recursive subroutine r_transfer_grid_host(pst)
      if(pst%s%r%nlevelmax > pst%s%r%levelmin) pst%s%m%flag1 = flag1
 #ifdef HYDRO
      pst%s%m%uold = uold
+#ifdef MHD
+     pst%s%m%bold = bold
+#endif
 #endif
 #ifdef GRAV
      pst%s%m%f = f
@@ -166,7 +173,8 @@ subroutine gpu_to_host_part(pst)
   pst%s%star%tp     = star_tp
   pst%s%star%zp     = star_zp
   pst%s%star%levelp = star_levelp
-  pst%s%star%idp    = star_idp
+  pst%s%star%sortp  = star_sortp
+  if (allocated(star_idp)) pst%s%star%idp = star_idp
   call GPU_Error_Check(__FILE__, __LINE__)
   call nvtxEndRange()
 

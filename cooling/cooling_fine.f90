@@ -1,6 +1,8 @@
 module cooling_fine_module
+  use cooling_module, only: set_table
 #ifdef _CUDA
   use gpu_runner, only: gpu_cooling
+  use cooling_device, only: gpu_upload_cooling_table
 #endif
 contains
 !###########################################################
@@ -28,6 +30,18 @@ recursive subroutine r_cooling_fine(pst,ilevel,input_size)
 #else
      call cooling_fine(pst%s%r,pst%s%g,pst%s%m,pst%s%cool,pst%s%tables,ilevel)
 #endif
+
+     ! Compute new cooling table for cosmo runs
+#ifndef RTZ
+     if(pst%s%r%cooling.and.ilevel==pst%s%r%levelmin.and.pst%s%r%cosmo)then
+        if(pst%s%g%myid==1)write(*,*)'Computing new cooling table'
+        call set_table(pst%s%cool,dble(pst%s%g%aexp))
+#ifdef _CUDA
+        call gpu_upload_cooling_table(pst%s%cool)
+#endif
+     endif
+#endif
+
   endif
 
 end subroutine r_cooling_fine
@@ -41,7 +55,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   use hydro_parameters, only: nener, nion
   use rt_parameters, only: nrtgrp, smallnp
   use amr_commons, only: run_t, global_t, mesh_t
-  use cooling_module, only: cooling_t, solve_cooling, T2_min_fix, set_table
+  use cooling_module, only: cooling_t, solve_cooling, T2_min_fix
   use coolrates_module, only: neq_cooling_t
 #ifdef RTZ
   use rtz_cooling_module, only: rtz_solve_cooling
@@ -482,14 +496,6 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
      ! End loop over grid
   end do
   ! End loop over cells
-
-#ifndef RTZ
-  ! Compute new cooling table
-  if(r%cooling.and.ilevel==r%levelmin.and.r%cosmo)then
-     if(g%myid==1)write(*,*)'Computing new cooling table'
-     call set_table(c,dble(g%aexp))
-  endif
-#endif
 #endif
 
 end subroutine cooling_fine
