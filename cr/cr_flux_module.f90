@@ -9,9 +9,9 @@ MODULE cr_flux_module
   implicit none
 
   private   ! default
-  integer,parameter::if1=0                                                      ! 0
-  integer,parameter::jf1=1-ndim/2                                               ! 0 or 1
-  integer,parameter::kf1=1-ndim/3                                               ! 0 or 1
+  integer,parameter::ifcr1=0                                                      ! 0
+  integer,parameter::jfcr1=1-ndim/2                                               ! 0 or 1
+  integer,parameter::kfcr1=1-ndim/3                                               ! 0 or 1
 
 #ifdef CRS
   public cr_unsplit, invrotatevec, rotatevec
@@ -36,9 +36,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   real(kind=8),dimension(1:ndim)::bcell
   real(kind=8)::cr_c2,Ecr2,aniso_term
   !------------------------------------------------------------------------
-  associate(iu1=>kcr%iu1, iu2=>kcr%iu2, ju1=>kcr%ju1, ju2=>kcr%ju2        &
-           ,ku1=>kcr%ku1, ku2=>kcr%ku2, if1=>kcr%if1, if2=>kcr%if2        &
-           ,jf1=>kcr%jf1, jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2)
+  associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
 
   cr_c2=cr_c**2
 
@@ -48,9 +46,9 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   ! We only need to calculate tensors for those cells which have faces to
   ! the NXNXN center cells, so by skipping the 'corners' we are reduced
   ! to fewer cells to calculate (by half for the default N=2).
-  do k = kf1, kf2
-  do j = jf1, jf2
-  do i = if1, if2
+  do k = kfcr1, kf2
+  do j = jfcr1, jf2
+  do i = ifcr1, if2
 
      nedge=0                 ! Check if we're at a corner and if so, cycle
      if(mod(i,if2).eq.0) nedge=nedge+1
@@ -58,7 +56,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
      if(ndim.gt.2 .and. mod(k,kf2).eq.0) nedge=nedge+1
      if(nedge.ge.2) cycle
 
-     Ecr    = kcr%cruloc(i,j,k,icrE)             ! CR density in cell
+     Ecr = kcr%cruloc(i,j,k,icrE)             ! CR density in cell
      Fcr = kcr%cruloc(i,j,k,icrE+1:icrE+ndim) ! CR flux vector
      if(Ecr .lt. 0d0) then
         write(*,*)'negative CR density in cmp_flux_tensors. -EXITING-'
@@ -69,7 +67,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
      if(r%cr_isotropic_pressure) then
         kcr%cflx(i,j,k,2:ndim+1,1:ndim) = 0d0
         do idim = 1, ndim
-           kcr%cflx(i,j,k,idim+1,idim) = 1.0d0  !Ecr*cr_c2/3d0
+           kcr%cflx(i,j,k,idim+1,idim) = Ecr*cr_c2/3d0
         enddo
      else
         ! M1 closure
@@ -93,11 +91,11 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
         do idim = 1, ndim
            kcr%cflx(i,j,k,idim+1,idim) = kcr%cflx(i,j,k,idim+1,idim) + chi
         end do
+        kcr%cflx(i,j,k,2:ndim+1,1:ndim) = kcr%cflx(i,j,k,2:ndim+1,1:ndim)*Ecr*cr_c2
      endif
   enddo
   enddo
   enddo
-  kcr%cflx=kcr%cflx*Ecr*cr_c2
   end associate
   
 end subroutine cmp_cr_flux_tensors
@@ -125,18 +123,16 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   !------------------------------------------------------------------------
   icrE = 1+(ndim+1)*(iGrp-1) ! starting index of cr variables
   twodx_inv=1d0/(2d0*dx)
-  associate(iu1=>kcr%iu1, iu2=>kcr%iu2, ju1=>kcr%ju1, ju2=>kcr%ju2              &
-           ,ku1=>kcr%ku1, ku2=>kcr%ku2, if1=>kcr%if1, if2=>kcr%if2              &
-           ,jf1=>kcr%jf1, jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2)
+  associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
 
   ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
   ! default. All dimension indices go from 0 to N+1.
   ! We only need to calculate tensors for those cells which have faces to
   ! the NXNXN center cells, so by skipping the 'corners' we are reduced
   ! to fewer cells to calculate (by half for the default N=2).
-  do k = kf1, kf2
-  do j = jf1, jf2
-  do i = if1, if2
+  do k = kfcr1, kf2
+  do j = jfcr1, jf2
+  do i = ifcr1, if2
 
      nedge=0                 ! Check if we're at a corner and if so, cycle
      if(mod(i,if2).eq.0) nedge=nedge+1
@@ -319,10 +315,9 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   real(kind=8)::fred, fred_dn, fred_up, c_tilde
   integer::iP0, iP1, idim, iGrp
 !------------------------------------------------------------------------
-  associate(iu1=>kcr%iu1, iu2=>kcr%iu2, ju1=>kcr%ju1, ju2=>kcr%ju2      &
-           ,ku1=>kcr%ku1, ku2=>kcr%ku2, if1=>kcr%if1, if2=>kcr%if2      &
-           ,jf1=>kcr%jf1, jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2      &
-           ,crin=>kcr%cruloc, cFlx=>kcr%cFlx, uin=>kcr%uloc, lmax=>kcr%lmax)
+  associate(if1=>kcr%if1, if2=>kcr%if2, jf1=>kcr%jf1                    &
+           ,jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2, crin=>kcr%cruloc  &
+           ,cFlx=>kcr%cFlx, uin=>kcr%uloc, lmax=>kcr%lmax)
 
   do iGrp = 1, ncrgrp
 
@@ -349,7 +344,6 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      uup = crin(i,   j, k, iP0:iP1 )    !
      vdn = uin( i-1, j, k, 2) / uin(i-1,j,k,1) ! left velocity
      vup = uin( i,   j, k, 2) / uin(i  ,j,k,1) ! right velocity
-     
      ! Second-order interpolation with using Van-Leer slope Limiter
      ! interpolation of U
      slopeLM = (fup-fdn)/dx
