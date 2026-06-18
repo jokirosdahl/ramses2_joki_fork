@@ -40,6 +40,7 @@ DEBUG = 0
 HDF5 = 0
 MPIF90 = mpif90
 EXEC = ramses
+EXTRA_DEFINES =
 #############################################################################
 # Compute NVAR
 NHYDRO = 5
@@ -57,6 +58,7 @@ GITREPO = $(shell git config --get remote.origin.url)
 BUILDDATE = $(shell date +"%D-%T")
 BUILDCOMMAND = ${MAKE} ${MAKEFLAGS}
 DEFINES = -DNDIM=$(NDIM) -DNVAR=$(NVAR)
+DEFINES += $(EXTRA_DEFINES)
 ifeq ($(RTZ),1)
 DEFINES += -DN_HYDROGEN_IONS=$(N_HYDROGEN_IONS)
 DEFINES += -DN_HELIUM_IONS=$(N_HELIUM_IONS)
