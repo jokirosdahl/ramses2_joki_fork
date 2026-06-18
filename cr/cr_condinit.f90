@@ -26,4 +26,10 @@ subroutine cr_condinit(r,g,x,q,dx,nn)
   ! Add here, if you wish, some user-defined initial conditions
   ! ........
 
+#ifdef CRTEST_1D_DIFFUSION
+  q(1:nn,1)=exp(-40d0*(x(1:nn,1)-r%box_size(1)*0.5d0)**2)
+  !q(1:nn,2)=q(1:nn,q)*4d0/3d0*q(1:nn,2)
+#endif
+
+
 end subroutine cr_condinit
