@@ -29,7 +29,7 @@ subroutine m_read_cr_params(pst)
   logical::cr_streaming_diffusion=.false. ! Streaming diffusion of cosmic rays?             !
   logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
   logical::cr_cooling=.false.             ! CR cooling?                                     !
-  logical::cr_isotropic_pressure=.false.  ! Isotropic CR pressure?                          !
+  logical::cr_isotropic_pressure=.true.   ! Isotropic CR pressure?                          !
   logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
   logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
   logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
