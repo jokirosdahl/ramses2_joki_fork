@@ -129,6 +129,7 @@ subroutine m_read_cr_params(pst)
   s%r%cr_c_fraction=cr_c_fraction
   s%r%cr_dmax=cr_dmax
   s%r%cr_nsubcycle=cr_nsubcycle
+  s%r%cr_courant_factor=cr_courant_factor
   s%r%cr_varc_fudge=cr_varc_fudge
   s%r%cr_smallr_decouple=cr_smallr_decouple
 
