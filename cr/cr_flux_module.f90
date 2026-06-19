@@ -31,7 +31,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   integer::iGrp
   real(kind=8),dimension(1:ndim)::Fcr
   real(kind=8)::Ecr, cr_c, nedge
-  integer::i, j, k, idim, jdim, n, icrE
+  integer::i, j, k, idim, jdim, icrE
   real(kind=8)::mu1,mu2,chi,b_norm2,Fcr_norm
   real(kind=8),dimension(1:ndim)::bcell
   real(kind=8)::cr_c2,Ecr2,aniso_term
@@ -116,8 +116,8 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   type(cr_kernel_t)::kcr
   integer,intent(in)::iGrp
   real(kind=8),intent(in)::cr_c, dt
-  real(kind=8)::scale_kappa, dx, scale, Ecr, va, twodx_inv
-  integer::icrE, i, j, k, n, idim, nedge
+  real(kind=8)::dx, Ecr, va, twodx_inv
+  integer::icrE, i, j, k, idim, nedge
   real(kind=8),dimension(1:3)::bcell, gradEcr, Dcr_vec
   real(kind=8)::norm,bdotgradE,cosp,sinp,cost,sint,bxby,Dcr_dir
   !------------------------------------------------------------------------
@@ -260,7 +260,7 @@ FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
 !              in the 3*4 flux function tensor
 !------------------------------------------------------------------------
   real(kind=8),dimension(nDim+1)::fdn, fup, udn, uup, cmp_cr_face
-  real(kind=8)::lminus, lplus, coeff, llmax
+  real(kind=8)::lminus, lplus, llmax
 !------------------------------------------------------------------------
   !if (r%cr_HLLE) then
   !  coeff = 0D0
@@ -306,14 +306,14 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   real(kind=8),dimension(nDim+1),save:: fdn, fup, udn, uup
   real(kind=8):: lminus, lplus                        ! Intercell wavespeeds
   real(kind=8)::dtdx, prod(ndim+1)
-  integer ::i, j, k, n
+  integer ::i, j, k
   real(kind=8),dimension(ndim+1),save::slopeLM,slopeRM,slopeM
   real(kind=8),dimension(ndim+1),save::slopeLL,slopeL
   real(kind=8),save::vslopeLM,vslopeRM,vslopeM
   real(kind=8),save::vslopeLL,vslopeL,vprod
   real(kind=8):: vup,vdn,meanadv,meandiffv,aup,adn
   real(kind=8)::fred, fred_dn, fred_up, c_tilde
-  integer::iP0, iP1, idim, iGrp
+  integer::iP0, iP1, iGrp
 !------------------------------------------------------------------------
   associate(if1=>kcr%if1, if2=>kcr%if2, jf1=>kcr%jf1                    &
            ,jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2, crin=>kcr%cruloc  &

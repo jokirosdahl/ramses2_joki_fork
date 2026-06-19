@@ -248,16 +248,13 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   integer::i2min,i2max,j2min,j2max,k2min,k2max
   integer::i3min,i3max,j3min,j3max,k3min,k3max
 #ifdef MHD
-  integer,dimension(1:8,1:3)::jj
   real(kind=8),dimension(0:twondim  ,1:6)::b1
   real(kind=8),dimension(1:twotondim,1:6)::b2
   real(kind=8),dimension(1:twondim,1:twotondim,1:6)::b3
   logical,dimension(1:twondim)::refined
   integer,dimension(1:3,1:6),save::shift=reshape(&
        & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
-  integer::igrid1,igrid2,igrid3,igridn
-  integer::icell1,icell2,icell3
-  real(kind=8)::dflux,dflux_x,dflux_y,dflux_z,weight
+  integer::igridn
   integer,dimension(1:twondim)::igrid_son_nbor
 #endif
   integer,dimension(1:ndim)::ckey_corner,ckey
