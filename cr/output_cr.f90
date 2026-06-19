@@ -62,9 +62,9 @@ subroutine output_cr(s,filename)
      do igrid=m%head(ilevel),m%tail(ilevel)
 #ifdef CRS
         cruold=m%cruold(:,:,igrid)
-        qout=real(max(cruold,tiny(0d0)),kind=4)
+        qout=real(cruold,kind=4)
 #endif
-        if(maxval(dble(qout)).gt.1d31 .and. s%g%myid==1 .and. .not. overflow_reported) then
+        if(maxval(dble(abs(qout))).gt.1d31 .and. s%g%myid==1 .and. .not. overflow_reported) then
             print*,'The CR variables have very high values and are overflowing in the outputs'
             overflow_reported=.true.
         endif
