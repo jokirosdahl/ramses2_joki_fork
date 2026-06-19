@@ -36,24 +36,20 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   real(kind=8),dimension(1:ndim)::bcell
   real(kind=8)::cr_c2,Ecr2,aniso_term
   !------------------------------------------------------------------------
-  associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
+  associate(iu1=>kcr%iu1, ju1=>kcr%ju1, ku1=>kcr%ku1 &
+           ,iu2=>kcr%iu2, ju2=>kcr%ju2, ku2=>kcr%ku2)
 
   cr_c2=cr_c**2
 
   icrE = 1+(ndim+1)*(iGrp-1) ! starting index of cr variables
-  ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
-  ! default. All dimension indices go from 0 to N+1.
-  ! We only need to calculate tensors for those cells which have faces to
-  ! the NXNXN center cells, so by skipping the 'corners' we are reduced
-  ! to fewer cells to calculate (by half for the default N=2).
-  do k = kfcr1, kf2
-  do j = jfcr1, jf2
-  do i = ifcr1, if2
-
-     nedge=0                 ! Check if we're at a corner and if so, cycle
-     if(mod(i,if2).eq.0) nedge=nedge+1
-     if(ndim.gt.1 .and. mod(j,jf2).eq.0) nedge=nedge+1
-     if(ndim.gt.2 .and. mod(k,kf2).eq.0) nedge=nedge+1
+  ! Loop 6X6X6 cells in grid, from -1 to 4.
+  do k = ku1, ku2
+  do j = ju1, ju2
+  do i = iu1, iu2
+     nedge = 0              ! Check if we're at a corner and if so, cycle
+     if(i.lt.1 .or. i.gt.2) nedge=nedge+1
+     if(ndim.gt.1 .and. (j.lt.1 .or. j.gt.2)) nedge=nedge+1
+     if(ndim.gt.2 .and. (k.lt.1 .or. k.gt.2)) nedge=nedge+1
      if(nedge.ge.2) cycle
 
      Ecr = kcr%cruloc(i,j,k,icrE)             ! CR density in cell
@@ -347,11 +343,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      ! Second-order interpolation with using Van-Leer slope Limiter
      ! interpolation of U
      slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx( i+1, j, k, :, 1) - fup)/dx
+     slopeRM = (cFlx(i+1, j, k, :, 1) - fup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx( i-2, j, k, :, 1))/dx
+     slopeLL = (fdn - cFlx(i-2, j, k, :, 1))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
@@ -360,11 +356,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      ! interpolation of F
      slopeLM = (uup-udn)/dx
-     slopeRM = (crin( i+1, j, k, iP0:iP1) - uup)/dx
+     slopeRM = (crin(i+1, j, k, iP0:iP1) - uup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin( i-2, j, k, iP0:iP1 ))/dx
+     slopeLL = (udn - crin(i-2, j, k, iP0:iP1))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
@@ -425,11 +421,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      ! Second-order interpolation with using Van-Leer slope Limiter
      ! interpolation of U
      slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx( i, j+1, k, :, 2) - fup)/dx
+     slopeRM = (cFlx(i, j+1, k, :, 2) - fup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx( i, j-2, k, :, 2))/dx
+     slopeLL = (fdn - cFlx(i, j-2, k, :, 2))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
@@ -438,11 +434,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      ! interpolation of F
      slopeLM = (uup-udn)/dx
-     slopeRM = (crin( i, j+1, k, iP0:iP1) - uup)/dx
+     slopeRM = (crin(i, j+1, k, iP0:iP1) - uup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin( i, j-2, k, iP0:iP1 ))/dx
+     slopeLL = (udn - crin(i, j-2, k, iP0:iP1))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
@@ -469,7 +465,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      lminus = min(adn,0.)
      lplus = max(aup,0.)
 
-     kcr%crflux( i, j, k, iP0:iP1, 2)=&
+     kcr%crflux(i, j, k, iP0:iP1, 2)=&
           cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
 
      if(r%cr_reduced_flux_correction) then
@@ -503,11 +499,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      ! Second-order interpolation with using Van-Leer slope Limiter
      ! interpolation of U
      slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx( i, j, k+1, :, 3) - fup)/dx
+     slopeRM = (cFlx(i, j, k+1, :, 3) - fup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx( i, j, k-2, :, 3))/dx
+     slopeLL = (fdn - cFlx(i, j, k-2, :, 3))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
@@ -516,11 +512,11 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      ! interpolation of F
      slopeLM = (uup-udn)/dx
-     slopeRM = (crin( i, j, k+1, iP0:iP1) - uup)/dx
+     slopeRM = (crin(i, j, k+1, iP0:iP1) - uup)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin( i, j, k-2, iP0:iP1 ))/dx
+     slopeLL = (udn - crin(i, j, k-2, iP0:iP1))/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
