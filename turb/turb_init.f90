@@ -175,7 +175,7 @@ contains
     turb_last_tfrac = real((global%t - turb%turb_last_time) / turb%turb_dt, kind=8)
     turb_next_tfrac = 1.0 - turb_last_tfrac
 
-    turb%afield_now = turb_last_tfrac*turb%afield_last + turb_next_tfrac*turb%afield_next
+    turb%afield_now = turb_next_tfrac*turb%afield_last + turb_last_tfrac*turb%afield_next
 
   end subroutine init_turb
 !################################################################
