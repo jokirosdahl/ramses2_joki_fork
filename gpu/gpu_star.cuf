@@ -23,7 +23,7 @@ attributes(global) subroutine count_site_kernel(grid, uold, bold, flag1, prefix_
   type(oct), device :: grid(*)
   real(kind=dp), device :: uold(1:twotondim,1:nvar,*)
   real(kind=dp), device :: bold(1:twotondim,1:6,*)
-  integer(kind=4), device :: flag1(*)
+  integer(kind=4), device :: flag1(1:twotondim,*)
   integer(kind=4), device :: prefix_sum(*)
 
   integer(kind=4), intent(in), value :: head_idx, num_octs, ilevel
@@ -122,9 +122,11 @@ attributes(global) subroutine count_site_kernel(grid, uold, bold, flag1, prefix_
 
   endif
 
-  ! Store nstar in flag1 array and 0/1 in flag2 array
+  ! Store nstar in flag1 array
+  flag1(cell_idx, oct_idx) = nstar
+
+  ! Count numbr of SF sites in prefix_sum array
   global_cell_idx = cell_idx + (oct_idx-1) * twotondim
-  flag1(global_cell_idx) = nstar
   if (nstar > 0) then
      prefix_sum(global_cell_idx) = 1
   else
@@ -238,7 +240,7 @@ attributes(global) subroutine star_formation_kernel(grid, uold, f, flag1, swap_l
   type(oct), device :: grid(*)
   real(kind=dp), device :: uold(1:twotondim,1:nvar,*)
   real(kind=dp), device :: f(1:twotondim,1:ndim,*)
-  integer(kind=4), device :: flag1(*)
+  integer(kind=4), device :: flag1(1:twotondim,*)
   integer(kind=4), device :: swap_local(*)
   real(kind=dp), device :: star_xp(*), star_vp(*)
   real(kind=dp), device :: star_mp(*), star_tp(*), star_zp(*)
@@ -290,7 +292,7 @@ attributes(global) subroutine star_formation_kernel(grid, uold, f, flag1, swap_l
 #endif
 
   ! Number of stars
-  nstar = flag1(global_cell_idx)
+  nstar = flag1(cell_idx, oct_idx)
 
   ! Star mass
   star_mp(star_idx) = real(nstar, 8) * mstar

@@ -592,6 +592,7 @@ contains
   !>
   subroutine gpu_star_formation(sim, ilevel, mstar_loc)
    use nvtx
+   use constants
    use star_device, only: count_site_kernel, count_star_kernel, star_formation_kernel, compute_star_swap_table
    use ramses_commons, only: ramses_t
 #ifndef WITHOUTMPI
@@ -602,7 +603,7 @@ contains
    real(kind=8), intent(inout) :: mstar_loc
 
    real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
-   real(kind=8) :: dx, vol, factG, d0, mstar
+   real(kind=8) :: dx, vol, factG, d0, mstar, n_star, nCOM
    real(kind=dp) :: gamma, smallr, smallc2
    integer(kind=4) :: head_idx, num_octs, head_part, npart_new
    integer(kind=8) :: nstar_new
@@ -622,9 +623,14 @@ contains
    factG = 1.0d0
    if(sim%r%cosmo) factG = 3.0d0/8.0d0/ACOS(-1.0d0) * sim%g%omega_m * sim%g%aexp
 
-   d0 = sim%r%n_star / scale_nH
+   n_star = sim%r%n_star
+   if(sim%r%cosmo)then
+      nCOM = 200.0*sim%g%omega_b*rhoc*(sim%g%h0/100)**2/sim%g%aexp**3/mH
+      n_star = MAX(nCOM,n_star)
+   endif
+   d0 = n_star / scale_nH
    mstar = sim%r%m_star * sim%r%mass_sph
-   mstar_loc =0d0
+   mstar_loc = 0d0
 
    head_idx = sim%m%head(ilevel)
    num_octs = sim%m%noct(ilevel)
@@ -651,8 +657,13 @@ contains
 
    ! Prefix sum to get cumulative SF site count
    ! Get total number of new SF sites (therefore new star particles)
-   call gpu_scan(prefix_sum, (head_idx - 1) * twotondim + 1, num_octs * twotondim, npart_new_d)
+   call gpu_scan(prefix_sum, 1 + (head_idx - 1) * twotondim, num_octs * twotondim, npart_new_d)
    npart_new = npart_new_d
+
+   if(npart_new>0 .or. mstar_loc>0)then
+      write(*,*)'Old star=',sim%g%mass_star_tot,sim%star%npart
+      write(*,*)'New star=',mstar_loc, npart_new
+   endif
 
    if (npart_new > 0) then
 
@@ -685,6 +696,7 @@ contains
 
    ! Update host star particle count
    sim%star%npart = sim%star%npart + npart_new
+   sim%star%npart_tot = sim%star%npart_tot + npart_new
 
   end subroutine gpu_star_formation
 
