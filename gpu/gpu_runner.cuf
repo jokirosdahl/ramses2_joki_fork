@@ -630,6 +630,13 @@ contains
     ! Cooling timestep in seconds (solve_cooling_gpu works in CGS).
     dtcool = sim%g%dtnew(ilevel) * scale_t
 
+!######## DEBUG ########
+    if (sim%g%nstep_coarse <= 2) print *, '######## DEBUG COOLING s=', sim%g%nstep_coarse, &
+         & ' scale_T2=', scale_T2, ' scale_t=', scale_t, ' eos_T2=', sim%r%eos_T2, &
+         & ' dtcool=', dtcool, ' nH_eos=', nH_eos, ' cooling=', sim%r%cooling, &
+         & ' eos_type=', sim%r%eos_type, ' dtnew=', sim%g%dtnew(ilevel)
+!######## DEBUG ########
+
     head_idx = sim%m%head(ilevel)
     num_octs = sim%m%noct(ilevel)
     threadsX_per_block = 8
@@ -647,6 +654,9 @@ contains
        call GPU_Error_Check('gpu_runner.cuf', 455)
        call nvtxEndRange()
     end if
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'cooling:OUT')
+!######## DEBUG ########
 
   end subroutine gpu_cooling
 
