@@ -630,12 +630,13 @@ contains
    endif
    d0 = n_star / scale_nH
    mstar = sim%r%m_star * sim%r%mass_sph
-   mstar_loc = 0d0
 
    head_idx = sim%m%head(ilevel)
    num_octs = sim%m%noct(ilevel)
    num_threads = 256
    num_blocks = (num_octs * twotondim + num_threads - 1) / num_threads
+
+   mstar_loc = 0d0
 
    if (num_octs <= 0) return
 
@@ -653,7 +654,6 @@ contains
    nstar_new_d = 0
    call count_star_kernel<<<num_blocks, num_threads>>>(flag1, head_idx, num_octs, nstar_new_d)
    nstar_new = nstar_new_d
-   mstar_loc = real(nstar_new, 8) * mstar
 
    ! Prefix sum to get cumulative SF site count
    ! Get total number of new SF sites (therefore new star particles)
@@ -666,6 +666,8 @@ contains
    endif
 
    if (npart_new > 0) then
+
+      mstar_loc = real(nstar_new, 8) * mstar
 
       ! Array flag2 contains the parent AMR cell index of each new star
       call compute_star_swap_table<<<num_blocks, num_threads>>>(flag2, prefix_sum, head_idx, num_octs)
