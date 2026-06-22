@@ -697,6 +697,7 @@ contains
    ! Update host star particle count
    sim%star%npart = sim%star%npart + npart_new
    sim%star%npart_tot = sim%star%npart_tot + npart_new
+   sim%star%tailp(sim%r%nlevelmax) = sim%star%tailp(sim%r%nlevelmax) + npart_new
 
   end subroutine gpu_star_formation
 
