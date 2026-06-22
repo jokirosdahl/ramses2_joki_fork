@@ -107,6 +107,48 @@ contains
 
   include 'gpu_scan.cuf'
 
+!######## DEBUG ########
+  !> Localize the turb blow-up: copy a level's active octs to the host and report
+  !> max|momentum|, max|energy| (uold & unew), max|fturb| and the NaN-energy count.
+  !> Prints only for the first few coarse steps. unew is meaningful only after the
+  !> Godunov/set_unew phases. Delete everything between the DEBUG markers.
+  subroutine debug_probe(sim, ilevel, tag)
+    use ramses_commons, only: ramses_t
+    type(ramses_t), intent(in) :: sim
+    integer, intent(in) :: ilevel
+    character(len=*), intent(in) :: tag
+    integer :: h0, n, nbad
+    real(kind=8) :: umom, uene, unmom, unene, fmx
+    real(kind=8), allocatable :: h(:,:,:)
+
+    if (sim%g%nstep_coarse > 2) return
+    h0 = sim%m%head(ilevel); n = sim%m%noct(ilevel)
+    if (n <= 0) return
+
+    allocate(h(size(uold,1), size(uold,2), n))
+    h = uold(:,:,h0:h0+n-1)
+    umom = maxval(abs(h(:,2:4,:)))
+    uene = maxval(abs(h(:,5,:)))
+    nbad = count(h(:,5,:) /= h(:,5,:))
+    h = unew(:,:,h0:h0+n-1)
+    unmom = maxval(abs(h(:,2:4,:)))
+    unene = maxval(abs(h(:,5,:)))
+    deallocate(h)
+
+    fmx = 0d0
+#ifdef TURB
+    allocate(h(size(fturb,1), size(fturb,2), n))
+    h = fturb(:,:,h0:h0+n-1)
+    fmx = maxval(abs(h))
+    deallocate(h)
+#endif
+
+    print '(A,I0,2A,5(A,ES11.3),A,I0)', ' ######## DEBUG s=', sim%g%nstep_coarse, &
+         & ' ', trim(tag), ' |mom|=',umom,' |E|=',uene,' |momN|=',unmom, &
+         & ' |EN|=',unene,' |ft|=',fmx,' nNaN=',nbad
+  end subroutine debug_probe
+!######## DEBUG ########
+
   !> @brief
   !> Compute the new time step on a GPU
   !>
@@ -161,6 +203,13 @@ contains
     eint = h_data(3)
     emag = h_data(4)
     dt = h_data(5)
+
+!######## DEBUG ########
+    if (sim%g%nstep_coarse <= 2) print '(A,I0,A,ES12.4,A,ES12.4,A,ES12.4)', &
+         & ' ######## DEBUG s=', sim%g%nstep_coarse, ' cmpdt dt=', dt, &
+         & ' ekin=', ekin, ' emag=', emag
+    call debug_probe(sim, ilevel, 'cmpdt:EXIT ')
+!######## DEBUG ########
 
     call GPU_Error_Check(__FILE__, __LINE__)
 
@@ -327,11 +376,17 @@ contains
     threadsY_per_block = 16
     num_blocks = (num_octs + threadsY_per_block - 1)/threadsY_per_block
 
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'drive:ENTER')
+!######## DEBUG ########
     call nvtxStartRange("GPU drive_turb", color=0)!green
     call turb_drive_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(grid, uold, &
          & fturb, afield_now_d, d_skip, head_idx, num_octs, dx, boxlen, turb_min_rho)
     call GPU_Error_Check(__FILE__, __LINE__)
     call nvtxEndRange()
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'drive:EXIT ')
+!######## DEBUG ########
 
   end subroutine gpu_drive_turb
 
@@ -364,11 +419,17 @@ contains
     threadsY_per_block = 16
     num_blocks = (num_octs + threadsY_per_block - 1)/threadsY_per_block
 
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'turbhyd:IN ')
+!######## DEBUG ########
     call nvtxStartRange("GPU turb_hydro", color=0)!green
     call turb_hydro_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(uold, fturb, &
          & head_idx, num_octs, smallr, smallc, dteff)
     call GPU_Error_Check(__FILE__, __LINE__)
     call nvtxEndRange()
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'turbhyd:OUT')
+!######## DEBUG ########
 
   end subroutine gpu_turb_hydro
 #endif
@@ -478,6 +539,9 @@ contains
     call GPU_Error_Check(__FILE__, __LINE__)
 #endif
     call nvtxEndRange()
+!######## DEBUG ########
+    call debug_probe(sim, ilevel, 'godunov:OUT')
+!######## DEBUG ########
 
   end subroutine gpu_godunov
 
