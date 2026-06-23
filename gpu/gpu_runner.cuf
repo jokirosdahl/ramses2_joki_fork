@@ -30,6 +30,13 @@ module gpu_runner
   !> Device arrays for face-centred B (MHD).
   real(kind=dp), device, allocatable, dimension(:,:,:) :: bold, bnew
 
+#ifdef TURB
+  !> Turbulent acceleration fields on the device (64^3 x NDIM), generated on the host.
+  real(kind=8), device, allocatable, dimension(:,:,:,:) :: afield_last_d, afield_next_d, afield_now_d
+  !> Per-cell turbulent forcing on the device (mirrors host m%fturb).
+  real(kind=dp), device, allocatable, dimension(:,:,:) :: fturb
+#endif
+
   !> Arrays to hold the gravity variables on the device
   real(kind=dp), device, allocatable, dimension(:,:) :: phi, rho, nref, phi_old
   real(kind=dp), device, allocatable, dimension(:,:,:) :: f
@@ -250,6 +257,118 @@ contains
 
   end subroutine gpu_sync_hydro
 
+#ifdef TURB
+  !> @brief
+  !> Time-interpolate the turbulent acceleration field on the device.
+  !>
+  !> @detail
+  !> afield_now_d = last_tfrac*afield_last_d + next_tfrac*afield_next_d, computed from the
+  !> host turbulence times.
+  !>
+  !> @param[in] sim : The simulation object
+  !>
+  subroutine gpu_turb_interp(sim)
+    use nvtx
+    use turb_device, only: turb_interp_field_kernel
+    use turb_commons, only: TURB_GS
+    use ramses_commons, only: ramses_t
+    type(ramses_t), intent(inout)::sim
+
+    integer(kind=4) :: ntot
+    integer :: num_threads, num_blocks
+    real(kind=8) :: last_tfrac, next_tfrac
+
+    last_tfrac = (sim%g%t - sim%turb%turb_last_time)/sim%turb%turb_dt
+    next_tfrac = 1d0 - last_tfrac
+
+    ntot = ndim*TURB_GS**ndim
+    num_threads = 256
+    num_blocks = (ntot + num_threads - 1)/num_threads
+
+    call nvtxStartRange("GPU turb_interp", color=0)!green
+    ! Pass element references so the flattened (assumed-size) kernel dummies bind to the
+    ! contiguous base address of each field.
+    call turb_interp_field_kernel<<<num_blocks, num_threads>>>(afield_last_d(1,0,0,0), &
+         & afield_next_d(1,0,0,0), afield_now_d(1,0,0,0), last_tfrac, next_tfrac, ntot)
+    call GPU_Error_Check(__FILE__, __LINE__)
+    call nvtxEndRange()
+
+  end subroutine gpu_turb_interp
+
+  !> @brief
+  !> Compute the turbulent driving force on a level, filling fturb.
+  !>
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to drive
+  !>
+  subroutine gpu_drive_turb(sim, ilevel)
+    use nvtx
+    use turb_device, only: turb_drive_kernel
+    use ramses_commons, only: ramses_t
+    type(ramses_t), intent(inout)::sim
+    integer, intent(in)::ilevel
+
+    integer(kind=4) :: head_idx, num_octs
+    integer :: threadsX_per_block, threadsY_per_block, num_blocks
+    real(kind=dp) :: dx, boxlen, turb_min_rho
+
+    dx = sim%r%boxlen/2**ilevel
+    boxlen = sim%r%boxlen
+    turb_min_rho = sim%r%turb_min_rho
+
+    head_idx = sim%m%head(ilevel)
+    num_octs = sim%m%noct(ilevel)
+    if (num_octs == 0) return
+    threadsX_per_block = twotondim
+    threadsY_per_block = 16
+    num_blocks = (num_octs + threadsY_per_block - 1)/threadsY_per_block
+
+    call nvtxStartRange("GPU drive_turb", color=0)!green
+    call turb_drive_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(grid, uold, &
+         & fturb, afield_now_d, d_skip, head_idx, num_octs, dx, boxlen, turb_min_rho)
+    call GPU_Error_Check(__FILE__, __LINE__)
+    call nvtxEndRange()
+
+  end subroutine gpu_drive_turb
+
+  !> @brief
+  !> Apply the turbulent source term to uold on a level.
+  !>
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to update
+  !> @param[in] dteff : The effective time step
+  !>
+  subroutine gpu_turb_hydro(sim, ilevel, dteff)
+    use nvtx
+    use turb_device, only: turb_hydro_kernel
+    use ramses_commons, only: ramses_t
+    type(ramses_t), intent(inout)::sim
+    integer, intent(in)::ilevel
+    real(kind=8)::dteff
+
+    integer(kind=4) :: head_idx, num_octs
+    integer :: threadsX_per_block, threadsY_per_block, num_blocks
+    real(kind=dp) :: smallr, smallc
+
+    smallr = sim%r%smallr
+    smallc = sim%r%smallc
+
+    head_idx = sim%m%head(ilevel)
+    num_octs = sim%m%noct(ilevel)
+    if (num_octs == 0) return
+    threadsX_per_block = twotondim
+    threadsY_per_block = 16
+    num_blocks = (num_octs + threadsY_per_block - 1)/threadsY_per_block
+
+    call nvtxStartRange("GPU turb_hydro", color=0)!green
+    call turb_hydro_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(uold, fturb, &
+         & head_idx, num_octs, smallr, smallc, dteff)
+    call GPU_Error_Check(__FILE__, __LINE__)
+    call nvtxEndRange()
+
+  end subroutine gpu_turb_hydro
+#endif
+
   !> @brief
   !> Predictor step of new hydro variables (unew) due to gravity
   !>
@@ -303,6 +422,7 @@ contains
 #else
     use hydro_device, only: hydro_integrator_kernel
 #endif
+    use hydro_device, only: switch_llf_dmin_d, switch_llf_pmin_d
     use ramses_commons, only: ramses_t
     type(ramses_t), intent(inout)::sim
     integer, intent(in)::ilevel
@@ -326,6 +446,9 @@ contains
     riemann2d = sim%r%riemann2d
     switch_llf_dmin = sim%r%switch_llf_dmin
     switch_llf_pmin = sim%r%switch_llf_pmin
+    ! Publish LLF-switch thresholds to the device for the 1D Riemann path.
+    switch_llf_dmin_d = switch_llf_dmin
+    switch_llf_pmin_d = switch_llf_pmin
     induction = sim%r%induction
 
     head_idx = (sim%m%head(ilevel) - 1) / nsubgridtondim + 1
@@ -469,6 +592,7 @@ contains
   !>
   subroutine gpu_star_formation(sim, ilevel, mstar_loc)
    use nvtx
+   use constants
    use star_device, only: count_site_kernel, count_star_kernel, star_formation_kernel, compute_star_swap_table
    use ramses_commons, only: ramses_t
 #ifndef WITHOUTMPI
@@ -479,12 +603,13 @@ contains
    real(kind=8), intent(inout) :: mstar_loc
 
    real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
-   real(kind=8) :: dx, vol, factG, d0, mstar
+   real(kind=8) :: dx, vol, factG, d0, mstar, n_star, nCOM
    real(kind=dp) :: gamma, smallr, smallc2
-   integer(kind=4) :: head_idx, num_octs, head_part, npart_new
-   integer(kind=8) :: nstar_new
+   integer(kind=4) :: head_idx, num_octs, head_part, head_scan, num_scan
    integer(kind=4) :: num_threads, num_blocks
+   integer(kind=4) :: npart_new
    integer(kind=4), device :: npart_new_d
+   integer(kind=8) :: nstar_new
    integer(kind=8), device :: nstar_new_d
 
    ! Conversion factor from user units to cgs units
@@ -499,21 +624,27 @@ contains
    factG = 1.0d0
    if(sim%r%cosmo) factG = 3.0d0/8.0d0/ACOS(-1.0d0) * sim%g%omega_m * sim%g%aexp
 
-   d0 = sim%r%n_star / scale_nH
+   n_star = sim%r%n_star
+   if(sim%r%cosmo)then
+      nCOM = 200.0*sim%g%omega_b*rhoc*(sim%g%h0/100)**2/sim%g%aexp**3/mH
+      n_star = MAX(nCOM,n_star)
+   endif
+   d0 = n_star / scale_nH
    mstar = sim%r%m_star * sim%r%mass_sph
-   mstar_loc =0d0
 
    head_idx = sim%m%head(ilevel)
    num_octs = sim%m%noct(ilevel)
    num_threads = 256
    num_blocks = (num_octs * twotondim + num_threads - 1) / num_threads
 
+   mstar_loc = 0d0
+
    if (num_octs <= 0) return
 
-   call nvtxStartRange("Count Star Formation Sites", color=3)!blue
-   ! Array flag1 contains the number of new stars formed per AMR cell
+   ! Array flag2 contains the number of new stars formed per AMR cell
    ! Array prefix_sum = 1 if we have a SF site and 0 otherwise.
-   call count_site_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, flag1, prefix_sum, &
+   call nvtxStartRange("Count Star Formation Sites", color=3)!blue
+   call count_site_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, flag2, prefix_sum, &
         & head_idx, num_octs, ilevel, d0, dx, vol, factG, mstar, &
         & sim%r%ivar_refine, sim%r%var_cut_refine, sim%g%dtnew(ilevel), sim%g%texp, &
         & gamma, smallr, smallc2, sim%r%sf_model, sim%r%eps_star, sim%r%sgs_turb, sim%r%iturb)
@@ -521,20 +652,27 @@ contains
    call nvtxEndRange()
 
    ! Get total number of true new stars
-   nstar_new_d = 0
-   call count_star_kernel<<<num_blocks, num_threads>>>(flag1, head_idx, num_octs, nstar_new_d)
+   nstar_new_d = 0_8
+   call count_star_kernel<<<num_blocks, num_threads>>>(flag2, head_idx, num_octs, nstar_new_d)
    nstar_new = nstar_new_d
-   mstar_loc = real(nstar_new, 8) * mstar
+
+   mstar_loc = real(nstar_new, kind=8) * mstar
 
    ! Prefix sum to get cumulative SF site count
    ! Get total number of new SF sites (therefore new star particles)
-   call gpu_scan(prefix_sum, (head_idx - 1) * twotondim + 1, num_octs * twotondim, npart_new_d)
+   head_scan = 1 + (head_idx - 1) * twotondim
+   num_scan = num_octs * twotondim
+   call gpu_scan(prefix_sum, head_scan, num_scan, npart_new_d)
    npart_new = npart_new_d
+
+   if(npart_new > 0 .or. nstar_new > 0)then
+      write(*,*)'New star=',mstar_loc, npart_new
+   endif
 
    if (npart_new > 0) then
 
-      ! Array flag2 contains the parent AMR cell index of each new star
-      call compute_star_swap_table<<<num_blocks, num_threads>>>(flag2, prefix_sum, head_idx, num_octs)
+      ! Array swap_local contains the parent AMR cell index of each new star
+      call compute_star_swap_table<<<num_blocks, num_threads>>>(swap_local, prefix_sum, head_idx, num_octs)
 
       head_part = sim%star%npart + 1
 
@@ -546,10 +684,10 @@ contains
       num_threads = 256
       num_blocks = (npart_new + num_threads - 1) / num_threads
 
-      call nvtxStartRange("Create New Star Particles", color=3)!blue
       ! Pull new star particles from free memory and set properties
       ! Also modifies parent cell gas properties (mass conserving)
-      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag1, flag2, &
+      call nvtxStartRange("Create New Star Particles", color=3)!blue
+      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag2, swap_local, &
            & star_xp, star_vp, star_mp, star_tp, star_zp, star_levelp, star_idp, &
            & head_part, npart_new, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
            & dx, vol, mstar, d_skip, int(sim%r%nstarmax,8), &
@@ -558,10 +696,12 @@ contains
       call GPU_Error_Check(__FILE__, __LINE__)
       call nvtxEndRange()
 
-   endif
+      ! Update host star particle count
+      sim%star%npart = sim%star%npart + npart_new
+      sim%star%npart_tot = sim%star%npart_tot + npart_new
+      sim%star%tailp(sim%r%nlevelmax) = sim%star%tailp(sim%r%nlevelmax) + npart_new
 
-   ! Update host star particle count
-   sim%star%npart = sim%star%npart + npart_new
+   endif
 
   end subroutine gpu_star_formation
 
@@ -1141,10 +1281,11 @@ contains
        if(num_octs > 0)then
           call nvtxStartRange("GPU user_flag", color=2)!yellow
           call hydro_flag_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(flag1, grid, nbor, uold, bold, &
+               & head_idx, num_octs, &
 #ifdef MHD
                & err_grad_b2, floor_b2, err_grad_A, floor_A, err_grad_B, floor_B, err_grad_C, floor_C, &
 #endif
-               & head_idx, num_octs, gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p)
+               & gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p)
           call nvtxEndRange()
        endif
     endif

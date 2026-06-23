@@ -387,7 +387,7 @@ subroutine m_read_params(pst)
   logical::isothermal=.false. ! Force temperature to eos value
   logical::haardt_madau=.false.
   logical::self_shielding=.false.
-  real(kind=8)::J21=0,a_spec=1,z_ave=0,z_reion=8.5
+  real(kind=8)::J21=0,a_spec=1,z_ave=0,z_reion=8.5,cooling_uvb_delta=0.05d0
   integer::eos_type=1 ! 1=isothermal, 2=polytrope, 3=isothermal+polytrope
   real(kind=8)::eos_nH=huge(1d0),eos_index=1,eos_T2=10
   real(kind=8)::T2max=huge(1d0)
@@ -658,6 +658,7 @@ subroutine m_read_params(pst)
   namelist/cooling_params/neq_chem,cooling,metal,isothermal,haardt_madau,J21 &
        & ,eos_type,eos_nH,eos_index,eos_T2, mu_mol, X_H, Y_He &
        & ,a_spec,self_shielding,z_ave,z_reion,T2max,cooling_ism &
+       & ,cooling_uvb_delta &
        & ,isHe, isH2, is_init_xion, neq_Tconst, upload_equilibrium_x &
        & ,rtz_cooling, rtz_equilibrium_test, rtz_include_collisional_ionization &
        & ,rtz_include_photoionization, rtz_include_cosmic_ray_ionization &
@@ -1571,6 +1572,7 @@ subroutine m_read_params(pst)
   s%r%a_spec=a_spec
   s%r%z_ave=z_ave
   s%r%z_reion=z_reion
+  s%r%cooling_uvb_delta=cooling_uvb_delta
   s%r%eos_type=eos_type
   s%r%eos_nH=eos_nH
   s%r%eos_index=eos_index

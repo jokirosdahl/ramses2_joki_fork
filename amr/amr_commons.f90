@@ -315,7 +315,7 @@ module amr_commons
      logical::isothermal=.false.
      logical::haardt_madau=.false.
      logical::self_shielding=.false.
-     real(kind=8)::J21=0d0,a_spec=1d0,z_ave=0d0,z_reion=8.5d0
+     real(kind=8)::J21=0d0,a_spec=1d0,z_ave=0d0,z_reion=8.5d0,cooling_uvb_delta=0.05d0
      integer::eos_type=1 ! 1=isothermal, 2=polytrope, 3=isothermal+polytrope
      real(kind=8)::eos_nH=1d50,eos_index=1d0,eos_T2=10d0
      real(kind=8)::T2max
