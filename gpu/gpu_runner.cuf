@@ -666,7 +666,6 @@ contains
    npart_new = npart_new_d
 
    if(npart_new > 0 .or. nstar_new > 0)then
-      write(*,*)'Old star=',sim%g%mass_star_tot,sim%star%npart
       write(*,*)'New star=',mstar_loc, npart_new
    endif
 
