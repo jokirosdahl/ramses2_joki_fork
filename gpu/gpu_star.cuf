@@ -119,6 +119,7 @@ attributes(global) subroutine count_site_kernel(grid, uold, bold, flag1, prefix_
      if (real(nstar, 8) * mstar > 0.9d0 * mcell) then
         nstar = int(0.9d0 * mcell / mstar)
      endif
+     nstar = max(nstar, 0)
 
   endif
 
