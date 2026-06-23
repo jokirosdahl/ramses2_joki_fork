@@ -605,10 +605,11 @@ contains
    real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
    real(kind=8) :: dx, vol, factG, d0, mstar, n_star, nCOM
    real(kind=dp) :: gamma, smallr, smallc2
-   integer(kind=4) :: head_idx, num_octs, head_part, npart_new
-   integer(kind=8) :: nstar_new
+   integer(kind=4) :: head_idx, num_octs, head_part, head_scan, num_scan
    integer(kind=4) :: num_threads, num_blocks
+   integer(kind=4) :: npart_new
    integer(kind=4), device :: npart_new_d
+   integer(kind=8) :: nstar_new
    integer(kind=8), device :: nstar_new_d
 
    ! Conversion factor from user units to cgs units
@@ -640,10 +641,10 @@ contains
 
    if (num_octs <= 0) return
 
-   call nvtxStartRange("Count Star Formation Sites", color=3)!blue
-   ! Array flag1 contains the number of new stars formed per AMR cell
+   ! Array flag2 contains the number of new stars formed per AMR cell
    ! Array prefix_sum = 1 if we have a SF site and 0 otherwise.
-   call count_site_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, flag1, prefix_sum, &
+   call nvtxStartRange("Count Star Formation Sites", color=3)!blue
+   call count_site_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, flag2, prefix_sum, &
         & head_idx, num_octs, ilevel, d0, dx, vol, factG, mstar, &
         & sim%r%ivar_refine, sim%r%var_cut_refine, sim%g%dtnew(ilevel), sim%g%texp, &
         & gamma, smallr, smallc2, sim%r%sf_model, sim%r%eps_star, sim%r%sgs_turb, sim%r%iturb)
@@ -651,23 +652,25 @@ contains
    call nvtxEndRange()
 
    ! Get total number of true new stars
-   nstar_new_d = 0
-   call count_star_kernel<<<num_blocks, num_threads>>>(flag1, head_idx, num_octs, nstar_new_d)
+   nstar_new_d = 0_8
+   call count_star_kernel<<<num_blocks, num_threads>>>(flag2, head_idx, num_octs, nstar_new_d)
    nstar_new = nstar_new_d
+
+   mstar_loc = real(nstar_new, kind=8) * mstar
 
    ! Prefix sum to get cumulative SF site count
    ! Get total number of new SF sites (therefore new star particles)
-   call gpu_scan(prefix_sum, 1 + (head_idx - 1) * twotondim, num_octs * twotondim, npart_new_d)
+   head_scan = 1 + (head_idx - 1) * twotondim
+   num_scan = num_octs * twotondim
+   call gpu_scan(prefix_sum, head_scan, num_scan, npart_new_d)
    npart_new = npart_new_d
 
-   if(npart_new>0 .or. nstar_new>0)then
+   if(npart_new > 0 .or. nstar_new > 0)then
       write(*,*)'Old star=',sim%g%mass_star_tot,sim%star%npart
-      write(*,*)'New star=',nstar_new, npart_new
+      write(*,*)'New star=',mstar_loc, npart_new
    endif
 
    if (npart_new > 0) then
-
-      mstar_loc = real(nstar_new, kind=8) * mstar
 
       ! Array swap_local contains the parent AMR cell index of each new star
       call compute_star_swap_table<<<num_blocks, num_threads>>>(swap_local, prefix_sum, head_idx, num_octs)
@@ -682,10 +685,10 @@ contains
       num_threads = 256
       num_blocks = (npart_new + num_threads - 1) / num_threads
 
-      call nvtxStartRange("Create New Star Particles", color=3)!blue
       ! Pull new star particles from free memory and set properties
       ! Also modifies parent cell gas properties (mass conserving)
-      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag1, swap_local, &
+      call nvtxStartRange("Create New Star Particles", color=3)!blue
+      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag2, swap_local, &
            & star_xp, star_vp, star_mp, star_tp, star_zp, star_levelp, star_idp, &
            & head_part, npart_new, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
            & dx, vol, mstar, d_skip, int(sim%r%nstarmax,8), &
@@ -694,12 +697,12 @@ contains
       call GPU_Error_Check(__FILE__, __LINE__)
       call nvtxEndRange()
 
-   endif
+      ! Update host star particle count
+      sim%star%npart = sim%star%npart + npart_new
+      sim%star%npart_tot = sim%star%npart_tot + npart_new
+      sim%star%tailp(sim%r%nlevelmax) = sim%star%tailp(sim%r%nlevelmax) + npart_new
 
-   ! Update host star particle count
-   sim%star%npart = sim%star%npart + npart_new
-   sim%star%npart_tot = sim%star%npart_tot + npart_new
-   sim%star%tailp(sim%r%nlevelmax) = sim%star%tailp(sim%r%nlevelmax) + npart_new
+   endif
 
   end subroutine gpu_star_formation
 
