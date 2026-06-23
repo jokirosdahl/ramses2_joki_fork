@@ -165,6 +165,33 @@ module hydro_device
      real(kind=dp), dimension(0:2*nsubgrid, 0:2*nsubgrid, 0:2*nsubgrid-1, 1:4) :: Bz
   end type subgrid_3x3x2edge_corner
 
+  !> @brief
+  !> Aggregate of every resident shared buffer the MHD integrator needs, so the
+  !> whole working set fits in ONE dynamic-shared allocation. At nsubgrid>1 the
+  !> MHD working set (~152 KB FP64 at nsubgrid=2) exceeds the 48 KB static-shared
+  !> hardware cap, which is only reachable as dynamic shared (opt-in carveout).
+  !> hydro_integrator_kernel declares `type(mhd_smem_t), shared :: smem(*)` and
+  !> exposes the members under their original names via `associate`, so the kernel
+  !> body and every device-routine call site are unchanged. gpu_godunov opts into
+  !> the >48 KB carveout (cudaFuncSetAttribute) and passes storage_size(mhd_smem_t)/8
+  !> as the 3rd chevron argument. See nsubgrid_mhd_fix.md (Phase I) / nsubgrid_paper_mhd.md.
+  type, public :: mhd_smem_t
+     type(subgrid_6x6x6cell_primitive)  :: local_subgrid
+#if NVAR>5+NENER
+     real(kind=dp) :: scalar_subgrid(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3, 1:nscalar)
+#endif
+     type(subgrid_3x2x2cell_primitive)  :: left_interfaces_x, right_interfaces_x
+     type(subgrid_2x3x2cell_primitive)  :: left_interfaces_y, right_interfaces_y
+     type(subgrid_2x2x3cell_primitive)  :: left_interfaces_z, right_interfaces_z
+     type(subgrid_face_b_t)             :: bf
+     type(subgrid_2x3x3edge_primitive)  :: emfx
+     type(subgrid_3x2x3edge_primitive)  :: emfy
+     type(subgrid_3x3x2edge_primitive)  :: emfz
+     type(subgrid_2x3x3edge_corner)     :: corner_x
+     type(subgrid_3x2x3edge_corner)     :: corner_y
+     type(subgrid_3x3x2edge_corner)     :: corner_z
+  end type mhd_smem_t
+
 #endif
 
 contains
@@ -3326,6 +3353,15 @@ contains
     real(kind=dp), intent(in), value :: switch_llf_dmin, switch_llf_pmin
     logical, intent(in), value :: induction
 
+#ifdef MHD
+    ! nsubgrid>1 MHD: the entire resident working set (~152 KB FP64 at nsubgrid=2)
+    ! exceeds the 48 KB static-shared hardware cap, so it lives in ONE dynamic
+    ! shared allocation overlaid by mhd_smem_t and exposed under the original
+    ! names via the associate below (kernel body + every call site unchanged).
+    ! gpu_godunov opts into the >48 KB carveout (cudaFuncSetAttribute) and passes
+    ! storage_size(mhd_smem_t)/8 as the 3rd chevron arg. See nsubgrid_mhd_fix.md (Phase I).
+    type(mhd_smem_t), shared :: smem(*)
+#else
     type(subgrid_3x2x2cell_primitive), shared :: left_interfaces_x, right_interfaces_x
     type(subgrid_2x3x2cell_primitive), shared :: left_interfaces_y, right_interfaces_y
     type(subgrid_2x2x3cell_primitive), shared :: left_interfaces_z, right_interfaces_z
@@ -3333,14 +3369,6 @@ contains
 #if NVAR>5+NENER
     real(kind=dp), shared :: scalar_subgrid(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3, 1:nscalar)
 #endif
-#ifdef MHD
-    type(subgrid_face_b_t), shared :: bf
-    type(subgrid_2x3x3edge_primitive), shared :: emfx
-    type(subgrid_3x2x3edge_primitive), shared :: emfy
-    type(subgrid_3x3x2edge_primitive), shared :: emfz
-    type(subgrid_2x3x3edge_corner), shared :: corner_x
-    type(subgrid_3x2x3edge_corner), shared :: corner_y
-    type(subgrid_3x3x2edge_corner), shared :: corner_z
 #endif
     real(kind=dp) :: dtdx
     integer :: block_idx  ! The index of this block, corresponds to the subgrid to load
@@ -3357,6 +3385,20 @@ contains
 
     ! thread guard, probably not needed since num_blocks should always be equal to num_subgrids
     if (block_idx >= num_subgrids) return
+
+#ifdef MHD
+    ! Expose the dynamic-shared MHD working set under the original buffer names,
+    ! so the body below and every device-routine call are byte-for-byte unchanged.
+    associate(local_subgrid => smem(1)%local_subgrid, &
+#if NVAR>5+NENER
+            & scalar_subgrid => smem(1)%scalar_subgrid, &
+#endif
+            & left_interfaces_x => smem(1)%left_interfaces_x, right_interfaces_x => smem(1)%right_interfaces_x, &
+            & left_interfaces_y => smem(1)%left_interfaces_y, right_interfaces_y => smem(1)%right_interfaces_y, &
+            & left_interfaces_z => smem(1)%left_interfaces_z, right_interfaces_z => smem(1)%right_interfaces_z, &
+            & bf => smem(1)%bf, emfx => smem(1)%emfx, emfy => smem(1)%emfy, emfz => smem(1)%emfz, &
+            & corner_x => smem(1)%corner_x, corner_y => smem(1)%corner_y, corner_z => smem(1)%corner_z)
+#endif
 
     ! =======================================================================
     ! Convert from conserved to primitive variables
@@ -3437,6 +3479,10 @@ contains
 #endif
             & head_idx, block_idx, thread_idx, ngridmax, dtdx)
     endif
+
+#ifdef MHD
+    end associate
+#endif
 
   end subroutine hydro_integrator_kernel
 
