@@ -660,17 +660,17 @@ contains
    call gpu_scan(prefix_sum, 1 + (head_idx - 1) * twotondim, num_octs * twotondim, npart_new_d)
    npart_new = npart_new_d
 
-   if(npart_new>0 .or. mstar_loc>0)then
+   if(npart_new>0 .or. nstar_new>0)then
       write(*,*)'Old star=',sim%g%mass_star_tot,sim%star%npart
-      write(*,*)'New star=',mstar_loc, npart_new
+      write(*,*)'New star=',nstar_new, npart_new
    endif
 
    if (npart_new > 0) then
 
-      mstar_loc = real(nstar_new, 8) * mstar
+      mstar_loc = real(nstar_new, kind=8) * mstar
 
-      ! Array flag2 contains the parent AMR cell index of each new star
-      call compute_star_swap_table<<<num_blocks, num_threads>>>(flag2, prefix_sum, head_idx, num_octs)
+      ! Array swap_local contains the parent AMR cell index of each new star
+      call compute_star_swap_table<<<num_blocks, num_threads>>>(swap_local, prefix_sum, head_idx, num_octs)
 
       head_part = sim%star%npart + 1
 
@@ -685,7 +685,7 @@ contains
       call nvtxStartRange("Create New Star Particles", color=3)!blue
       ! Pull new star particles from free memory and set properties
       ! Also modifies parent cell gas properties (mass conserving)
-      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag1, flag2, &
+      call star_formation_kernel<<<num_blocks, num_threads>>>(grid, uold, f, flag1, swap_local, &
            & star_xp, star_vp, star_mp, star_tp, star_zp, star_levelp, star_idp, &
            & head_part, npart_new, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
            & dx, vol, mstar, d_skip, int(sim%r%nstarmax,8), &
