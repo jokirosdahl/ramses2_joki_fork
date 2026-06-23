@@ -1,0 +1,209 @@
+!> GPU thermal feedback CUDA kernels.
+module feedback_device
+  use amr_parameters, only: ndim, twotondim, dp, i8b
+  use hydro_parameters, only: nvar
+  use oct_commons, only: oct
+  use gpu_utils
+  use cudafor
+
+  implicit none
+
+contains
+
+  include 'gpu_hash.cuf'
+
+  !> Select recently formed stars for feedback
+  attributes(global) subroutine select_feedback_stars_kernel(star_tp, prefix_sum, head_idx, num_stars, texp, t_SN, dteff)
+    implicit none
+    real(kind=dp), device :: star_tp(*)
+    integer(kind=4), device :: prefix_sum(*)
+    integer(kind=4), intent(in), value :: head_idx, num_stars
+    real(kind=8), intent(in), value :: texp, t_SN, dteff
+
+    integer :: tid, ipart
+    real(kind=dp) :: birth_time
+
+    tid = (blockIdx%x - 1) * blockDim%x + threadIdx%x - 1
+    if (tid >= num_stars) return
+
+    ipart = head_idx + tid
+    birth_time = star_tp(ipart)
+
+    if (birth_time >= (texp - t_SN - dteff) .and. birth_time < (texp - t_SN)) then
+       prefix_sum(tid + 1) = 1
+    else
+       prefix_sum(tid + 1) = 0
+    endif
+
+  end subroutine select_feedback_stars_kernel
+
+  !> Compute swap table for feedback stars
+  attributes(global) subroutine compute_feedback_swap_table(isp_swap, prefix_sum, head_idx, num_stars)
+    implicit none
+    integer(kind=4), device :: isp_swap(*)
+    integer(kind=4), device :: prefix_sum(*)
+    integer(kind=4), intent(in), value :: head_idx, num_stars
+
+    integer :: tid, ipart
+    integer :: previous_sum, is_selected
+
+    tid = (blockIdx%x - 1) * blockDim%x + threadIdx%x - 1
+    if (tid >= num_stars) return
+
+    ipart = head_idx + tid
+
+    if (tid > 0) then
+       previous_sum = prefix_sum(tid)
+    else
+       previous_sum = 0
+    endif
+
+    is_selected = prefix_sum(tid + 1) - previous_sum
+
+    if (is_selected > 0) then
+       isp_swap(1 + previous_sum) = ipart
+    endif
+
+  end subroutine compute_feedback_swap_table
+
+  !> Perform the thermal feedback updates on the gas cells
+  attributes(global) subroutine thermal_feedback_kernel(grid, uold, unew, &
+       & star_xp, star_vp, star_mp, star_zp, &
+       & isp_swap, num_selected, &
+       & hash_key_d, hash_val_d, hash_size_d, ckey_max_d, key_off_d, &
+       & eta_SNII, yield_SNII, e_SN, metal, imetal, entropy, dual_energy, gamma, &
+       & ientropy, d_skip, dx_loc, vol_loc, ilevel, leading, msn_loc_d)
+    implicit none
+    type(oct), device :: grid(*)
+    real(kind=dp), device :: uold(1:twotondim,1:nvar,*)
+    real(kind=dp), device :: unew(1:twotondim,1:nvar,*)
+    real(kind=dp), device :: star_xp(*)
+    real(kind=dp), device :: star_vp(*)
+    real(kind=dp), device :: star_mp(*)
+    real(kind=dp), device :: star_zp(*)
+    integer(kind=4), device :: isp_swap(*)
+    integer(kind=4), intent(in), value :: num_selected
+    integer(kind=8), device :: hash_key_d(*)
+    integer(kind=4), device :: hash_val_d(*)
+    integer(kind=4), intent(in), value :: hash_size_d
+    integer(kind=4), device :: ckey_max_d(*)
+    integer(kind=8), device :: key_off_d(*)
+    real(kind=8), intent(in), value :: eta_SNII, yield_SNII, e_SN
+    logical, intent(in), value :: metal
+    integer(kind=4), intent(in), value :: imetal
+    logical, intent(in), value :: entropy
+    real(kind=8), intent(in), value :: dual_energy
+    real(kind=dp), intent(in), value :: gamma
+    integer(kind=4), intent(in), value :: ientropy
+    real(kind=8), device :: d_skip(1:3)
+    real(kind=8), intent(in), value :: dx_loc, vol_loc
+    integer(kind=4), intent(in), value :: ilevel
+    integer(kind=8), intent(in), value :: leading
+    real(kind=8), device :: msn_loc_d
+
+    integer :: tid, ipart, igrid, icell, idim, info
+    real(kind=dp) :: mejecta, dloss, ethermal, ekinetic, zloss, dzloss, dold
+    real(kind=dp) :: vol_cell, vp_sum
+    real(kind=8) :: xs, inv_dx_loc, inv_2dx_loc, inv_4dx_loc
+    integer(kind=4) :: ix(1:3), ii(1:3)
+    integer(kind=8) :: ix8, iy8, iz8, nx, offset, key
+
+    tid = (blockIdx%x - 1) * blockDim%x + threadIdx%x - 1
+    if (tid >= num_selected) return
+
+    ! Get the original index of the selected star particle
+    ipart = isp_swap(1 + tid)
+
+    inv_dx_loc  = 1.0_dp / dx_loc
+    inv_2dx_loc = 0.5_dp * inv_dx_loc
+    inv_4dx_loc = 0.25_dp * inv_dx_loc
+
+    ! First try ilevel
+    do idim = 1, ndim
+       xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
+       ix(idim) = floor(xs * inv_2dx_loc)
+    end do
+    ix8 = int(ix(1), kind=8)
+    iy8 = int(ix(2), kind=8)
+    iz8 = int(ix(3), kind=8)
+    nx  = int(ckey_max_d(ilevel), kind=8)
+    offset = key_off_d(ilevel)
+    key = offset + ix8 + iy8*nx + iz8*nx*nx
+    igrid = hash_get(hash_key_d, hash_val_d, hash_size_d, key)
+    vol_cell = vol_loc
+
+    if (igrid /= 0) then
+       do idim = 1, ndim
+          xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
+          ii(idim) = int(xs * inv_dx_loc - 2*ix(idim))
+       end do
+       icell = 1
+       do idim = 1, ndim
+          icell = icell + ii(idim) * 2**(idim-1)
+       end do
+    else
+       ! Try ilevel - 1
+       do idim = 1, ndim
+          xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
+          ix(idim) = floor(xs * inv_4dx_loc)
+       end do
+       ix8 = int(ix(1), kind=8)
+       iy8 = int(ix(2), kind=8)
+       iz8 = int(ix(3), kind=8)
+       nx  = int(ckey_max_d(ilevel - 1), kind=8)
+       offset = key_off_d(ilevel - 1)
+       key = offset + ix8 + iy8*nx + iz8*nx*nx
+       igrid = hash_get(hash_key_d, hash_val_d, hash_size_d, key)
+       vol_cell = vol_loc * 8.0d0
+       
+       if (igrid /= 0) then
+          do idim = 1, ndim
+             xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
+             ii(idim) = int(xs * (0.5d0 * inv_dx_loc) - 2*ix(idim))
+          end do
+          icell = 1
+          do idim = 1, ndim
+             icell = icell + ii(idim) * 2**(idim-1)
+          end do
+       endif
+    endif
+
+    ! If cell not found, or not a leaf cell, we skip
+    if (igrid == 0) return
+    if (grid(igrid)%refined(icell)) return
+
+    ! Compute supernova properties
+    mejecta = eta_SNII * star_mp(ipart)
+    dloss = mejecta / vol_cell
+    ethermal = dloss * e_SN
+    vp_sum = star_vp(ipart)**2 + star_vp(ipart + leading)**2 + star_vp(ipart + 2*leading)**2
+    ekinetic = dloss * 0.5d0 * vp_sum
+    zloss = yield_SNII + (1.0d0 - yield_SNII) * star_zp(ipart)
+    dzloss = dloss * zloss
+
+    ! Update unew using atomic additions
+    info = atomicadd(unew(icell, 1, igrid), dloss)
+    info = atomicadd(unew(icell, 2, igrid), dloss * star_vp(ipart))
+    info = atomicadd(unew(icell, 3, igrid), dloss * star_vp(ipart + leading))
+    info = atomicadd(unew(icell, 4, igrid), dloss * star_vp(ipart + 2*leading))
+    info = atomicadd(unew(icell, 5, igrid), ekinetic + ethermal)
+
+    if (metal) then
+       info = atomicadd(unew(icell, imetal, igrid), dzloss)
+    endif
+
+    ! If dual energy scheme is activated, update entropy
+    if (entropy .and. dual_energy >= 0.0d0) then
+       dold = uold(icell, 1, igrid)
+       info = atomicadd(unew(icell, ientropy, igrid), ethermal / dold**(gamma - 1.0d0) * (gamma - 1.0d0))
+    endif
+
+    ! Update particle mass
+    star_mp(ipart) = star_mp(ipart) - mejecta
+
+    ! Accumulate total ejecta mass
+    info = atomicadd(msn_loc_d, mejecta)
+
+  end subroutine thermal_feedback_kernel
+
+end module feedback_device
