@@ -2,7 +2,7 @@ module turb_device
   use amr_parameters, only: ndim, twotondim, dp
   use hydro_parameters, only: nvar
   use oct_commons, only: oct
-  use turb_commons, only: TURB_GS, turb_gs_real   ! parameters; inline into device code
+  use turb_commons, only: TURB_GS, turb_gs_real
   use cudafor
   implicit none
 

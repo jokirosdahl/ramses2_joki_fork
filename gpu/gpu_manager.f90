@@ -195,7 +195,7 @@ subroutine gpu_turb_init_fields(pst)
   call nvtxStartRange("Copy initial turb fields host to device", color=5)!red
   afield_last_d = pst%s%turb%afield_last
   afield_next_d = pst%s%turb%afield_next
-  afield_now_d  = pst%s%turb%afield_now   ! used by the first drive_turb, before update_turb runs
+  afield_now_d  = pst%s%turb%afield_now
   call GPU_Error_Check(__FILE__, __LINE__)
   call nvtxEndRange()
 
@@ -212,8 +212,8 @@ subroutine gpu_turb_next_field(pst)
   if (.not. allocated(afield_next_d)) return
 
   call nvtxStartRange("Rotate + upload turb afield_next", color=5)!red
-  afield_last_d = afield_next_d                  ! device-to-device rotate
-  afield_next_d = pst%s%turb%afield_next         ! H2D: only the new 'next'
+  afield_last_d = afield_next_d
+  afield_next_d = pst%s%turb%afield_next
   call GPU_Error_Check(__FILE__, __LINE__)
   call nvtxEndRange()
 
