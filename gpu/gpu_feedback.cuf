@@ -395,7 +395,7 @@ contains
 
     integer :: tid, tid_star, lane, ipart, igrid, icell, idim, info, ivar
     integer :: igridn, icelln, level_nbor, cell_level
-    real(kind=dp) :: mejecta, dloss, ekloss, zloss, dzloss, num_sn
+    real(kind=dp) :: mejecta, dloss, ekloss, zloss, dzloss, num_sn, up, vp, wp, d_nei
     real(kind=dp) :: dold, vp_sum, xs, inv_dx_loc, inv_2dx_loc, inv_4dx_loc
     real(kind=dp) :: xcen(3), xnei(3)
     real(kind=dp) :: d, u, v, w, e, ekk, eth, T2, z, q(nvar)
