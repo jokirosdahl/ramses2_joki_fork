@@ -52,12 +52,13 @@ subroutine cr_source_terms(s,ilevel)
   integer,dimension(1:3,1:6),save::shift=reshape(&
        & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
   integer(kind=8),dimension(0:ndim)::hash_key,hash_nbor
-  integer,dimension(1:twondim)::igridn,icelln
+  integer,dimension(1:twondim)::igridn,icelln,refined
   type(msg_large_realdp)::dummy_large_realdp
   real(kind=8),dimension(1:nvector,1:ndim,1:ncrgrp),save::gradecr_loc,gradpcr_loc
   real(kind=8),dimension(1:3)::vs_loc,bloc
 
-  real(kind=8)::pcrg,pcrd,twodx,sqrt3,fred,frotx,froty,frotz,sint,cost,sinp,cosp
+  real(kind=8)::dx, dx_g,dx_d
+  real(kind=8)::pcrg,pcrd,sqrt3,fred,frotx,froty,frotz,sint,cost,sinp,cosp
   real(kind=8)::cr_c_two,dt, va_loc, bdotgradE_loc, norm,bxby, f1, f2, f3
   real(kind=8)::coef_11, coef_12, coef_13, coef_14, coef_21, coef_22
   real(kind=8)::coef_31, coef_33, coef_41, coef_44
@@ -67,7 +68,7 @@ subroutine cr_source_terms(s,ilevel)
   ! -------------------------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
   if(r%verbose.and.g%myid==1)write(*,'("   Entering cr_source_terms for level ",I2)')ilevel
-  twodx = r%boxlen/2**ilevel
+  dx = r%boxlen/2**ilevel/2d0*100.
   cr_c_two = g%cr_c(ilevel)**2
   smallp = r%smallc**2/r%gamma
   dt = g%dtnew(ilevel)
@@ -121,12 +122,14 @@ subroutine cr_source_terms(s,ilevel)
             if(igridp>0)then
               igridn(i_nbor)=igridp
               icelln(i_nbor)=icellp
+              refined(i_nbor) = 0
             else
               hash_nbor(0)=hash_nbor(0)-1
               hash_nbor(1:ndim)=hash_nbor(1:ndim)/2
               call get_parent_cell(s,hash_nbor,igridp,icellp,flush_cache=.false.,fetch_cache=.true.,lock=.true.)
               igridn(i_nbor)=igridp
               icelln(i_nbor)=icellp
+              refined(i_nbor) = 1
             endif
           end do
 
@@ -142,8 +145,10 @@ subroutine cr_source_terms(s,ilevel)
 #ifdef CRS
               pcrg   = max(m%cruold(icellg,iecr,igridg),smallecr)
               pcrd   = max(m%cruold(icelld,iecr,igridd),smallecr)
+              dx_g   = dx+refined(2*idim-1)*dx*0.5
+              dx_d   = dx+refined(2*idim)*dx*0.5
 #endif 
-              gradecr_loc(i,idim,iGrp) = (pcrd-pcrg)/twodx
+              gradecr_loc(i,idim,iGrp) = (pcrd-pcrg)/(dx_g+dx_d)
               gradpcr_loc(i,idim,iGrp) = gradecr_loc(i,idim,iGrp) * (r%cr_gamma(igrp)-1d0)
             end do
           end do
@@ -255,9 +260,9 @@ subroutine cr_source_terms(s,ilevel)
            ! Factor for decoupling CRs from gas at low densities
             f_decouple = MAX(exp(-r%smallr*r%cr_smallr_decouple/m%uold(ind,1,ind_leaf(i))),1d-10)
 
-            sigma_stream = max(1./r%cr_dmax_code &
-               & ,abs(bdotgradE_loc)/3d0 / norm / va_loc / g_grp / max(m%crunew(ind,iecr,ind_leaf(i)),smallecr))
             if(r%cr_streaming_diffusion) then
+               sigma_stream = max(1./r%cr_dmax_code &
+                  & ,abs(bdotgradE_loc)/3d0 / norm / va_loc / g_grp / max(m%crunew(ind,iecr,ind_leaf(i)),smallecr))
                sigma_x = 1./(r%cr_d_code(igrp) + 1./sigma_stream)
             else
                sigma_x = 1./r%cr_d_code(igrp)
@@ -310,7 +315,6 @@ subroutine cr_source_terms(s,ilevel)
             ! Make sure that |F|<=cE/sqrt3 (sqrt3=1 or sqrt(3) for M1 or P1 resp.)
             fred = sqrt(frotx**2+froty**2+frotz**2)/(g%cr_c(ilevel)*new_ec)*sqrt3
             if(fred .gt. 1d0) then
-               !print*,'maybe a problem with fred'
                frotx = frotx/fred ; froty = froty/fred ; frotz = frotz/fred
             endif
 
