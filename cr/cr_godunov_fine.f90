@@ -523,7 +523,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                     end do
                  end do
                  ! Interpolate using cr variables
-                 call interpol_cr(cr1,cr2,r%interpol_var,r%interpol_type)
+                 call interpol_cr(cr1,cr2,r%interpol_type)
 #endif
               endif
 
@@ -605,7 +605,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
         end do
      end do
   end do
-  ! End over octs
+  ! End loop over octs
   end do
 
   !-------------------------------------------------
