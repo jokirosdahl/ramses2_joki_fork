@@ -209,6 +209,7 @@ subroutine m_update_time(pst,ilevel,done)
   call r_broadcast_aexp(pst,in_broadcast_aexp,storage_size(in_broadcast_aexp)/32)
 
   ! Update turbulent driving field
+  call m_timer('hydro - turbulence','start')
   if(r%turb)call r_update_turb(pst)
 
 end associate
