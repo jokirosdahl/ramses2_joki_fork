@@ -1,5 +1,5 @@
 module cooling_fine_module
-  use cooling_module, only: set_table
+  use cooling_module, only: set_table, cooling_needs_update
 #ifdef _CUDA
   use gpu_runner, only: gpu_cooling
   use cooling_device, only: gpu_upload_cooling_table
@@ -34,11 +34,13 @@ recursive subroutine r_cooling_fine(pst,ilevel,input_size)
      ! Compute new cooling table for cosmo runs
 #ifndef RTZ
      if(pst%s%r%cooling.and.ilevel==pst%s%r%levelmin.and.pst%s%r%cosmo)then
-        if(pst%s%g%myid==1)write(*,*)'Computing new cooling table'
-        call set_table(pst%s%cool,dble(pst%s%g%aexp))
+        if (cooling_needs_update(pst%s%cool, dble(pst%s%g%aexp))) then
+           if(pst%s%g%myid==1)write(*,*)'Computing new cooling table'
+           call set_table(pst%s%cool,dble(pst%s%g%aexp))
 #ifdef _CUDA
-        call gpu_upload_cooling_table(pst%s%cool)
+           call gpu_upload_cooling_table(pst%s%cool)
 #endif
+        endif
      endif
 #endif
 

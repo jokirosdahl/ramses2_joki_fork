@@ -38,6 +38,8 @@ contains
           & dble(r%aexp_ini),T2_sim, r%mu_mol)
   endif
 
+  c%uvb_delta = r%cooling_uvb_delta
+
 end subroutine init_cooling
 !###########################################################
 !###########################################################
