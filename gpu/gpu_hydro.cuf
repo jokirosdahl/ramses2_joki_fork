@@ -4150,7 +4150,6 @@ contains
           grav = abs(constant_gravity(1)) + abs(constant_gravity(2)) + abs(constant_gravity(3))
 #endif
 #ifdef TURB
-          ! Turbulent driving acceleration (zero where undriven); mirrors courant_fine.f90.
           grav = grav + abs(fturb(cell_idx,1,oct_idx)) + abs(fturb(cell_idx,2,oct_idx)) + abs(fturb(cell_idx,3,oct_idx))
 #endif
           grav = grav*dx/ctot**2
