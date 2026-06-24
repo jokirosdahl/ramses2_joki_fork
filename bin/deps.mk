@@ -25,14 +25,14 @@ flag_utils.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.
 force_fine.o: multigrid_fine_coarse.o
 godunov_fine.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.o hydro_commons.o hydro_parameters.o marshal.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
 godunov_utils.o: amr_commons.o amr_parameters.o hydro_parameters.o
-gpu_manager.o: mdl.o mdl_commons.o ramses_commons.o
+gpu_manager.o: mdl.o mdl_commons.o ramses_commons.o turb_commons.o
 grav_ana.o: amr_commons.o amr_parameters.o
 hash.o: amr_parameters.o
 hilbert.o: amr_parameters.o
 hydro_commons.o: amr_parameters.o hydro_parameters.o rt_parameters.o
 hydro_flag.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.o hydro_parameters.o nbors_utils.o ramses_commons.o
 hydro_parameters.o: amr_parameters.o
-init_amr.o: amr_commons.o amr_parameters.o hash.o hilbert.o hydro_parameters.o mdl.o mdl_commons.o output_amr.o ramses_commons.o rt_parameters.o
+init_amr.o: amr_commons.o amr_parameters.o hash.o hilbert.o hydro_parameters.o mdl.o mdl_commons.o output_amr.o ramses_commons.o rt_parameters.o turb_commons.o
 init_cooling.o: amr_commons.o cooling_module.o
 init_flow_fine.o: input_hydro_condinit.o input_hydro_gadget.o input_hydro_grafic.o ramses_commons.o
 init_hydro.o: amr_commons.o mdl.o mdl_commons.o ramses_commons.o
@@ -118,8 +118,8 @@ tree_formation.o: amr_commons.o amr_parameters.o cache.o cache_commons.o clfind_
 turb_commons.o: amr_commons.o amr_parameters.o
 turb_driving.o: amr_commons.o amr_parameters.o mdl.o mdl_commons.o ramses_commons.o turb_commons.o
 turb_hydro.o: amr_commons.o amr_parameters.o mdl.o mdl_commons.o ramses_commons.o
-turb_init.o: amr_commons.o mdl.o mdl_commons.o ramses_commons.o turb_commons.o
-turb_update.o: amr_commons.o mdl.o mdl_commons.o ramses_commons.o turb_commons.o
+turb_init.o: amr_commons.o gpu_manager.o mdl.o mdl_commons.o ramses_commons.o turb_commons.o
+turb_update.o: amr_commons.o gpu_manager.o mdl.o mdl_commons.o ramses_commons.o turb_commons.o
 umuscl.o: amr_commons.o amr_parameters.o hydro_parameters.o
 units.o: amr_commons.o amr_parameters.o constants.o
 update_time.o: amr_parameters.o hash.o mdl.o mdl_commons.o ramses_commons.o rt_init_flow_fine.o turb_update.o
@@ -129,12 +129,14 @@ write_gitinfo.o: amr_parameters.o
 write_screen.o: amr_commons.o amr_parameters.o hydro_parameters.o
 
 ifeq ($(COMPILER),NVHPC)
-cooling_fine.o: gpu_runner.o
+cooling_fine.o: gpu_cooling.o gpu_runner.o
 courant_fine.o: gpu_runner.o
+feedback.o: gpu_runner.o
 flag_utils.o: gpu_runner.o gpu_utils.o
 force_fine.o: gpu_runner.o
 godunov_fine.o: gpu_runner.o
-gpu_cooling.o: amr_parameters.o hydro_parameters.o oct_commons.o
+gpu_cooling.o: amr_parameters.o cooling_module.o hydro_parameters.o oct_commons.o
+gpu_feedback.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_flag.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_hilbert.o: amr_parameters.o hilbert.o
 gpu_hydro.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
@@ -145,7 +147,7 @@ gpu_nbor.o: amr_parameters.o gpu_utils.o oct_commons.o
 gpu_part.o: amr_parameters.o cub_module_radix_sort_f.o gpu_refine.o gpu_runner.o gpu_utils.o oct_commons.o ramses_commons.o
 gpu_refine.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_rho.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
-gpu_runner.o: amr_parameters.o cache.o cache_commons.o cub_inclusive_scan_f.o cub_module_radix_sort_f.o gpu_cooling.o gpu_flag.o gpu_hydro.o gpu_mg.o gpu_refine.o gpu_rho.o gpu_star.o gpu_turb.o gpu_utils.o hydro_parameters.o oct_commons.o ramses_commons.o
+gpu_runner.o: amr_parameters.o cache.o cache_commons.o constants.o cub_inclusive_scan_f.o cub_module_radix_sort_f.o gpu_cooling.o gpu_feedback.o gpu_flag.o gpu_hydro.o gpu_mg.o gpu_refine.o gpu_rho.o gpu_star.o gpu_turb.o gpu_utils.o hydro_parameters.o oct_commons.o ramses_commons.o turb_commons.o
 gpu_scan.o: amr_parameters.o
 gpu_star.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_turb.o: amr_parameters.o hydro_parameters.o oct_commons.o turb_commons.o
@@ -163,6 +165,8 @@ rho_fine.o: gpu_part.o gpu_runner.o
 smooth.o: gpu_runner.o
 star_formation.o: gpu_runner.o
 synchro_hydro_fine.o: gpu_runner.o
+turb_driving.o: gpu_runner.o
+turb_hydro.o: gpu_runner.o
 upload.o: gpu_runner.o
 endif
 
