@@ -195,6 +195,7 @@ subroutine gpu_turb_init_fields(pst)
   call nvtxStartRange("Copy initial turb fields host to device", color=5)!red
   afield_last_d = pst%s%turb%afield_last
   afield_next_d = pst%s%turb%afield_next
+  afield_now_d  = pst%s%turb%afield_now
   call GPU_Error_Check(__FILE__, __LINE__)
   call nvtxEndRange()
 
@@ -211,8 +212,8 @@ subroutine gpu_turb_next_field(pst)
   if (.not. allocated(afield_next_d)) return
 
   call nvtxStartRange("Rotate + upload turb afield_next", color=5)!red
-  afield_last_d = afield_next_d                  ! device-to-device rotate
-  afield_next_d = pst%s%turb%afield_next         ! H2D: only the new 'next'
+  afield_last_d = afield_next_d
+  afield_next_d = pst%s%turb%afield_next
   call GPU_Error_Check(__FILE__, __LINE__)
   call nvtxEndRange()
 
@@ -246,7 +247,7 @@ subroutine gpu_update_turb(pst)
   ! Keep the host afield_now in sync for host-side diagnostics.
   last_tfrac = (pst%s%g%t - pst%s%turb%turb_last_time)/pst%s%turb%turb_dt
   next_tfrac = 1d0 - last_tfrac
-  pst%s%turb%afield_now = last_tfrac*pst%s%turb%afield_last + next_tfrac*pst%s%turb%afield_next
+  pst%s%turb%afield_now = next_tfrac*pst%s%turb%afield_last + last_tfrac*pst%s%turb%afield_next
 
 end subroutine gpu_update_turb
 #endif

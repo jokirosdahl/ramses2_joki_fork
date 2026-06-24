@@ -2,7 +2,7 @@ module turb_device
   use amr_parameters, only: ndim, twotondim, dp
   use hydro_parameters, only: nvar
   use oct_commons, only: oct
-  use turb_commons, only: TURB_GS, turb_gs_real   ! parameters; inline into device code
+  use turb_commons, only: TURB_GS, turb_gs_real
   use cudafor
   implicit none
 
@@ -11,7 +11,7 @@ contains
 #ifdef TURB
   !=====================================================================================
   ! Time-interpolation of the acceleration field.
-  ! afield_now = last_tfrac*afield_last + next_tfrac*afield_next, elementwise.
+  ! afield_now = next_tfrac*afield_last + last_tfrac*afield_next, elementwise.
   ! Mirrors the host array statement in turb/turb_update.f90.
   ! Arrays are passed as assumed-size (flattened) -- one thread per element.
   !=====================================================================================
@@ -28,7 +28,7 @@ contains
     i = (blockIdx%x - 1)*blockDim%x + threadIdx%x
     if (i > ntot) return
 
-    afield_now(i) = last_tfrac*afield_last(i) + next_tfrac*afield_next(i)
+    afield_now(i) = next_tfrac*afield_last(i) + last_tfrac*afield_next(i)
 
   end subroutine turb_interp_field_kernel
 
