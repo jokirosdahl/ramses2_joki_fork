@@ -986,7 +986,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
 #endif
 #ifdef RT
   ! Interpolate using rt variables
-  call interpol_rt(rtu1,rtu2,r%interpol_var,r%interpol_type,smallnp)
+  call interpol_rt(rtu1,rtu2,r%interpol_var,r%interpol_type)
   ! Store children cell rt variables
   do ivar=1,nrtvar
      do ind=1,twotondim
@@ -1000,7 +1000,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
 #endif
 #ifdef CRS
   ! Interpolate using CR variables
-  call interpol_cr(cru1,cru2,r%interpol_var,r%interpol_type,smallnp)
+  call interpol_cr(cru1,cru2,r%interpol_var,r%interpol_type)
   ! Store children cell CR variables
   do ivar=1,ncrvar
      do ind=1,twotondim
