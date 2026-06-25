@@ -17,7 +17,7 @@ nsuperoct=0
 &AMR_PARAMS
 levelmin=8
 levelmax=8
-ngridmax=1000000
+ngridmax=3000000
 boxlen=4
 /
 
