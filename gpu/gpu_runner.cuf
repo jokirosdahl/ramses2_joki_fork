@@ -433,7 +433,7 @@ contains
     !
     integer(kind=4) :: head_idx, num_subgrids
     integer :: threads_per_block, num_blocks
-    real(dp) :: dt, dx, gamma, smallr, smallc2, switch_llf_dmin, switch_llf_pmin, etamag
+    real(dp) :: dt, dx, gamma, smallr, smallc2, switch_llf_dmin, switch_llf_pmin
     integer :: slope, riemann, slope_mag, riemann2d
     logical :: induction
 
@@ -454,7 +454,6 @@ contains
     switch_llf_dmin_d = switch_llf_dmin
     switch_llf_pmin_d = switch_llf_pmin
     induction = sim%r%induction
-    etamag = sim%r%etamag
 
     head_idx = (sim%m%head(ilevel) - 1) / nsubgridtondim + 1
     num_subgrids = sim%m%noct(ilevel) / nsubgridtondim
@@ -475,7 +474,7 @@ contains
          & f, father, nbor, &
          & head_idx, num_subgrids, sim%m%ngridmax, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
          & gamma, smallr, smallc2, dt, dx, slope, slope_mag, riemann, riemann2d, &
-         & switch_llf_dmin, switch_llf_pmin, induction, etamag, constant_gravity)
+         & switch_llf_dmin, switch_llf_pmin, induction, constant_gravity)
     call GPU_Error_Check(__FILE__, __LINE__)
 #endif
     call nvtxEndRange()
@@ -728,8 +727,7 @@ contains
 
     real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
     real(kind=8) :: dx, vol, t_SN, e_SN, dteff
-    real(kind=dp) :: gamma
-    real(kind=dp), device :: msn_loc_d
+    real(kind=8), device :: msn_loc_d
     integer(kind=4) :: head_idx, num_stars, num_selected
     integer(kind=4), device :: num_selected_d
     integer(kind=4) :: num_threads, num_blocks
@@ -757,7 +755,6 @@ contains
 
     ! Time step for stars at this level
     dteff=sim%g%dtnew(ilevel)*sim%g%aexp**2
-    gamma = sim%r%gamma
 
     num_threads = 256
     num_blocks = (num_stars + num_threads - 1) / num_threads
@@ -790,7 +787,7 @@ contains
             & isp_swap, num_selected, &
             & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
             & sim%r%eta_SNII, sim%r%yield_SNII, e_SN, sim%r%metal, sim%r%imetal, &
-            & sim%r%entropy, sim%r%dual_energy, gamma, sim%r%ientropy, &
+            & sim%r%entropy, sim%r%dual_energy, sim%r%gamma, sim%r%ientropy, &
             & d_skip, &
             & dx, vol, ilevel, int(sim%r%nstarmax, 8), msn_loc_d)
        call GPU_Error_Check(__FILE__, __LINE__)
@@ -822,8 +819,7 @@ contains
 
     real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
     real(kind=8) :: dx, vol, t_SN, e_SN, dteff, m_SN
-    real(kind=dp) :: gamma
-    real(kind=dp), device :: msn_loc_d
+    real(kind=8), device :: msn_loc_d
     integer(kind=4) :: head_idx, num_stars, num_selected
     integer(kind=4), device :: num_selected_d
     integer(kind=4) :: num_threads, num_blocks
@@ -854,7 +850,6 @@ contains
 
     ! Time step for stars at this level
     dteff=sim%g%dtnew(ilevel)*sim%g%aexp**2
-    gamma = sim%r%gamma
 
     num_threads = 256
     num_blocks = (num_stars + num_threads - 1) / num_threads
@@ -890,7 +885,7 @@ contains
             & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
             & box_ckey_min, box_ckey_max, periodic, &
             & sim%r%eta_SNII, sim%r%yield_SNII, e_SN, m_SN, sim%r%z_ave, scale_nH, &
-            & sim%r%metal, sim%r%imetal, gamma, &
+            & sim%r%metal, sim%r%imetal, sim%r%gamma, &
             & d_skip, &
             & dx, vol, ilevel, int(sim%r%nstarmax, 8), msn_loc_d, sim%r%smallr)
        call GPU_Error_Check(__FILE__, __LINE__)
