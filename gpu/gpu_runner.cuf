@@ -146,7 +146,7 @@ contains
     call nvtxStartRange("GPU cmpdt", color=0)!green
     call cmpdt_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, f, &
         & constant_gravity, head_idx, num_octs, d_data, dx, gamma, &
-        & smallr, smallc2, courant_factor, sim%r%induction, sim%r%etamag &
+        & smallr, smallc2, courant_factor, sim%r%induction &
 #ifdef TURB
         & , fturb &
 #endif
