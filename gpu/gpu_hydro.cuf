@@ -3297,6 +3297,42 @@ contains
 
   end subroutine zero_fine_emf
 
+  attributes(device) subroutine cmpcurrent_mhd(bf, emfx, emfy, emfz, etamag, dx, thread_idx)
+    type(subgrid_face_b_t), intent(in) :: bf
+    type(subgrid_2x3x3edge_primitive), intent(inout) :: emfx
+    type(subgrid_3x2x3edge_primitive), intent(inout) :: emfy
+    type(subgrid_3x3x2edge_primitive), intent(inout) :: emfz
+    real(kind=dp), value :: etamag, dx
+    integer, value :: thread_idx
+    integer :: work_idx, emf_size, I, J, K, X, Y, Z
+    real(kind=dp) :: fact
+
+    emf_size = (2*nsubgrid+1)**2 * (2*nsubgrid)
+    fact = etamag/dx
+
+    do work_idx = thread_idx, emf_size*3 - 1, blockDim%x
+       if (work_idx < emf_size) then
+          call index_1Dto3D(work_idx, 2*nsubgrid+1, 2*nsubgrid+1, I, J, K)
+          X = I+2; Y = J+2; Z = K+2
+          emfz%edge_e(I,J,K) = emfz%edge_e(I,J,K) - fact * &
+               & ( (bf%by(X,Y,Z)-bf%by(X-1,Y,Z)) - (bf%bx(X,Y,Z)-bf%bx(X,Y-1,Z)) )
+       else if (work_idx < 2*emf_size) then
+          call index_1Dto3D(work_idx - emf_size, 2*nsubgrid+1, 2*nsubgrid, I, J, K)
+          X = I+2; Y = J+2; Z = K+2
+          emfy%edge_e(I,J,K) = emfy%edge_e(I,J,K) - fact * &
+               & ( (bf%bx(X,Y,Z)-bf%bx(X,Y,Z-1)) - (bf%bz(X,Y,Z)-bf%bz(X-1,Y,Z)) )
+       else
+          call index_1Dto3D(work_idx - 2*emf_size, 2*nsubgrid, 2*nsubgrid+1, I, J, K)
+          X = I+2; Y = J+2; Z = K+2
+          emfx%edge_e(I,J,K) = emfx%edge_e(I,J,K) - fact * &
+               & ( (bf%bz(X,Y,Z)-bf%bz(X,Y-1,Z)) - (bf%by(X,Y,Z)-bf%by(X,Y,Z-1)) )
+       end if
+    end do
+
+    call syncthreads()
+
+  end subroutine cmpcurrent_mhd
+
   ! Map cache oct to parent coarse cell for coarse/fine corrections.
   attributes(device) subroutine get_cf_cell(nbor, grid, father, subgrid_idx, ngridmax, &
        & di, dj, dk, is_coarse, coct, ccell)
@@ -3332,7 +3368,7 @@ contains
        & f, father, nbor, &
        & head_idx, num_subgrids, ngridmax, ilevel, levelmin, levelmax, &
        & gamma, smallr, smallc2, dt, dx, slope, slope_mag, riemann, riemann2d, &
-       & switch_llf_dmin, switch_llf_pmin, induction, constant_gravity)
+       & switch_llf_dmin, switch_llf_pmin, induction, etamag, constant_gravity)
     type(oct), device :: grid(*)
     integer, device :: father(*)
     integer, device :: nbor(1:subgridsize,*)
@@ -3355,6 +3391,7 @@ contains
     integer, intent(in), value :: riemann2d
     real(kind=dp), intent(in), value :: switch_llf_dmin, switch_llf_pmin
     logical, intent(in), value :: induction
+    real(kind=dp), intent(in), value :: etamag
 
     type(subgrid_3x2x2cell_primitive), shared :: left_interfaces_x, right_interfaces_x
     type(subgrid_2x3x2cell_primitive), shared :: left_interfaces_y, right_interfaces_y
@@ -3435,6 +3472,10 @@ contains
     ! 2D EMF solve from the shared edge-corner buffers -> edge-EMF subgrids
     call cmp_mag_flx_mhd(corner_x, corner_y, corner_z, emfx, emfy, emfz, thread_idx, &
          & gamma, smallr, smallc, switch_llf_dmin, switch_llf_pmin, riemann2d)
+
+    if (etamag > 0.0_dp) then
+       call cmpcurrent_mhd(bf, emfx, emfy, emfz, etamag, dx, thread_idx)
+    endif
 #endif
 
     ! =======================================================================
@@ -4029,7 +4070,7 @@ contains
 
   ! =========================================================================
   attributes(global) subroutine cmpdt_kernel(grid, uold, bold, f, constant_gravity, &
-      & head_idx, num_octs, data_out, dx, gamma, smallr, smallc2, courant_factor, induction &
+      & head_idx, num_octs, data_out, dx, gamma, smallr, smallc2, courant_factor, induction, etamag &
 #ifdef TURB
       & , fturb &
 #endif
@@ -4045,7 +4086,7 @@ contains
     integer(kind=4), intent(in), value :: head_idx
     integer(kind=4), intent(in), value :: num_octs
     real(kind=8), device :: data_out(*) !mass, ekin, eint, emag, dt
-    real(kind=dp), value :: dx, gamma, smallr, smallc2, courant_factor
+    real(kind=dp), value :: dx, gamma, smallr, smallc2, courant_factor, etamag
     logical, value :: induction
 
     type(primitive_t) :: primitive
@@ -4155,6 +4196,9 @@ contains
           grav = grav*dx/ctot**2
           grav = MAX(grav,0.0001d0)
           dt_loc = dx / ctot*(sqrt(1d0+2d0*courant_factor*grav)-1d0)/grav
+#ifdef MHD
+          if (etamag > 0.0_dp) dt_loc = min(dt_loc, courant_factor*dx*dx/(2*ndim*etamag))
+#endif
 
        end if
 
