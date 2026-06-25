@@ -99,10 +99,10 @@ contains
     real(kind=8), intent(in), value :: dx_loc, vol_loc
     integer(kind=4), intent(in), value :: ilevel
     integer(kind=8), intent(in), value :: leading
-    real(kind=dp), device :: msn_loc_d
+    real(kind=8), device :: msn_loc_d
 
     integer :: tid, ipart, igrid, icell, idim, info
-    real(kind=dp) :: mejecta, dloss, ethermal, ekinetic, zloss, dzloss, dold, ds_entropy
+    real(kind=dp) :: mejecta, dloss, ethermal, ekinetic, zloss, dzloss, dold
     real(kind=dp) :: vol_cell, vp_sum
     real(kind=8) :: xs, inv_dx_loc, inv_2dx_loc, inv_4dx_loc
     integer(kind=4) :: ix(1:3), ii(1:3)
@@ -195,8 +195,7 @@ contains
     ! If dual energy scheme is activated, update entropy
     if (entropy .and. dual_energy >= 0.0d0) then
        dold = uold(icell, 1, igrid)
-       ds_entropy = ethermal / dold**(gamma - 1.0d0) * (gamma - 1.0d0)
-       info = atomicadd(unew(icell, ientropy, igrid), ds_entropy)
+       info = atomicadd(unew(icell, ientropy, igrid), ethermal / dold**(gamma - 1.0d0) * (gamma - 1.0d0))
     endif
 
     ! Update particle mass
@@ -277,7 +276,7 @@ contains
     real(kind=8), intent(in), value :: dx_loc, vol_loc
     integer(kind=4), intent(in), value :: ilevel
     integer(kind=8), intent(in), value :: leading
-    real(kind=dp), device :: msn_loc_d
+    real(kind=8), device :: msn_loc_d
     real(kind=8), intent(in), value :: smallr
 
     ! Neighbor coordinate offsets
