@@ -4070,7 +4070,7 @@ contains
 
   ! =========================================================================
   attributes(global) subroutine cmpdt_kernel(grid, uold, bold, f, constant_gravity, &
-      & head_idx, num_octs, data_out, dx, gamma, smallr, smallc2, courant_factor, induction, etamag &
+      & head_idx, num_octs, data_out, dx, gamma, smallr, smallc2, courant_factor, induction &
 #ifdef TURB
       & , fturb &
 #endif
@@ -4086,7 +4086,7 @@ contains
     integer(kind=4), intent(in), value :: head_idx
     integer(kind=4), intent(in), value :: num_octs
     real(kind=8), device :: data_out(*) !mass, ekin, eint, emag, dt
-    real(kind=dp), value :: dx, gamma, smallr, smallc2, courant_factor, etamag
+    real(kind=dp), value :: dx, gamma, smallr, smallc2, courant_factor
     logical, value :: induction
 
     type(primitive_t) :: primitive
@@ -4196,9 +4196,6 @@ contains
           grav = grav*dx/ctot**2
           grav = MAX(grav,0.0001d0)
           dt_loc = dx / ctot*(sqrt(1d0+2d0*courant_factor*grav)-1d0)/grav
-#ifdef MHD
-          if (etamag > 0.0_dp) dt_loc = min(dt_loc, courant_factor*dx*dx/(2*ndim*etamag))
-#endif
 
        end if
 

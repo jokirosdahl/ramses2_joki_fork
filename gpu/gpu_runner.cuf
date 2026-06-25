@@ -124,7 +124,7 @@ contains
 
     integer(kind=4) :: head_idx, num_octs
     integer :: num_threads, num_blocks
-    real(kind=dp) :: gamma, smallr, smallc2, dx, courant_factor, etamag
+    real(kind=dp) :: gamma, smallr, smallc2, dx, courant_factor
     real(kind=8), device, dimension(5) :: d_data !mass, ekin, eint, emag, dt
     real(kind=8), dimension(5) :: h_data
 
@@ -132,7 +132,6 @@ contains
     gamma = sim%r%gamma
     smallr = sim%r%smallr
     smallc2 = sim%r%smallc**2
-    etamag = sim%r%etamag
     dx = sim%r%boxlen/2**ilevel
     dt = courant_factor*dx/sim%r%smallc
 
@@ -147,7 +146,7 @@ contains
     call nvtxStartRange("GPU cmpdt", color=0)!green
     call cmpdt_kernel<<<num_blocks, num_threads>>>(grid, uold, bold, f, &
         & constant_gravity, head_idx, num_octs, d_data, dx, gamma, &
-        & smallr, smallc2, courant_factor, sim%r%induction, etamag &
+        & smallr, smallc2, courant_factor, sim%r%induction &
 #ifdef TURB
         & , fturb &
 #endif

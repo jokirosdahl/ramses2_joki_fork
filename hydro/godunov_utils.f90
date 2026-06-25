@@ -317,13 +317,6 @@ subroutine cmpdt(r,uu,bb,gg,dx,dt)
   dtcell = dx/ctot*(sqrt(one+two*r%courant_factor*grav)-one)/grav
   dt = min(dt,dtcell)
 
-#ifdef MHD
-  if(r%etamag>0.0)then
-     dtcell = r%courant_factor*dx*dx/(2*ndim*r%etamag)
-     dt = min(dt,dtcell)
-  endif
-#endif
-
 end subroutine cmpdt
 !###########################################################
 !###########################################################
