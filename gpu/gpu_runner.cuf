@@ -786,7 +786,7 @@ contains
        call thermal_feedback_kernel<<<num_blocks, num_threads>>>(grid, uold, unew, &
             & star_xp, star_vp, star_mp, star_zp, &
             & isp_swap, num_selected, &
-            & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+            & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, sim%m%ngridmax, &
             & sim%r%eta_SNII, sim%r%yield_SNII, e_SN, sim%r%metal, sim%r%imetal, &
             & sim%r%entropy, sim%r%dual_energy, sim%r%gamma, sim%r%ientropy, &
             & d_skip, &
@@ -883,7 +883,7 @@ contains
        call mechanical_feedback_kernel<<<num_blocks, num_threads>>>(grid, uold, unew, &
             & star_xp, star_vp, star_mp, star_zp, &
             & isp_swap, num_selected, &
-            & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+            & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, sim%m%ngridmax, &
             & box_ckey_min, box_ckey_max, periodic, &
             & sim%r%eta_SNII, sim%r%yield_SNII, e_SN, m_SN, sim%r%z_ave, scale_nH, &
             & sim%r%metal, sim%r%imetal, sim%r%gamma, &
