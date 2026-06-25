@@ -613,6 +613,85 @@ contains
     return
   end function hll_mhd_fluxes
 
+  attributes(device) function upwind_mhd_fluxes(left, right, gamma, smallr, smallc2, zero_flux) result(flux)
+    type(primitive_t), intent(in) :: left, right
+    real(kind=dp), value :: gamma, smallr, smallc2, zero_flux
+    type(conserved_t) :: flux
+    type(primitive_t) :: left_state, right_state
+    type(conserved_t) :: left_state_c, right_state_c, left_fluxes, right_fluxes
+    real(kind=dp) :: smallp, bx_mean, vl, vr, speed
+    real(kind=dp) :: rl, rr, pl, pr, ul, ur, wl, wr
+    real(kind=dp) :: blx, bly, blz, brx, bry, brz
+    real(kind=dp) :: emagl, emagr, ptotl, ptotr, vdotbl, vdotbr
+
+    smallp = smallc2 / gamma
+    left_state = left
+    right_state = right
+    bx_mean = 0.5_dp * (left_state%Bx + right_state%Bx)
+    left_state%Bx = bx_mean
+    right_state%Bx = bx_mean
+    left_state%density = max(left_state%density, smallr)
+    right_state%density = max(right_state%density, smallr)
+    left_state%pressure = max(left_state%pressure, smallp * left_state%density)
+    right_state%pressure = max(right_state%pressure, smallp * right_state%density)
+
+    left_state_c = primitive_2_conserved(left_state, gamma)
+    right_state_c = primitive_2_conserved(right_state, gamma)
+
+    rl = left_state%density; rr = right_state%density
+    ul = left_state%velocity_x; ur = right_state%velocity_x
+    vl = left_state%velocity_y; vr = right_state%velocity_y
+    wl = left_state%velocity_z; wr = right_state%velocity_z
+    pl = left_state%pressure; pr = right_state%pressure
+    blx = left_state%Bx; brx = right_state%Bx
+    bly = left_state%By; bry = right_state%By
+    blz = left_state%Bz; brz = right_state%Bz
+    emagl = compute_emag(blx, bly, blz)
+    emagr = compute_emag(brx, bry, brz)
+    ptotl = pl + emagl
+    ptotr = pr + emagr
+    vdotbl = blx*ul + bly*vl + blz*wl
+    vdotbr = brx*ur + bry*vr + brz*wr
+
+    left_fluxes%density = rl*ul
+    left_fluxes%momentum_x = rl*ul*ul + ptotl - blx*blx
+    left_fluxes%momentum_y = rl*ul*vl - blx*bly
+    left_fluxes%momentum_z = rl*ul*wl - blx*blz
+    left_fluxes%energy = (left_state_c%energy + ptotl)*ul - blx*vdotbl
+    left_fluxes%Bx = 0.0_dp
+    left_fluxes%By = bly*ul - blx*vl
+    left_fluxes%Bz = blz*ul - blx*wl
+
+    right_fluxes%density = rr*ur
+    right_fluxes%momentum_x = rr*ur*ur + ptotr - brx*brx
+    right_fluxes%momentum_y = rr*ur*vr - brx*bry
+    right_fluxes%momentum_z = rr*ur*wr - brx*brz
+    right_fluxes%energy = (right_state_c%energy + ptotr)*ur - brx*vdotbr
+    right_fluxes%Bx = 0.0_dp
+    right_fluxes%By = bry*ur - brx*vr
+    right_fluxes%Bz = brz*ur - brx*wr
+
+    speed = abs(0.5_dp*(ul+ur))
+    flux%density = 0.5_dp*zero_flux*(left_fluxes%density+right_fluxes%density) &
+         & - speed*0.5_dp*(right_state_c%density-left_state_c%density)
+    flux%momentum_x = 0.5_dp*zero_flux*(left_fluxes%momentum_x+right_fluxes%momentum_x) &
+         & - speed*0.5_dp*(right_state_c%momentum_x-left_state_c%momentum_x)
+    flux%momentum_y = 0.5_dp*zero_flux*(left_fluxes%momentum_y+right_fluxes%momentum_y) &
+         & - speed*0.5_dp*(right_state_c%momentum_y-left_state_c%momentum_y)
+    flux%momentum_z = 0.5_dp*zero_flux*(left_fluxes%momentum_z+right_fluxes%momentum_z) &
+         & - speed*0.5_dp*(right_state_c%momentum_z-left_state_c%momentum_z)
+    flux%energy = 0.5_dp*zero_flux*(left_fluxes%energy+right_fluxes%energy) &
+         & - speed*0.5_dp*(right_state_c%energy-left_state_c%energy)
+    flux%Bx = 0.5_dp*zero_flux*(left_fluxes%Bx+right_fluxes%Bx) &
+         & - speed*0.5_dp*(right_state_c%Bx-left_state_c%Bx)
+    flux%By = 0.5_dp*zero_flux*(left_fluxes%By+right_fluxes%By) &
+         & - speed*0.5_dp*(right_state_c%By-left_state_c%By)
+    flux%Bz = 0.5_dp*zero_flux*(left_fluxes%Bz+right_fluxes%Bz) &
+         & - speed*0.5_dp*(right_state_c%Bz-left_state_c%Bz)
+
+    return
+  end function upwind_mhd_fluxes
+
   ! 1D HLLD MHD Riemann flux (Miyoshi & Kusano; x-normal).
   attributes(device) function hlld_mhd_fluxes(left, right, gamma, smallr, smallc2) result(flux)
     type(primitive_t), intent(in) :: left, right
@@ -1020,6 +1099,60 @@ contains
     return
   end function riemann2d_hlld_emf
 
+  attributes(device) function riemann2d_upwind_emf(qLL, qLR, qRL, qRR, gamma, smallr, smallc) result(E)
+    type(primitive_t), intent(in) :: qLL, qLR, qRL, qRR
+    real(kind=dp), value :: gamma, smallr, smallc
+    real(kind=dp) :: E
+    type(primitive_t) :: qleft, qright
+    type(conserved_t) :: fmean_x, fmean_y
+    real(kind=dp) :: ELL, ERL, ELR, ERR
+
+    ELL = qLL%velocity_x*qLL%By - qLL%velocity_y*qLL%Bx
+    ERL = qRL%velocity_x*qRL%By - qRL%velocity_y*qRL%Bx
+    ELR = qLR%velocity_x*qLR%By - qLR%velocity_y*qLR%Bx
+    ERR = qRR%velocity_x*qRR%By - qRR%velocity_y*qRR%Bx
+    E = 0.25_dp*(ELL+ERL+ELR+ERR)
+
+    qleft%density = 0.5_dp*(qLL%density+qLR%density)
+    qright%density = 0.5_dp*(qRR%density+qRL%density)
+    qleft%velocity_x = 0.5_dp*(qLL%velocity_x+qLR%velocity_x)
+    qright%velocity_x = 0.5_dp*(qRR%velocity_x+qRL%velocity_x)
+    qleft%velocity_y = 0.5_dp*(qLL%velocity_y+qLR%velocity_y)
+    qright%velocity_y = 0.5_dp*(qRR%velocity_y+qRL%velocity_y)
+    qleft%velocity_z = 0.5_dp*(qLL%velocity_z+qLR%velocity_z)
+    qright%velocity_z = 0.5_dp*(qRR%velocity_z+qRL%velocity_z)
+    qleft%pressure = 0.5_dp*(qLL%pressure+qLR%pressure)
+    qright%pressure = 0.5_dp*(qRR%pressure+qRL%pressure)
+    qleft%Bx = 0.5_dp*(qLL%Bx+qLR%Bx)
+    qright%Bx = 0.5_dp*(qRR%Bx+qRL%Bx)
+    qleft%By = 0.5_dp*(qLL%By+qLR%By)
+    qright%By = 0.5_dp*(qRR%By+qRL%By)
+    qleft%Bz = 0.5_dp*(qLL%Bz+qLR%Bz)
+    qright%Bz = 0.5_dp*(qRR%Bz+qRL%Bz)
+    fmean_x = upwind_mhd_fluxes(qleft, qright, gamma, smallr, smallc*smallc, 0.0_dp)
+
+    qleft%density = 0.5_dp*(qLL%density+qRL%density)
+    qright%density = 0.5_dp*(qRR%density+qLR%density)
+    qleft%velocity_x = 0.5_dp*(qLL%velocity_y+qRL%velocity_y)
+    qright%velocity_x = 0.5_dp*(qRR%velocity_y+qLR%velocity_y)
+    qleft%velocity_y = 0.5_dp*(qLL%velocity_x+qRL%velocity_x)
+    qright%velocity_y = 0.5_dp*(qRR%velocity_x+qLR%velocity_x)
+    qleft%velocity_z = 0.5_dp*(qLL%velocity_z+qRL%velocity_z)
+    qright%velocity_z = 0.5_dp*(qRR%velocity_z+qLR%velocity_z)
+    qleft%pressure = 0.5_dp*(qLL%pressure+qRL%pressure)
+    qright%pressure = 0.5_dp*(qRR%pressure+qLR%pressure)
+    qleft%Bx = 0.5_dp*(qLL%By+qRL%By)
+    qright%Bx = 0.5_dp*(qRR%By+qLR%By)
+    qleft%By = 0.5_dp*(qLL%Bx+qRL%Bx)
+    qright%By = 0.5_dp*(qRR%Bx+qLR%Bx)
+    qleft%Bz = 0.5_dp*(qLL%Bz+qRL%Bz)
+    qright%Bz = 0.5_dp*(qRR%Bz+qLR%Bz)
+    fmean_y = upwind_mhd_fluxes(qleft, qright, gamma, smallr, smallc*smallc, 0.0_dp)
+
+    E = E + (fmean_x%By - fmean_y%By)
+    return
+  end function riemann2d_upwind_emf
+
   ! Dispatch 2D MHD EMF solver (HLLD, HLLF, else HLL).
   attributes(device) function riemann2d_emf(qLL, qLR, qRL, qRR, gamma, smallr, smallc, &
        & switch_llf_dmin, switch_llf_pmin, riemann2d) result(E)
@@ -1031,6 +1164,8 @@ contains
     if (riemann2d .eq. solver2d_hlld) then
        E = riemann2d_hlld_emf(qLL, qLR, qRL, qRR, gamma, smallr, smallc, &
             & switch_llf_dmin, switch_llf_pmin)
+    else if (riemann2d .eq. solver2d_upwind) then
+       E = riemann2d_upwind_emf(qLL, qLR, qRL, qRR, gamma, smallr, smallc)
     else if (riemann2d .eq. solver2d_hllf) then
        E = riemann2d_hll_emf(qLL, qLR, qRL, qRR, gamma, smallr, smallc)
     else
@@ -2009,6 +2144,8 @@ contains
        flux = hll_mhd_fluxes(left_state_p, right_state_p, gamma, smallr, smallc2, .true.)
     else if (riemann .eq. solver_hll) then
        flux = hll_mhd_fluxes(left_state_p, right_state_p, gamma, smallr, smallc2, .false.)
+    else if (riemann .eq. solver_upwind) then
+       flux = upwind_mhd_fluxes(left_state_p, right_state_p, gamma, smallr, smallc2, 1.0_dp)
     else
        ! Unimplemented 1D solvers fall back to HLL.
        flux = hll_mhd_fluxes(left_state_p, right_state_p, gamma, smallr, smallc2, .false.)   ! fall back to HLL
@@ -2179,6 +2316,10 @@ contains
 #if NVAR>5+NENER
 #ifdef MHD
        call hll_mhd_wavespeeds(left_interface, right_interface, gamma, smallr, smallc2, SL, SR)
+       if (riemann_local .eq. solver_upwind) then
+          SR = abs(0.5_dp*(left_interface%velocity_x + right_interface%velocity_x))
+          SL = -SR
+       endif
        rhoL = max(left_interface%density, smallr)
        rhoR = max(right_interface%density, smallr)
 #else
