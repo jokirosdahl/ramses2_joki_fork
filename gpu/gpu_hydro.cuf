@@ -3154,6 +3154,7 @@ contains
     slop = min(abs(dlft),abs(drgt)); dlim = merge(zero, slop, (dlft*drgt) <= zero)
     db = dsgn*min(dlim,abs(dcen))
   end function face_b_tvd_slope
+#endif
 
   ! Passive-scalar flux matched to the active 1D MHD solver.
   attributes(device) function scalar_flux(riemann, fdens, speed_l, speed_r, rhoL, uL, sL, rhoR, uR, sR) result(fs)
@@ -3193,6 +3194,7 @@ contains
     endif
   end subroutine hll_hydro_wavespeeds
 
+#ifdef MHD
   ! Fast-magnetosonic HLL wave speeds for passive-scalar MHD fluxes.
   attributes(device) subroutine hll_mhd_wavespeeds(left, right, gamma, smallr, smallc2, SL, SR)
     type(primitive_t), intent(in) :: left, right
