@@ -413,10 +413,15 @@ contains
     tid_star = tid / 48
     lane = mod(tid, 48)
 
-    if (tid_star >= num_selected) return
+    if (tid_star < num_selected) then
+       ! Get the original index of the selected star particle
+       ipart = isp_swap(1 + tid_star)
+       ! Compute supernova ejecta mass before any thread modifies star_mp
+       mejecta = eta_SNII * star_mp(ipart)
+    endif
+    call syncthreads()
 
-    ! Get the original index of the selected star particle
-    ipart = isp_swap(1 + tid_star)
+    if (tid_star >= num_selected) return
 
     inv_dx_loc  = 1.0_dp / dx_loc
     inv_2dx_loc = 0.5_dp * inv_dx_loc
@@ -488,7 +493,6 @@ contains
     end do
 
     ! Compute supernova properties
-    mejecta = eta_SNII * star_mp(ipart)
     up = star_vp(ipart)
     vp = star_vp(ipart + leading)
     wp = star_vp(ipart + 2*leading)
