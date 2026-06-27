@@ -607,9 +607,8 @@ end subroutine gather_twondim_parent_stencil
     integer(kind=4), value :: interpol_var, interpol_type
     real(kind=dp), value :: smallr
 
-    integer(kind=4) :: i, j, k, ind, child_idx, ilevel
+    integer(kind=4) :: i, j, k, ind, child_idx, ilevel, ivar
 #ifdef MHD
-    integer(kind=4) :: ivar
     ! Prolongation scratch for parent stencil and children.
     real(kind=dp) :: u1(0:twondim,1:nvar)
     real(kind=dp) :: u2(1:twotondim,1:nvar)
@@ -668,12 +667,10 @@ end subroutine gather_twondim_parent_stencil
 #else
 #ifdef HYDRO
     ! Straight injection for hydro variables
-    do ind = 1, twotondim
-       uold(ind,1,child_idx) = uold(cell_idx,1,oct_idx)
-       uold(ind,2,child_idx) = uold(cell_idx,2,oct_idx)
-       uold(ind,3,child_idx) = uold(cell_idx,3,oct_idx)
-       uold(ind,4,child_idx) = uold(cell_idx,4,oct_idx)
-       uold(ind,5,child_idx) = uold(cell_idx,5,oct_idx)
+    do ivar = 1, nvar
+       do ind = 1, twotondim
+          uold(ind,ivar,child_idx) = uold(cell_idx,ivar,oct_idx)
+       end do
     end do
 #endif
 #endif
@@ -2162,10 +2159,9 @@ end subroutine gather_twondim_parent_stencil
 
     integer(kind=8) :: hkey, parent_key, offset, ix, iy, iz, nx
     integer :: oct_idx, subgrid_idx, thread_idx, block_idx, cache_idx, parent_idx, cell_idx
-    integer :: ind, i, j, k, ilevel, idim
+    integer :: ind, i, j, k, ilevel, idim, ivar
     integer, dimension(1:ndim) :: ckey
 #ifdef MHD
-    integer :: ivar
     ! Prolongation scratch for parent stencil and children.
     real(kind=dp) :: u1(0:twondim,1:nvar)
     real(kind=dp) :: u2(1:twotondim,1:nvar)
@@ -2267,12 +2263,10 @@ end subroutine gather_twondim_parent_stencil
 #else
 #ifdef HYDRO
     ! Straight injection for hydro variables
-    do ind = 1, twotondim
-       uold(ind,1,cache_idx) = uold(cell_idx,1,parent_idx)
-       uold(ind,2,cache_idx) = uold(cell_idx,2,parent_idx)
-       uold(ind,3,cache_idx) = uold(cell_idx,3,parent_idx)
-       uold(ind,4,cache_idx) = uold(cell_idx,4,parent_idx)
-       uold(ind,5,cache_idx) = uold(cell_idx,5,parent_idx)
+    do ivar = 1, nvar
+       do ind = 1, twotondim
+          uold(ind,ivar,cache_idx) = uold(cell_idx,ivar,parent_idx)
+       end do
     end do
 #endif
 #endif
