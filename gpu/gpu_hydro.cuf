@@ -576,12 +576,12 @@ contains
     b2l = compute_bsquared(blx, bly, blz)
     c2l = gamma * pl / rl
     d2l = 0.5_dp * (b2l / rl + c2l)
-    cfleft = sqrt(d2l + sqrt(d2l**2 - c2l * blx * blx / rl))
+    cfleft = sqrt(d2l + sqrt(max(d2l**2 - c2l * blx * blx / rl, 0.0_dp)))   ! floor discriminant (no-op in double; avoids NPRE=4 sqrt(<0)=NaN)
 
     b2r = compute_bsquared(brx, bry, brz)
     c2r = gamma * pr / rr
     d2r = 0.5_dp * (b2r / rr + c2r)
-    cfright = sqrt(d2r + sqrt(d2r**2 - c2r * brx * brx / rr))
+    cfright = sqrt(d2r + sqrt(max(d2r**2 - c2r * brx * brx / rr, 0.0_dp)))
 
     if (llf) then
        ! Local Lax-Friedrich (Rusanov): symmetric maximum signal speed.
@@ -740,9 +740,9 @@ contains
 
     ! Fast magnetosonic speeds (find_speed_fast) using the continuity-enforced A.
     b2l = A*A + Bl*Bl + Cl*Cl; c2l = gamma*Pl/rl; d2l = 0.5_dp*(b2l/rl + c2l)
-    cfastl = sqrt(d2l + sqrt(d2l**2 - c2l*A*A/rl))
+    cfastl = sqrt(d2l + sqrt(max(d2l**2 - c2l*A*A/rl, 0.0_dp)))   ! floor discriminant (no-op in double; avoids NPRE=4 sqrt(<0)=NaN)
     b2r = A*A + Br*Br + Cr*Cr; c2r = gamma*Pr/rr; d2r = 0.5_dp*(b2r/rr + c2r)
-    cfastr = sqrt(d2r + sqrt(d2r**2 - c2r*A*A/rr))
+    cfastr = sqrt(d2r + sqrt(max(d2r**2 - c2r*A*A/rr, 0.0_dp)))
 
     ! HLL wave speeds and star state.
     SL = min(ul, ur) - max(cfastl, cfastr)
@@ -753,6 +753,7 @@ contains
 
     ! Left star region.
     rstarl = rl*(SL - ul)/(SL - ustar)
+    rstarl = max(rstarl, smallr)   ! single-precision floor (no-op in double): keep sqrt/density positive
     estar  = rl*(SL - ul)*(SL - ustar) - A*A
     el     = rl*(SL - ul)*(SL - ul   ) - A*A
     if (abs(estar) < 1e-4_dp*A*A) then
@@ -769,6 +770,7 @@ contains
 
     ! Right star region.
     rstarr = rr*(SR - ur)/(SR - ustar)
+    rstarr = max(rstarr, smallr)   ! single-precision floor (no-op in double): keep sqrt/density positive
     estar  = rr*(SR - ur)*(SR - ustar) - A*A
     er     = rr*(SR - ur)*(SR - ur   ) - A*A
     if (abs(estar) < 1e-4_dp*A*A) then
@@ -869,22 +871,22 @@ contains
     b2LL = compute_bsquared(stateLL%Bx, stateLL%By, stateLL%Bz)
     c2LL = gamma * stateLL%pressure / stateLL%density
     d2LL = 0.5_dp * (b2LL / stateLL%density + c2LL)
-    cLLx = sqrt(d2LL + sqrt(d2LL**2 - c2LL * stateLL%Bx * stateLL%Bx / stateLL%density))
+    cLLx = sqrt(d2LL + sqrt(max(d2LL**2 - c2LL * stateLL%Bx * stateLL%Bx / stateLL%density, 0.0_dp)))
 
     b2LR = compute_bsquared(stateLR%Bx, stateLR%By, stateLR%Bz)
     c2LR = gamma * stateLR%pressure / stateLR%density
     d2LR = 0.5_dp * (b2LR / stateLR%density + c2LR)
-    cLRx = sqrt(d2LR + sqrt(d2LR**2 - c2LR * stateLR%Bx * stateLR%Bx / stateLR%density))
+    cLRx = sqrt(d2LR + sqrt(max(d2LR**2 - c2LR * stateLR%Bx * stateLR%Bx / stateLR%density, 0.0_dp)))
 
     b2RL = compute_bsquared(stateRL%Bx, stateRL%By, stateRL%Bz)
     c2RL = gamma * stateRL%pressure / stateRL%density
     d2RL = 0.5_dp * (b2RL / stateRL%density + c2RL)
-    cRLx = sqrt(d2RL + sqrt(d2RL**2 - c2RL * stateRL%Bx * stateRL%Bx / stateRL%density))
+    cRLx = sqrt(d2RL + sqrt(max(d2RL**2 - c2RL * stateRL%Bx * stateRL%Bx / stateRL%density, 0.0_dp)))
 
     b2RR = compute_bsquared(stateRR%Bx, stateRR%By, stateRR%Bz)
     c2RR = gamma * stateRR%pressure / stateRR%density
     d2RR = 0.5_dp * (b2RR / stateRR%density + c2RR)
-    cRRx = sqrt(d2RR + sqrt(d2RR**2 - c2RR * stateRR%Bx * stateRR%Bx / stateRR%density))
+    cRRx = sqrt(d2RR + sqrt(max(d2RR**2 - c2RR * stateRR%Bx * stateRR%Bx / stateRR%density, 0.0_dp)))
 
     ! Compute 4 fast magnetosonic velocities relative to y direction.
     vLL = stateLL%velocity_y
@@ -892,10 +894,10 @@ contains
     vRL = stateRL%velocity_y
     vRR = stateRR%velocity_y
 
-    cLLy = sqrt(d2LL + sqrt(d2LL**2 - c2LL * stateLL%By * stateLL%By / stateLL%density))
-    cLRy = sqrt(d2LR + sqrt(d2LR**2 - c2LR * stateLR%By * stateLR%By / stateLR%density))
-    cRLy = sqrt(d2RL + sqrt(d2RL**2 - c2RL * stateRL%By * stateRL%By / stateRL%density))
-    cRRy = sqrt(d2RR + sqrt(d2RR**2 - c2RR * stateRR%By * stateRR%By / stateRR%density))
+    cLLy = sqrt(d2LL + sqrt(max(d2LL**2 - c2LL * stateLL%By * stateLL%By / stateLL%density, 0.0_dp)))
+    cLRy = sqrt(d2LR + sqrt(max(d2LR**2 - c2LR * stateLR%By * stateLR%By / stateLR%density, 0.0_dp)))
+    cRLy = sqrt(d2RL + sqrt(max(d2RL**2 - c2RL * stateRL%By * stateRL%By / stateRL%density, 0.0_dp)))
+    cRRy = sqrt(d2RR + sqrt(max(d2RR**2 - c2RR * stateRR%By * stateRR%By / stateRR%density, 0.0_dp)))
 
     SL = min(min(uLL, uLR, uRL, uRR) - max(cLLx, cLRx, cRLx, cRRx), 0.0_dp)
     SR = max(max(uLL, uLR, uRL, uRR) + max(cLLx, cLRx, cRLx, cRRx), 0.0_dp)
@@ -971,22 +973,26 @@ contains
     uRR = stateRR%velocity_x; vRR = stateRR%velocity_y
     ARR = stateRR%Bx; BRR = stateRR%By; CRR = stateRR%Bz
 
+    ! Fast-magnetosonic speeds. The inner discriminant d2**2 - c2*B_par**2/rho is
+    ! >= 0 analytically, but at NPRE=4 it rounds slightly negative when the
+    ! transverse field is small (OT current sheets), giving sqrt(<0)=NaN that
+    ! propagates into the wave speeds and EMF. max(.,0) is an exact no-op in double.
     b2LL = compute_bsquared(ALL, BLL, CLL); c2LL = gamma*pLL/rLL
     d2LL = 0.5_dp*(b2LL/rLL + c2LL)
-    cfastLLx = sqrt(d2LL + sqrt(d2LL**2 - c2LL*ALL*ALL/rLL))
-    cfastLLy = sqrt(d2LL + sqrt(d2LL**2 - c2LL*BLL*BLL/rLL))
+    cfastLLx = sqrt(d2LL + sqrt(max(d2LL**2 - c2LL*ALL*ALL/rLL, 0.0_dp)))
+    cfastLLy = sqrt(d2LL + sqrt(max(d2LL**2 - c2LL*BLL*BLL/rLL, 0.0_dp)))
     b2LR = compute_bsquared(ALR, BLR, CLR); c2LR = gamma*pLR/rLR
     d2LR = 0.5_dp*(b2LR/rLR + c2LR)
-    cfastLRx = sqrt(d2LR + sqrt(d2LR**2 - c2LR*ALR*ALR/rLR))
-    cfastLRy = sqrt(d2LR + sqrt(d2LR**2 - c2LR*BLR*BLR/rLR))
+    cfastLRx = sqrt(d2LR + sqrt(max(d2LR**2 - c2LR*ALR*ALR/rLR, 0.0_dp)))
+    cfastLRy = sqrt(d2LR + sqrt(max(d2LR**2 - c2LR*BLR*BLR/rLR, 0.0_dp)))
     b2RL = compute_bsquared(ARL, BRL, CRL); c2RL = gamma*pRL/rRL
     d2RL = 0.5_dp*(b2RL/rRL + c2RL)
-    cfastRLx = sqrt(d2RL + sqrt(d2RL**2 - c2RL*ARL*ARL/rRL))
-    cfastRLy = sqrt(d2RL + sqrt(d2RL**2 - c2RL*BRL*BRL/rRL))
+    cfastRLx = sqrt(d2RL + sqrt(max(d2RL**2 - c2RL*ARL*ARL/rRL, 0.0_dp)))
+    cfastRLy = sqrt(d2RL + sqrt(max(d2RL**2 - c2RL*BRL*BRL/rRL, 0.0_dp)))
     b2RR = compute_bsquared(ARR, BRR, CRR); c2RR = gamma*pRR/rRR
     d2RR = 0.5_dp*(b2RR/rRR + c2RR)
-    cfastRRx = sqrt(d2RR + sqrt(d2RR**2 - c2RR*ARR*ARR/rRR))
-    cfastRRy = sqrt(d2RR + sqrt(d2RR**2 - c2RR*BRR*BRR/rRR))
+    cfastRRx = sqrt(d2RR + sqrt(max(d2RR**2 - c2RR*ARR*ARR/rRR, 0.0_dp)))
+    cfastRRy = sqrt(d2RR + sqrt(max(d2RR**2 - c2RR*BRR*BRR/rRR, 0.0_dp)))
 
     SL = min(uLL, uLR, uRL, uRR) - max(cfastLLx, cfastLRx, cfastRLx, cfastRRx)
     SR = max(uLL, uLR, uRL, uRR) + max(cfastLLx, cfastLRx, cfastRLx, cfastRRx)
@@ -1054,6 +1060,16 @@ contains
     EstarRRy = uRR*BRR - vstar*AstarRR
     EstarRR  = ustar*BstarRR - vstar*AstarRR
 
+    ! Single-precision robustness: the star-region densities below feed sqrt() and
+    ! must stay positive. In double precision they are always > 0 so these floors
+    ! are an exact no-op; at NPRE=4 round-off can drive a marginal state slightly
+    ! negative, giving sqrt(<0)=NaN that then poisons the EMF / face-B / emag.
+    rstarLLx = max(rstarLLx, smallr); rstarLRx = max(rstarLRx, smallr)
+    rstarRLx = max(rstarRLx, smallr); rstarRRx = max(rstarRRx, smallr)
+    rstarLLy = max(rstarLLy, smallr); rstarLRy = max(rstarLRy, smallr)
+    rstarRLy = max(rstarRLy, smallr); rstarRRy = max(rstarRRy, smallr)
+    rstarLL  = max(rstarLL,  smallr); rstarLR  = max(rstarLR,  smallr)
+    rstarRL  = max(rstarRL,  smallr); rstarRR  = max(rstarRR,  smallr)
     calfvenL = max(abs(ALR)/sqrt(rstarLRx), abs(AstarLR)/sqrt(rstarLR), &
          &         abs(ALL)/sqrt(rstarLLx), abs(AstarLL)/sqrt(rstarLL), smallc)
     calfvenR = max(abs(ARR)/sqrt(rstarRRx), abs(AstarRR)/sqrt(rstarRR), &
@@ -3213,9 +3229,9 @@ contains
     bly = left%By;  blz = left%Bz
     bry = right%By; brz = right%Bz
     b2l = compute_bsquared(blx, bly, blz); c2l = gamma*pl/rl
-    d2l = 0.5_dp*(b2l/rl + c2l); cfleft = sqrt(d2l + sqrt(d2l**2 - c2l*blx*blx/rl))
+    d2l = 0.5_dp*(b2l/rl + c2l); cfleft = sqrt(d2l + sqrt(max(d2l**2 - c2l*blx*blx/rl, 0.0_dp)))
     b2r = compute_bsquared(brx, bry, brz); c2r = gamma*pr/rr
-    d2r = 0.5_dp*(b2r/rr + c2r); cfright = sqrt(d2r + sqrt(d2r**2 - c2r*brx*brx/rr))
+    d2r = 0.5_dp*(b2r/rr + c2r); cfright = sqrt(d2r + sqrt(max(d2r**2 - c2r*brx*brx/rr, 0.0_dp)))
     SL = min(min(ul, ur) - max(cfleft, cfright), 0.0_dp)
     SR = max(max(ul, ur) + max(cfleft, cfright), 0.0_dp)
   end subroutine hll_mhd_wavespeeds
