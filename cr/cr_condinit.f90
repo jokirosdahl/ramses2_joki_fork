@@ -26,10 +26,13 @@ subroutine cr_condinit(r,g,x,q,dx,nn)
   ! Add here, if you wish, some user-defined initial conditions
   ! ........
   if(r%cr_test_setup=='none') return
-  if(r%cr_test_setup=='1d_diffusion') then
+  if(r%cr_test_setup=='diffusion') then
     q(1:nn,1)=exp(-40d0*(x(1:nn,1)-r%box_size(1)*0.5d0)**2)
-  else if(r%cr_test_setup=='1d_streaming') then
-    q(1:nn,1)=exp(-40d0*(x(1:nn,1)-r%box_size(1)*0.5d0)**2)
+  else if(r%cr_test_setup=='streaming_triangle') then
+     q(1:nn,1)=2d0-1d0*sqrt((x(1:nn,1)-r%box_size(1)*0.5d0)**2)
+     !q(1:nn,1+1)=q(1:nn,1)*4d0/3d0*q(1:nn,2)
   endif
+
+
 
 end subroutine cr_condinit
