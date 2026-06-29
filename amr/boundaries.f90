@@ -85,6 +85,9 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
   real(kind=8),dimension(1:nvector,1:ndim)::ff
   real(kind=8),dimension(1:nvector)::phi
   real(kind=8)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
+#ifdef CRS
+  real(kind=8),dimension(1:nvector,1:ncrvar)::cruu
+#endif
 
   type = r%bound_type(ibound)
   dir = r%bound_dir(ibound)
@@ -429,6 +432,21 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
            m%uold(ind,ivar,igrid)=uu(1,ivar)
         end do
      end do
+
+#ifdef CRS
+     do ind=1,twotondim
+        do idim=1,ndim
+           nstride=2**(idim-1)
+           xx(1,idim)=(2*m%grid(igrid)%ckey(idim)+MOD((ind-1)/nstride,2)+0.5)*dx-m%skip(idim)
+        end do
+        ! Call initial condition routine
+        call cr_boundana(r,g,xx,cruu,dx,ibound,1)
+        ! Scatter variables to main memory
+        do ivar=1,ncrvar
+           m%cruold(ind,ivar,igrid)=cruu(1,ivar)
+        end do
+     end do
+#endif
 
   endif
 
