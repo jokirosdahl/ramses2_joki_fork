@@ -68,7 +68,7 @@ subroutine cr_source_terms(s,ilevel)
   ! -------------------------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
   if(r%verbose.and.g%myid==1)write(*,'("   Entering cr_source_terms for level ",I2)')ilevel
-  dx = r%boxlen/2**ilevel/2d0*100.
+  dx = r%boxlen/2**ilevel
   cr_c_two = g%cr_c(ilevel)**2
   smallp = r%smallc**2/r%gamma
   dt = g%dtnew(ilevel)
@@ -173,11 +173,11 @@ subroutine cr_source_terms(s,ilevel)
           va_loc = sqrt(va_loc)
           norm = max(sqrt(norm),1d-30)
 
-          !if(v_alfven.gt.0.) then
-          !  vs_loc(i,:) = 0. 
-          ! vs_loc(i,1) = v_alfven
-          !  va_loc(i) = v_alfven
-          !endif
+          if(r%cr_v_alfven.gt.0d0) then
+            vs_loc(:) = 0d0
+            vs_loc(1) = r%cr_v_alfven
+            va_loc = r%cr_v_alfven
+          endif
 
           bxby = sqrt(bloc(1)**2+bloc(2)**2)
           if(norm.gt.1e-10) then
@@ -253,9 +253,6 @@ subroutine cr_source_terms(s,ilevel)
             rhs2 = frotx
             rhs3 = froty
             rhs4 = frotz
-            if(abs(rhs2).lt.1e-10*smallecr) rhs2=0d0
-            if(abs(rhs3).lt.1e-10*smallecr) rhs3=0d0
-            if(abs(rhs4).lt.1e-10*smallecr) rhs4=0d0
 
            ! Factor for decoupling CRs from gas at low densities
             f_decouple = MAX(exp(-r%smallr*r%cr_smallr_decouple/m%uold(ind,1,ind_leaf(i))),1d-10)
@@ -305,8 +302,8 @@ subroutine cr_source_terms(s,ilevel)
             if ( m%crunew(ind,iecr,ind_leaf(i)) .lt. smallecr ) m%crunew(ind,iecr,ind_leaf(i)) = smallecr
             ! Thermal energy update:
             if(.not. r%static_gas) then
-               m%unew(ind,5,ind_leaf(i)) = m%unew(ind,5,ind_leaf(i)) - (m%crunew(ind,iecr,ind_leaf(i)) - old_ec)*f_decouple
-               m%unew(ind,5,ind_leaf(i)) = max(smallp*m%uold(ind,1,ind_leaf(i)), m%unew(ind,5,ind_leaf(i)))
+               m%uold(ind,5,ind_leaf(i)) = m%uold(ind,5,ind_leaf(i)) - (m%crunew(ind,iecr,ind_leaf(i)) - old_ec)*f_decouple
+               m%uold(ind,5,ind_leaf(i)) = max(smallp*m%uold(ind,1,ind_leaf(i)), m%uold(ind,5,ind_leaf(i)))
             endif
             frotx = (rhs2 - coef_21 * new_ec)/coef_22
             froty = (rhs3 - coef_31 * new_ec)/coef_33
@@ -325,20 +322,20 @@ subroutine cr_source_terms(s,ilevel)
             ! Momentum update
             if(.not. r%static_gas) then
                mom_change = -gradpcr_loc(i,1,iGrp)*dt
-               m%unew(ind,2,ind_leaf(i)) = m%unew(ind,2,ind_leaf(i)) + mom_change*f_decouple
+               m%uold(ind,2,ind_leaf(i)) = m%uold(ind,2,ind_leaf(i)) + mom_change*f_decouple
             endif
 #if NDIM>1
             m%crunew(ind,iecr+2,ind_leaf(i)) = froty
             if(.not. r%static_gas) then
                mom_change = -gradpcr_loc(i,2,igrp)*dt
-               m%unew(ind,3,ind_leaf(i)) = m%unew(ind,3,ind_leaf(i)) + mom_change*f_decouple
+               m%uold(ind,3,ind_leaf(i)) = m%uold(ind,3,ind_leaf(i)) + mom_change*f_decouple
             endif
 #endif
 #if NDIM>2
             m%crunew(ind,iecr+3,ind_leaf(i)) = frotz
             if(.not. r%static_gas) then
                mom_change = -gradpcr_loc(i,3,igrp)*dt
-               m%unew(ind,4,ind_leaf(i)) = m%unew(ind,4,ind_leaf(i)) + mom_change*f_decouple
+               m%uold(ind,4,ind_leaf(i)) = m%uold(ind,4,ind_leaf(i)) + mom_change*f_decouple
             endif
 #endif
           end do ! End loop over groups

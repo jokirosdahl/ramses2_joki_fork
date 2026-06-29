@@ -165,7 +165,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 
      va=0.
      if(r%cr_streaming_diffusion) va=norm/sqrt(kcr%uloc(i,j,k,1))
-     if(r%cr_streaming_diffusion .and. r%v_alfven(iGrp).gt.0.0) va = r%v_alfven(iGrp)
+     if(r%cr_streaming_diffusion .and. r%cr_v_alfven.gt.0.0) va = r%cr_v_alfven
 
      ! Calculate grad Pcr
      gradEcr(1) = (kcr%cruloc(i+1,j  ,k  ,icrE) - kcr%cruloc(i-1,j  ,k  ,icrE)) * twodx_inv

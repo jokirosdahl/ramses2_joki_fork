@@ -34,16 +34,17 @@ subroutine m_read_cr_params(pst)
   logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
   logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
   real(kind=8)::cr_c_fraction=1.0
-  real(kind=8)::cr_dmax=1.0               ! Max CR streaming diffusion coefficient in cgs   !
+  real(kind=8)::cr_dmax=1d30              ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
   real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
   real(kind=8)::cr_varc_fudge=3.0
   real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
+  character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
   real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29
   real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp CR diffusion suppression  !
   real(kind=8),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
   real(kind=8),dimension(1:ncrgrp)::fecr=0d0               ! SN fraction of CR energy       !
-  real(kind=8),dimension(1:ncrgrp)::v_alfven=0.0 ! For idealised tests
+  real(kind=8)::cr_v_alfven=0.0           ! For idealised tests
 
   ! CR source regions parameters----------------------------------------------------------
   integer                           ::cr_nsource=0
@@ -69,9 +70,9 @@ subroutine m_read_cr_params(pst)
        & ,cr_cooling, cr_isotropic_pressure, cr_varc, cr_varc_vdvs       &
        & ,cr_reduced_flux_correction, cr_c_fraction, cr_dmax             &
        & ,cr_nsubcycle, cr_courant_factor, cr_varc_fudge                 &
-       & ,cr_smallr_decouple
+       & ,cr_smallr_decouple, cr_test_setup, cr_v_alfven
 
-  namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr, v_alfven 
+  namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr
 
   namelist/cr_sources/cr_nsource, cr_source_type                         &
        & ,cr_src_x_center, cr_src_y_center, cr_src_z_center              &
@@ -132,12 +133,13 @@ subroutine m_read_cr_params(pst)
   s%r%cr_courant_factor=cr_courant_factor
   s%r%cr_varc_fudge=cr_varc_fudge
   s%r%cr_smallr_decouple=cr_smallr_decouple
+  s%r%cr_test_setup=cr_test_setup
 
   s%r%cr_d=cr_d
   s%r%cr_d_perp_factors=cr_d_perp_factors
   s%r%cr_gamma=cr_gamma
   s%r%fecr=fecr
-  s%r%v_alfven=v_alfven
+  s%r%cr_v_alfven=cr_v_alfven
 
   s%r%cr_nsource=cr_nsource
   s%r%cr_source_type=cr_source_type
