@@ -145,8 +145,6 @@ end subroutine r_transfer_grid_host
 !###########################################################
 !###########################################################
 !###########################################################
-#ifdef _CUDA
-!> D→H particle copy at host I/O boundaries.
 subroutine gpu_to_host_part(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -179,12 +177,9 @@ subroutine gpu_to_host_part(pst)
   call nvtxEndRange()
 
 end subroutine gpu_to_host_part
-#endif
 !###########################################################
 !###########################################################
 !###########################################################
-#if defined(_CUDA) && defined(TURB)
-!> One-time seed of both device turbulence fields from the host (after init_turb).
 subroutine gpu_turb_init_fields(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -203,7 +198,6 @@ end subroutine gpu_turb_init_fields
 !###########################################################
 !###########################################################
 !###########################################################
-!> Device-side companion to turb_next_field.
 subroutine gpu_turb_next_field(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -221,9 +215,6 @@ end subroutine gpu_turb_next_field
 !###########################################################
 !###########################################################
 !###########################################################
-!> GPU turbulence update:
-!> generate new field(s) on the host as time advances, mirror to the device, and
-!> time-interpolate afield_now on the device. The host afield_now is also updated.
 subroutine gpu_update_turb(pst)
   use ramses_commons, only: pst_t
   use turb_commons, only: turb_next_field
@@ -250,7 +241,6 @@ subroutine gpu_update_turb(pst)
   pst%s%turb%afield_now = next_tfrac*pst%s%turb%afield_last + last_tfrac*pst%s%turb%afield_next
 
 end subroutine gpu_update_turb
-#endif
 !###########################################################
 !###########################################################
 !###########################################################

@@ -57,7 +57,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
   real(kind=8),allocatable,dimension(:,:,:)::init_array
   real(kind=4),allocatable,dimension(:,:)::init_plane
 
-  logical::error,ok_file3
+  logical::error,ok_file,ok_velb
   character(LEN=80)::filename
   character(LEN=5)::ncharvar
 
@@ -133,9 +133,27 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
      if(r%cosmo)then
         ! Read baryons initial overdensity and displacement at a=aexp
         if(ivar==1)filename=TRIM(r%initfile(ilevel))//'/ic_deltab'
-        if(ivar==2)filename=TRIM(r%initfile(ilevel))//'/ic_velcx'
-        if(ivar==3)filename=TRIM(r%initfile(ilevel))//'/ic_velcy'
-        if(ivar==4)filename=TRIM(r%initfile(ilevel))//'/ic_velcz'
+        if(ivar==2)then
+           filename=TRIM(r%initfile(ilevel))//'/ic_velbx'
+           INQUIRE(file=filename,exist=ok_velb)
+           if(.not. ok_velb)then
+              filename=TRIM(r%initfile(ilevel))//'/ic_velcx'
+           endif
+        endif
+        if(ivar==3)then
+           filename=TRIM(r%initfile(ilevel))//'/ic_velby'
+           INQUIRE(file=filename,exist=ok_velb)
+           if(.not. ok_velb)then
+              filename=TRIM(r%initfile(ilevel))//'/ic_velcy'
+           endif
+        endif
+        if(ivar==4)then
+           filename=TRIM(r%initfile(ilevel))//'/ic_velbz'
+           INQUIRE(file=filename,exist=ok_velb)
+           if(.not. ok_velb)then
+              filename=TRIM(r%initfile(ilevel))//'/ic_velcz'
+           endif
+        endif
         if(ivar==5)filename=TRIM(r%initfile(ilevel))//'/ic_tempb'
      else
         ! Read primitive variables
@@ -151,8 +169,8 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
         filename=TRIM(r%initfile(ilevel))//'/ic_pvar_'//TRIM(ncharvar)
      endif
      
-     INQUIRE(file=filename,exist=ok_file3)
-     if(ok_file3)then
+     INQUIRE(file=filename,exist=ok_file)
+     if(ok_file)then
         ! Reading the existing file   
         if(g%myid==1)write(*,*)"Reading "//TRIM(filename)
         open(10,file=filename,form='unformatted')
@@ -246,8 +264,8 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
      if(ivar==2 .or. ivar==5) bdefault=r%B_ave
      if(ivar==3 .or. ivar==6) bdefault=r%C_ave
 
-     INQUIRE(file=filename,exist=ok_file3)
-     if(ok_file3)then
+     INQUIRE(file=filename,exist=ok_file)
+     if(ok_file)then
         if(g%myid==1)write(*,*)"Reading "//TRIM(filename)
         open(10,file=filename,form='unformatted')
         rewind 10
@@ -467,7 +485,7 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
   real(kind=8),allocatable,dimension(:,:,:)::init_array
   real(kind=4),allocatable,dimension(:,:)::init_plane
 
-  logical::error,ok_file3
+  logical::error,ok_file
   character(LEN=80)::filename
 
   if(m%noct(ilevel)==0)return
@@ -523,9 +541,9 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
 
   ! Read refinement mask 
   filename=TRIM(r%initfile(ilevel))//'/ic_refmap'
-  INQUIRE(file=filename,exist=ok_file3)
-  ok_file3 = ok_file3 .and. (r%initfile(ilevel+1) .ne.' ')
-  if(ok_file3)then
+  INQUIRE(file=filename,exist=ok_file)
+  ok_file = ok_file .and. (r%initfile(ilevel+1) .ne.' ')
+  if(ok_file)then
      ! Reading the existing file   
      open(10,file=filename,form='unformatted')
      rewind 10

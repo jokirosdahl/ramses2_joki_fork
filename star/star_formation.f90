@@ -282,7 +282,7 @@ subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
               s%tp(s%npart)=g%texp+Rand*g%dtnew(ilevel)*g%aexp**2
               ! Compute star particle metallicity
               if(r%metal)then
-                 s%zp(s%npart)=m%uold(ind,r%imetal,igrid)/d
+                 s%zp(s%npart)=m%uold(ind,r%imetal,igrid)
               else
                  s%zp(s%npart)=r%z_ave*0.02
               endif
