@@ -576,7 +576,7 @@ contains
     b2l = compute_bsquared(blx, bly, blz)
     c2l = gamma * pl / rl
     d2l = 0.5_dp * (b2l / rl + c2l)
-    cfleft = sqrt(d2l + sqrt(max(d2l**2 - c2l * blx * blx / rl, 0.0_dp)))   ! floor discriminant (no-op in double; avoids NPRE=4 sqrt(<0)=NaN)
+    cfleft = sqrt(d2l + sqrt(max(d2l**2 - c2l * blx * blx / rl, 0.0_dp)))
 
     b2r = compute_bsquared(brx, bry, brz)
     c2r = gamma * pr / rr
@@ -740,7 +740,7 @@ contains
 
     ! Fast magnetosonic speeds (find_speed_fast) using the continuity-enforced A.
     b2l = A*A + Bl*Bl + Cl*Cl; c2l = gamma*Pl/rl; d2l = 0.5_dp*(b2l/rl + c2l)
-    cfastl = sqrt(d2l + sqrt(max(d2l**2 - c2l*A*A/rl, 0.0_dp)))   ! floor discriminant (no-op in double; avoids NPRE=4 sqrt(<0)=NaN)
+    cfastl = sqrt(d2l + sqrt(max(d2l**2 - c2l*A*A/rl, 0.0_dp)))
     b2r = A*A + Br*Br + Cr*Cr; c2r = gamma*Pr/rr; d2r = 0.5_dp*(b2r/rr + c2r)
     cfastr = sqrt(d2r + sqrt(max(d2r**2 - c2r*A*A/rr, 0.0_dp)))
 
@@ -753,7 +753,7 @@ contains
 
     ! Left star region.
     rstarl = rl*(SL - ul)/(SL - ustar)
-    rstarl = max(rstarl, smallr)   ! single-precision floor (no-op in double): keep sqrt/density positive
+    rstarl = max(rstarl, smallr)
     estar  = rl*(SL - ul)*(SL - ustar) - A*A
     el     = rl*(SL - ul)*(SL - ul   ) - A*A
     if (abs(estar) < 1e-4_dp*A*A) then
@@ -770,7 +770,7 @@ contains
 
     ! Right star region.
     rstarr = rr*(SR - ur)/(SR - ustar)
-    rstarr = max(rstarr, smallr)   ! single-precision floor (no-op in double): keep sqrt/density positive
+    rstarr = max(rstarr, smallr)
     estar  = rr*(SR - ur)*(SR - ustar) - A*A
     er     = rr*(SR - ur)*(SR - ur   ) - A*A
     if (abs(estar) < 1e-4_dp*A*A) then
@@ -973,10 +973,6 @@ contains
     uRR = stateRR%velocity_x; vRR = stateRR%velocity_y
     ARR = stateRR%Bx; BRR = stateRR%By; CRR = stateRR%Bz
 
-    ! Fast-magnetosonic speeds. The inner discriminant d2**2 - c2*B_par**2/rho is
-    ! >= 0 analytically, but at NPRE=4 it rounds slightly negative when the
-    ! transverse field is small (OT current sheets), giving sqrt(<0)=NaN that
-    ! propagates into the wave speeds and EMF. max(.,0) is an exact no-op in double.
     b2LL = compute_bsquared(ALL, BLL, CLL); c2LL = gamma*pLL/rLL
     d2LL = 0.5_dp*(b2LL/rLL + c2LL)
     cfastLLx = sqrt(d2LL + sqrt(max(d2LL**2 - c2LL*ALL*ALL/rLL, 0.0_dp)))
@@ -1060,10 +1056,6 @@ contains
     EstarRRy = uRR*BRR - vstar*AstarRR
     EstarRR  = ustar*BstarRR - vstar*AstarRR
 
-    ! Single-precision robustness: the star-region densities below feed sqrt() and
-    ! must stay positive. In double precision they are always > 0 so these floors
-    ! are an exact no-op; at NPRE=4 round-off can drive a marginal state slightly
-    ! negative, giving sqrt(<0)=NaN that then poisons the EMF / face-B / emag.
     rstarLLx = max(rstarLLx, smallr); rstarLRx = max(rstarLRx, smallr)
     rstarRLx = max(rstarRLx, smallr); rstarRRx = max(rstarRRx, smallr)
     rstarLLy = max(rstarLLy, smallr); rstarLRy = max(rstarLRy, smallr)
