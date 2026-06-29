@@ -38,11 +38,14 @@ recursive subroutine m_sink_formation(pst)
      endif
   endif
 
+  !----------------------------
+  ! Output sink properties
+  !----------------------------
   if(pst%s%r%sink_dump)call dump_sink_particles(pst)
 
-  !------------------------------
+  !----------------------------
   ! Deallocate all peak arrays
-  !------------------------------
+  !----------------------------
   call r_deallocate_clump(pst)
 
   ttend = mdl_wtime(pst%s%mdl)
