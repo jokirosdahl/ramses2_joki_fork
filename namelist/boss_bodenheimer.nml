@@ -1,0 +1,60 @@
+This is the RAMSES parameter file for Boss and Bodenheimer (1979) collapse test.
+Compile the code with:
+
+make NDIM=3 MPI=1 GRAV=1 HYDRO=1 INIT=COLLAPSE
+
+&RUN_PARAMS
+cosmo=.false.
+hydro=.true.
+poisson=.true.
+nrestart=0
+ncontrol=10
+nremap=1
+nsubcycle=2*1,35*2
+verbose=.false.
+/
+
+&AMR_PARAMS
+levelmin=5
+levelmax=14 ! ~ 0.24 AU
+ngridmax=50000
+nexpand=30*2
+boxlen=0.191405298315250E-01 ! ~ 4000 AU
+/
+
+&INIT_PARAMS
+/
+
+&OUTPUT_PARAMS
+tout=9.2e-05
+/
+
+&POISSON_PARAMS
+gravity_type=0
+epsilon=1.d-4
+/
+
+&HYDRO_PARAMS
+gamma=1.666667
+courant_factor=0.6
+slope_type=1
+riemann='llf'
+/
+
+&UNITS_PARAMS
+units_density=0.383460000000000E-23
+units_time=0.197732040946880E+16
+units_length=3.0857d18
+/
+
+&COOLING_PARAMS
+isothermal=.true.
+eos_type=5
+eos_T2=4.29
+/
+
+&REFINE_PARAMS
+jeans_refine=30*8.
+interpol_var=0
+interpol_type=1
+/
