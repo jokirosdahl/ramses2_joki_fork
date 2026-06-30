@@ -1,4 +1,4 @@
-This is the RAMSES parameter file for Boss and Oppenheimer (1979) collapse test.
+This is the RAMSES parameter file for Boss and Bodenheimer (1979) collapse test.
 Compile the code with:
 
 make NDIM=3 MPI=1 GRAV=1 HYDRO=1 INIT=COLLAPSE
