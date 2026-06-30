@@ -26,19 +26,18 @@ boxlen=0.191405298315250E-01 ! ~ 4000 AU
 /
 
 &OUTPUT_PARAMS
-tout=8.602321767654e-05,9.113034748294e-05,9.160914090229e-05,9.208793432164e-05,1.3e-04
+tout=9.2e-05
 /
 
 &POISSON_PARAMS
 gravity_type=0
-epsilon=1.d-6
+epsilon=1.d-4
 /
 
 &HYDRO_PARAMS
 gamma=1.666667
 courant_factor=0.6
 slope_type=1
-scheme='muscl'
 riemann='llf'
 /
 
