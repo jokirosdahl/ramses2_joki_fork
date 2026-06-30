@@ -8,7 +8,6 @@ module turb_device
 
 contains
 
-#ifdef TURB
   !=====================================================================================
   ! Time-interpolation of the acceleration field.
   ! afield_now = next_tfrac*afield_last + last_tfrac*afield_next, elementwise.
@@ -144,6 +143,5 @@ contains
     uold(cell_idx, 5, oct_idx) = ener
 
   end subroutine turb_hydro_kernel
-#endif
 
 end module turb_device
