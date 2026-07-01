@@ -23,8 +23,8 @@ subroutine m_cr_step(pst,ilevel)
   dt_save = g%dtnew(ilevel)
   t_save = g%t
 
-  ! We shift the time backwards one hydro-dt, to get evolution of stellar
-  ! ages within the hydro timestep, in the case of rt subcycling:
+  ! We shift the time backwards one hydro-dt, just in case,
+  ! though not really needed for now.
   t_cr = t_save - dt_save
 
   ! Get CR courant time step at coarse level
@@ -38,6 +38,10 @@ subroutine m_cr_step(pst,ilevel)
 
   ! CR sub-cycle loop
   do i = 1, i_substep
+     if(i_substep .gt. r%cr_nsubcycle) then
+         print*,'Doing CR substeps but should not!! ',i_substep, r%cr_nsubcycle, dt_save
+         stop
+     endif
 
      ! Shift the CR time forwards one dt_cr
      t_cr = t_cr + dt_cr
