@@ -35,7 +35,7 @@ subroutine m_newdt_fine(pst,ilevel)
   !-----------------------------------------------------------
   real(kind=8)::dx,tff,fourpi,threepi2
   real(kind=8)::ekin,vmax
-  real(kind=8)::dt_gyro, max_b, max_q
+  real(kind=8)::dt_gyro, dt_courant, max_b, max_q
   type(out_courant_fine_t)::out_courant_fine
   type(out_newdt_part_t)::out_newdt_part
   type(in_broadcast_dt_t)::in_broadcast_dt
@@ -116,13 +116,13 @@ subroutine m_newdt_fine(pst,ilevel)
 #endif
 
   if(r%rt.and.r%rt_advect)then
-     if(r%verbose)write(*,'("   Entering newdt_rt for level ",I2)')ilevel
-     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%rt_nsubcycle*r%rt_courant_factor*dx/3d0/g%rt_c(ilevel))
+     call get_rt_courant_dt(r,g,dt_courant,ilevel)
+     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%rt_nsubcycle*dt_courant)
   endif
 
   if(r%cr.and.r%cr_advect)then
-     if(r%verbose)write(*,'("   Entering newdt_cr for level ",I2)')ilevel
-     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%cr_nsubcycle*r%cr_courant_factor*dx/3d0/g%cr_c(ilevel))
+     call get_cr_courant_dt(r,g,dt_courant,ilevel)
+     g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%cr_nsubcycle*dt_courant)
   endif
 
   ! Adaptive time step condition
