@@ -5,8 +5,6 @@ subroutine get_cr_courant_dt(r,g,dt,ilevel)
 !-------------------------------------------------------------------------
 ! Determine the coarse CR timestep length set by the Courant condition
 !-------------------------------------------------------------------------
-  use amr_parameters
-  use cr_parameters
   use amr_commons, only: run_t, global_t
   implicit none
   type(run_t)::r
