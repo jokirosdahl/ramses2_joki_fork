@@ -140,7 +140,7 @@ gpu_feedback.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_flag.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_hilbert.o: amr_parameters.o hilbert.o
 gpu_hydro.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
-gpu_manager.o: gpu_refine.o gpu_runner.o gpu_utils.o
+gpu_manager.o: gpu_part.o gpu_refine.o gpu_runner.o gpu_utils.o
 gpu_mg.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_mpi.o: amr_parameters.o cache.o cache_commons.o gpu_hydro.o gpu_utils.o hash.o hydro_commons.o hydro_parameters.o marshal.o mdl.o nbors_utils.o oct_commons.o ramses_commons.o
 gpu_nbor.o: amr_parameters.o gpu_utils.o oct_commons.o
@@ -152,8 +152,8 @@ gpu_scan.o: amr_parameters.o
 gpu_star.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_turb.o: amr_parameters.o hydro_parameters.o oct_commons.o turb_commons.o
 gpu_utils.o: amr_parameters.o oct_commons.o
-init_amr.o: gpu_runner.o gpu_utils.o
-init_part.o: gpu_part.o gpu_runner.o
+init_amr.o: gpu_manager.o gpu_runner.o gpu_utils.o
+init_part.o: gpu_manager.o gpu_part.o gpu_runner.o
 interpol_phi.o: gpu_runner.o
 move_fine.o: gpu_part.o
 multigrid_fine_coarse.o: gpu_runner.o
