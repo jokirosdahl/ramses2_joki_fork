@@ -626,6 +626,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             list(APPEND _deps "${_gpu_obj_dir}/gpu_utils.cuf.o")
         endif()
 
+        file(STRINGS "${_full}" _use_manager REGEX "[Uu][Ss][Ee][ \t]+gpu_manager([ \t,;]|$)")
+        if(_use_manager)
+            list(APPEND _deps "${_gpu_obj_dir}/gpu_manager.cuf.o")
+        endif()
+
         if(_deps)
             set_source_files_properties("${_src}"
                 PROPERTIES OBJECT_DEPENDS "${_deps}")
