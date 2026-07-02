@@ -485,7 +485,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         gpu/gpu_runner.cuf
         gpu/gpu_part.cuf
     )
-    list(APPEND fortran_files ${gpu_cuf_files} gpu/gpu_manager.f90)
+    list(APPEND fortran_files ${gpu_cuf_files} gpu/gpu_manager.cuf)
     set_source_files_properties(${gpu_cuf_files} PROPERTIES LANGUAGE Fortran)
 
     # -------------------------------------------------------------------------
@@ -594,7 +594,7 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set_source_files_properties(gpu/gpu_part.cuf
         PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_utils.cuf.o;${_gpu_obj_dir}/gpu_runner.cuf.o")
 
-    set_source_files_properties(gpu/gpu_manager.f90
+    set_source_files_properties(gpu/gpu_manager.cuf
         PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_runner.cuf.o")
 
     # Step 2 – scan non-GPU sources for GPU module USE statements
