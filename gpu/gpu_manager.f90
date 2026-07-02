@@ -389,4 +389,72 @@ end subroutine gpu_allocate_mg
 !###########################################################
 !###########################################################
 !###########################################################
+subroutine gpu_allocate_part(sim)
+  use amr_parameters, ONLY: ndim, twotondim
+  use part_device, only: ensure_scan_capacity_part
+  implicit none
+  type(ramses_t) :: sim
+  integer :: scan_size
+
+  allocate(xp(1:sim%r%npartmax, 1:ndim))
+  allocate(vp(1:sim%r%npartmax, 1:ndim))
+  allocate(mp(1:sim%r%npartmax))
+  allocate(levelp(1:sim%r%npartmax))
+  allocate(sortp(1:sim%r%npartmax))
+  if (sim%r%nlevelmax > sim%r%levelmin) allocate(idp(1:sim%r%npartmax))
+#ifdef OUTPUT_PARTICLE_POTENTIAL
+  allocate(phip(1:sim%r%npartmax))
+#endif
+  ! gpu_cic_part source map.
+  allocate(xp_swap(1:sim%r%npartmax))
+  allocate(isp_swap(1:sim%r%npartmax))
+  allocate(idp_swap(1:sim%r%npartmax))
+  ! CUB workspace
+#if defined(CUB_SORT_PART)
+  allocate(hkeyp(1:sim%r%npartmax))
+#endif
+  ! Prefix sum arrays
+  scan_size = max(sim%r%npartmax, (sim%m%ngridmax + sim%m%ncachemax) * twotondim)
+  call ensure_scan_capacity_part(scan_size, sim%r%part_dep_algo)
+
+end subroutine gpu_allocate_part
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine gpu_allocate_star(sim)
+  use amr_parameters, ONLY: ndim, twotondim
+  use part_device, only: ensure_scan_capacity_part
+  implicit none
+  type(ramses_t) :: sim
+  integer :: scan_size
+
+  allocate(star_xp(1:sim%r%nstarmax, 1:ndim))
+  allocate(star_vp(1:sim%r%nstarmax, 1:ndim))
+  allocate(star_mp(1:sim%r%nstarmax))
+  allocate(star_tp(1:sim%r%nstarmax))
+  allocate(star_zp(1:sim%r%nstarmax))
+  allocate(star_sortp(1:sim%r%nstarmax))
+  allocate(star_levelp(1:sim%r%nstarmax))
+  if (sim%r%nlevelmax > sim%r%levelmin) allocate(star_idp(1:sim%r%nstarmax))
+#ifdef OUTPUT_PARTICLE_POTENTIAL
+  allocate(star_phip(1:sim%r%nstarmax))
+#endif
+  ! gpu_cic_part source map.
+  if (.not. allocated(xp_swap)) allocate(xp_swap(1:sim%r%nstarmax))
+  if (.not. allocated(isp_swap)) allocate(isp_swap(1:sim%r%nstarmax))
+  if (.not. allocated(idp_swap)) allocate(idp_swap(1:sim%r%nstarmax))
+  ! CUB workspace
+#if defined(CUB_SORT_PART)
+  if (.not. allocated(hkeyp)) allocate(hkeyp(1:sim%r%nstarmax))
+#endif
+  ! Prefix sum arrays
+  scan_size = max(sim%r%nstarmax, (sim%m%ngridmax + sim%m%ncachemax) * twotondim)
+  call ensure_scan_capacity_part(scan_size, sim%r%star_dep_algo)
+
+end subroutine gpu_allocate_star
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 end module gpu_manager
