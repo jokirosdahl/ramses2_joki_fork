@@ -42,7 +42,7 @@ recursive subroutine r_set_grid_device(pst)
 
      ! Particle H→D (allocated in init_part).
      if (pst%s%r%part .and. allocated(pst%s%p%xp) .and. allocated(xp)) then
-        call nvtxStartRange("Copy particles from host to device", color=5)!red
+        call nvtxStartRange("Copy part from host to device", color=5)!red
         xp     = pst%s%p%xp
         vp     = pst%s%p%vp
         mp     = pst%s%p%mp
@@ -55,7 +55,7 @@ recursive subroutine r_set_grid_device(pst)
 
      ! Star particle H→D
      if (pst%s%r%star .and. allocated(pst%s%star%xp) .and. allocated(star_xp)) then
-        call nvtxStartRange("Copy stars from host to device", color=5)!red
+        call nvtxStartRange("Copy star from host to device", color=5)!red
         star_xp     = pst%s%star%xp
         star_vp     = pst%s%star%vp
         star_mp     = pst%s%star%mp
@@ -135,9 +135,9 @@ recursive subroutine r_transfer_grid_host(pst)
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
 
-#ifdef _CUDA
-     call gpu_to_host_part(pst)
-#endif
+     if(pst%s%r%pic)then
+        call gpu_to_host_part(pst)
+     endif
 
   endif
 
@@ -151,31 +151,31 @@ subroutine gpu_to_host_part(pst)
   implicit none
   type(pst_t)::pst
 
-  if (.not. allocated(xp)) return
+  if (allocated(xp)) then
+     call nvtxStartRange("Copy part from device to host", color=5)!red
+     pst%s%p%xp     = xp
+     pst%s%p%vp     = vp
+     pst%s%p%mp     = mp
+     pst%s%p%levelp = levelp
+     pst%s%p%sortp  = sortp
+     if (allocated(idp)) pst%s%p%idp = idp
+     call GPU_Error_Check(__FILE__, __LINE__)
+     call nvtxEndRange()
+  endif
 
-  call nvtxStartRange("Copy particles from device to host", color=5)!red
-  pst%s%p%xp     = xp
-  pst%s%p%vp     = vp
-  pst%s%p%mp     = mp
-  pst%s%p%levelp = levelp
-  pst%s%p%sortp  = sortp
-  if (allocated(idp)) pst%s%p%idp = idp
-  call GPU_Error_Check(__FILE__, __LINE__)
-  call nvtxEndRange()
-
-  if (.not. allocated(star_xp)) return
-
-  call nvtxStartRange("Copy stars from device to host", color=5)!red
-  pst%s%star%xp     = star_xp
-  pst%s%star%vp     = star_vp
-  pst%s%star%mp     = star_mp
-  pst%s%star%tp     = star_tp
-  pst%s%star%zp     = star_zp
-  pst%s%star%levelp = star_levelp
-  pst%s%star%sortp  = star_sortp
-  if (allocated(star_idp)) pst%s%star%idp = star_idp
-  call GPU_Error_Check(__FILE__, __LINE__)
-  call nvtxEndRange()
+  if (.not. allocated(star_xp)) then
+     call nvtxStartRange("Copy star from device to host", color=5)!red
+     pst%s%star%xp     = star_xp
+     pst%s%star%vp     = star_vp
+     pst%s%star%mp     = star_mp
+     pst%s%star%tp     = star_tp
+     pst%s%star%zp     = star_zp
+     pst%s%star%levelp = star_levelp
+     pst%s%star%sortp  = star_sortp
+     if (allocated(star_idp)) pst%s%star%idp = star_idp
+     call GPU_Error_Check(__FILE__, __LINE__)
+     call nvtxEndRange()
+  endif
 
 end subroutine gpu_to_host_part
 !###########################################################

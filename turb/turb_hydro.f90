@@ -32,7 +32,7 @@ recursive subroutine r_turb_hydro(pst,input_array,input_size,output_array,output
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
-#if defined(_CUDA) && defined(TURB)
+#ifdef _CUDA
   use gpu_runner, only: gpu_turb_hydro
 #endif
   implicit none
@@ -53,7 +53,7 @@ recursive subroutine r_turb_hydro(pst,input_array,input_size,output_array,output
   else
      ilevel=input_array(1)
      dteff=transfer(input_array(2:3),dteff)
-#if defined(_CUDA) && defined(TURB)
+#ifdef _CUDA
      call gpu_turb_hydro(pst%s,ilevel,dteff)
 #else
      call turb_hydro(pst%s%r,pst%s%m,ilevel,dteff)
