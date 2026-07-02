@@ -653,9 +653,6 @@ recursive subroutine r_cic_part(pst,input_array,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
-#ifdef _CUDA
-  use pm_parameters, only: PART_TYPE
-#endif
   implicit none
   type(pst_t)::pst
   integer,VALUE::input_size

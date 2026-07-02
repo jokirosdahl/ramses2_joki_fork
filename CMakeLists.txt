@@ -479,13 +479,14 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         gpu/gpu_feedback.cuf
         gpu/gpu_rho.cuf
         gpu/gpu_mg.cuf
+        gpu/gpu_turb.cuf
 
         gpu/gpu_refine.cuf
         gpu/gpu_flag.cuf
         gpu/gpu_runner.cuf
         gpu/gpu_part.cuf
     )
-    list(APPEND fortran_files ${gpu_cuf_files} gpu/gpu_manager.f90)
+    list(APPEND fortran_files ${gpu_cuf_files} gpu/gpu_manager.cuf)
     set_source_files_properties(${gpu_cuf_files} PROPERTIES LANGUAGE Fortran)
 
     # -------------------------------------------------------------------------
@@ -589,12 +590,12 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_utils.cuf.o")
 
     set_source_files_properties(gpu/gpu_runner.cuf
-        PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_utils.cuf.o;${_gpu_obj_dir}/gpu_hydro.cuf.o;${_gpu_obj_dir}/gpu_cooling.cuf.o;${_gpu_obj_dir}/gpu_star.cuf.o;${_gpu_obj_dir}/gpu_feedback.cuf.o;${_gpu_obj_dir}/gpu_rho.cuf.o;${_gpu_obj_dir}/gpu_mg.cuf.o;${_gpu_obj_dir}/gpu_refine.cuf.o;${_gpu_obj_dir}/gpu_flag.cuf.o")
+        PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_utils.cuf.o;${_gpu_obj_dir}/gpu_hydro.cuf.o;${_gpu_obj_dir}/gpu_cooling.cuf.o;${_gpu_obj_dir}/gpu_star.cuf.o;${_gpu_obj_dir}/gpu_feedback.cuf.o;${_gpu_obj_dir}/gpu_rho.cuf.o;${_gpu_obj_dir}/gpu_mg.cuf.o;${_gpu_obj_dir}/gpu_turb.cuf.o;${_gpu_obj_dir}/gpu_refine.cuf.o;${_gpu_obj_dir}/gpu_flag.cuf.o")
 
     set_source_files_properties(gpu/gpu_part.cuf
         PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_utils.cuf.o;${_gpu_obj_dir}/gpu_runner.cuf.o")
 
-    set_source_files_properties(gpu/gpu_manager.f90
+    set_source_files_properties(gpu/gpu_manager.cuf
         PROPERTIES OBJECT_DEPENDS "${_gpu_obj_dir}/gpu_runner.cuf.o")
 
     # Step 2 – scan non-GPU sources for GPU module USE statements
@@ -624,6 +625,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         file(STRINGS "${_full}" _use_utils REGEX "[Uu][Ss][Ee][ \t]+gpu_utils([ \t,;]|$)")
         if(_use_utils)
             list(APPEND _deps "${_gpu_obj_dir}/gpu_utils.cuf.o")
+        endif()
+
+        file(STRINGS "${_full}" _use_manager REGEX "[Uu][Ss][Ee][ \t]+gpu_manager([ \t,;]|$)")
+        if(_use_manager)
+            list(APPEND _deps "${_gpu_obj_dir}/gpu_manager.cuf.o")
         endif()
 
         if(_deps)

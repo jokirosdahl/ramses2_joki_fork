@@ -1,9 +1,4 @@
 module init_part_module
-#ifdef _CUDA
-  use gpu_runner
-  use part_device, only: ensure_scan_capacity_part
-  use cudafor
-#endif
 
 contains
 !#########################################################################
@@ -14,6 +9,9 @@ recursive subroutine r_init_part(pst)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
+#ifdef _CUDA
+  use gpu_manager
+#endif
   implicit none
   type(pst_t)::pst
   !--------------------------------------------------------------------
@@ -28,9 +26,15 @@ recursive subroutine r_init_part(pst)
   else
      if(pst%s%r%part)then
         call init_part(pst%s%r,pst%s%g,pst%s%m,pst%s%p)
+#ifdef _CUDA
+        call gpu_allocate_part(pst%s)
+#endif
      endif
      if(pst%s%r%star)then
         call init_star(pst%s%r,pst%s%g,pst%s%m,pst%s%star)
+#ifdef _CUDA
+        call gpu_allocate_star(pst%s)
+#endif
      end if
      if(pst%s%r%sink)then
         call init_sink(pst%s%r,pst%s%g,pst%s%sink)
@@ -61,9 +65,6 @@ subroutine init_part(r,g,m,p)
   type(global_t)::g
   type(mesh_t)::m
   type(part_t)::p
-#ifdef _CUDA
-  integer::scan_size
-#endif
   !--------------------------------------------
   ! Allocate PART particle variables on the CPU
   !--------------------------------------------
@@ -93,33 +94,6 @@ subroutine init_part(r,g,m,p)
   p%headp=1
   p%tailp=0
 
-  ! Device mirrors/scratch; H→D in r_set_grid_device.
-  !--------------------------------------------
-  ! Allocate PART particle variables on the GPU
-  !--------------------------------------------
-#ifdef _CUDA
-  allocate(xp(1:r%npartmax, 1:ndim))
-  allocate(vp(1:r%npartmax, 1:ndim))
-  allocate(mp(1:r%npartmax))
-  allocate(levelp(1:r%npartmax))
-  allocate(sortp(1:r%npartmax))
-  if (r%nlevelmax > r%levelmin) allocate(idp(1:r%npartmax))
-#ifdef OUTPUT_PARTICLE_POTENTIAL
-  allocate(phip(1:r%npartmax))
-#endif
-  ! gpu_cic_part source map.
-  allocate(xp_swap(1:r%npartmax))
-  allocate(isp_swap(1:r%npartmax))
-  allocate(idp_swap(1:r%npartmax))
-  ! CUB workspace
-#if defined(CUB_SORT_PART)
-  allocate(hkeyp(1:r%npartmax))
-#endif
-  ! Prefix sum arrays
-  scan_size = max(r%npartmax, (m%ngridmax + m%ncachemax) * twotondim)
-  call ensure_scan_capacity_part(scan_size, r%part_dep_algo)
-#endif
-
 end subroutine init_part
 !#########################################################################
 !#########################################################################
@@ -135,9 +109,6 @@ subroutine init_star(r,g,m,p)
   type(global_t)::g
   type(mesh_t)::m
   type(part_t)::p
-#ifdef _CUDA
-  integer::scan_size
-#endif
   !--------------------------------------------
   ! Allocate star particle variables on the CPU
   !--------------------------------------------
@@ -168,34 +139,6 @@ subroutine init_star(r,g,m,p)
   ! No particle just yet
   p%headp=1
   p%tailp=0
-
-  !--------------------------------------------
-  ! Allocate star particle variables on the GPU
-  !--------------------------------------------
-#ifdef _CUDA
-  allocate(star_xp(1:r%nstarmax, 1:ndim))
-  allocate(star_vp(1:r%nstarmax, 1:ndim))
-  allocate(star_mp(1:r%nstarmax))
-  allocate(star_tp(1:r%nstarmax))
-  allocate(star_zp(1:r%nstarmax))
-  allocate(star_sortp(1:r%nstarmax))
-  allocate(star_levelp(1:r%nstarmax))
-  if (r%nlevelmax > r%levelmin) allocate(star_idp(1:r%nstarmax))
-#ifdef OUTPUT_PARTICLE_POTENTIAL
-  allocate(star_phip(1:r%nstarmax))
-#endif
-  ! gpu_cic_part source map.
-  if (.not. allocated(xp_swap)) allocate(xp_swap(1:r%nstarmax))
-  if (.not. allocated(isp_swap)) allocate(isp_swap(1:r%nstarmax))
-  if (.not. allocated(idp_swap)) allocate(idp_swap(1:r%nstarmax))
-  ! CUB workspace
-#if defined(CUB_SORT_PART)
-  if (.not. allocated(hkeyp)) allocate(hkeyp(1:r%nstarmax))
-#endif
-  ! Prefix sum arrays
-  scan_size = max(r%nstarmax, (m%ngridmax + m%ncachemax) * twotondim)
-  call ensure_scan_capacity_part(scan_size, r%star_dep_algo)
-#endif
 
 end subroutine init_star
 !#########################################################################

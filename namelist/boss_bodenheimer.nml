@@ -1,7 +1,7 @@
 This is the RAMSES parameter file for Boss and Bodenheimer (1979) collapse test.
 Compile the code with:
 
-make NDIM=3 MPI=1 GRAV=1 HYDRO=1 INIT=COLLAPSE
+make NDIM=3 MPI=1 GRAV=1 HYDRO=1 MHD=1 INIT=COLLAPSE
 
 &RUN_PARAMS
 cosmo=.false.
@@ -9,7 +9,6 @@ hydro=.true.
 poisson=.true.
 nrestart=0
 ncontrol=10
-nremap=1
 nsubcycle=2*1,35*2
 verbose=.false.
 /
@@ -39,6 +38,7 @@ gamma=1.666667
 courant_factor=0.6
 slope_type=1
 riemann='llf'
+riemann2d='llf'
 /
 
 &UNITS_PARAMS

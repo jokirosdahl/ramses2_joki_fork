@@ -8,7 +8,7 @@ recursive subroutine r_drive_turb(pst,ilevel,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
-#if defined(_CUDA) && defined(TURB)
+#ifdef _CUDA
   use gpu_runner, only: gpu_drive_turb
 #endif
   implicit none
@@ -23,7 +23,7 @@ recursive subroutine r_drive_turb(pst,ilevel,input_size)
      call r_drive_turb(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-#if defined(_CUDA) && defined(TURB)
+#ifdef _CUDA
      call gpu_drive_turb(pst%s,ilevel)
 #else
      call drive_turb(pst%s%r,pst%s%g,pst%s%m,pst%s%turb,ilevel)

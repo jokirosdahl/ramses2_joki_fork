@@ -210,9 +210,6 @@ recursive subroutine r_newdt_part(pst,ilevel,input_size,output,output_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
-#ifdef _CUDA
-  use pm_parameters, only: PART_TYPE
-#endif
   implicit none
   type(pst_t)::pst
   integer,VALUE::input_size
