@@ -3,6 +3,7 @@ module gpu_manager
   use nvtx
   use gpu_utils
   use gpu_runner
+  use ramses_commons, only: ramses_t
 contains
 !###########################################################
 !###########################################################
@@ -241,6 +242,149 @@ subroutine gpu_update_turb(pst)
   pst%s%turb%afield_now = next_tfrac*pst%s%turb%afield_last + last_tfrac*pst%s%turb%afield_next
 
 end subroutine gpu_update_turb
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine gpu_allocate_amr(sim)
+  use amr_parameters, ONLY: ndim, twotondim
+#ifdef HYDRO
+  use hydro_parameters, ONLY: nvar
+#endif
+#ifdef TURB
+  use turb_commons, ONLY: TURB_GS
+#endif
+  implicit none
+  type(ramses_t) :: sim
+  integer :: nborarrsize, ilevel
+
+  allocate(grid(1:sim%m%ngridmax+sim%m%ncachemax))
+  if(sim%r%nlevelmax > sim%r%levelmin)then
+     allocate(flag1(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+     allocate(flag2(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+     allocate(father(1:sim%m%ngridmax+sim%m%ncachemax))
+     flag1=0
+     flag2=0
+     father=0
+  endif
+  nborarrsize = (sim%m%ngridmax + nsubgridtondim - 1) / nsubgridtondim
+  allocate(nbor(1:subgridsize,1:nborarrsize))
+  nbor=0
+  ! Allocate hash table space
+  sim%m%hash_size=2*(sim%m%ngridmax+sim%m%ncachemax)
+  allocate(hash_key(1:sim%m%hash_size))
+  allocate(hash_val(1:sim%m%hash_size))
+  hash_key=0
+  hash_val=0
+  ! Work buffers for GPU scan/sort/refine
+  allocate(swap_local(1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(swap_global(1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(prefix_sum(1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(partial_sums_0(1:max(1,(sim%m%ngridmax+sim%m%ncachemax)/256)))
+  allocate(partial_sums_1(1:max(1,(sim%m%ngridmax+sim%m%ncachemax)/65536)))
+  allocate(partial_sums_2(1:max(1,(sim%m%ngridmax+sim%m%ncachemax)/16777216)))
+  swap_local=0
+  swap_global=0
+  prefix_sum=0
+
+#ifdef HYDRO
+  allocate(uold(1:twotondim,1:nvar,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(unew(1:twotondim,1:nvar,1:sim%m%ngridmax+sim%m%ncachemax))
+  uold=0d0
+  unew=0d0
+#endif
+#ifdef MHD
+  allocate(bold(1:twotondim,1:6,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(bnew(1:twotondim,1:6,1:sim%m%ngridmax+sim%m%ncachemax))
+  bold=0d0
+  bnew=0d0
+#endif
+#ifdef TURB
+  allocate(afield_last_d(1:ndim,0:TURB_GS-1,0:TURB_GS-1,0:TURB_GS-1))
+  allocate(afield_next_d(1:ndim,0:TURB_GS-1,0:TURB_GS-1,0:TURB_GS-1))
+  allocate(afield_now_d (1:ndim,0:TURB_GS-1,0:TURB_GS-1,0:TURB_GS-1))
+  allocate(fturb(1:twotondim,1:3,1:sim%m%ngridmax+sim%m%ncachemax))
+  afield_last_d=0d0
+  afield_next_d=0d0
+  afield_now_d=0d0
+  fturb=0d0
+#endif
+#ifdef GRAV
+  allocate(rho(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(phi(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(nref(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(f(1:twotondim,1:3,1:sim%m%ngridmax+sim%m%ncachemax))
+  allocate(phi_old(1:twotondim,1:sim%m%ngridmax+sim%m%ncachemax))
+  f=0d0
+  rho=0d0
+  phi=0d0
+  nref=0d0
+  phi_old=0d0
+#endif
+
+  allocate(sim%m%head_cache(1:sim%r%nlevelmax))
+  allocate(sim%m%tail_cache(1:sim%r%nlevelmax))
+  allocate(sim%m%noct_cache(1:sim%r%nlevelmax))
+  sim%m%head_cache=1
+  sim%m%tail_cache=0
+  sim%m%noct_cache=0
+  sim%m%ifree_cache=1
+  ! Compute Cartesian key offset for GPU hash table
+  allocate(sim%m%key_off(1:sim%r%nlevelmax+1))
+  sim%m%key_off(1)=1
+  do ilevel=2,sim%r%nlevelmax+1
+     sim%m%key_off(ilevel)=sim%m%key_off(ilevel-1)+sim%m%hkey_max(1,ilevel-1)
+  end do
+  ! Transfer debug parameter to host global
+  gpu_debug = sim%r%debug
+  ! Allocate and transfer bounding box to device
+  allocate(ckey_max(1:sim%r%nlevelmax+1))
+  allocate(key_off(1:sim%r%nlevelmax+1))
+  allocate(box_ckey_min(1:3,1:sim%r%nlevelmax+1))
+  allocate(box_ckey_max(1:3,1:sim%r%nlevelmax+1))
+  ckey_max=sim%m%ckey_max
+  key_off=sim%m%key_off
+  periodic=sim%r%periodic
+  box_size=sim%r%box_size
+  constant_gravity=sim%r%constant_gravity
+  box_ckey_min=sim%m%box_ckey_min
+  box_ckey_max=sim%m%box_ckey_max
+  if(sim%r%nbound>0)then
+     allocate(bound_ckey_min(1:3,1:sim%r%nbound,1:sim%r%nlevelmax+1))
+     allocate(bound_ckey_max(1:3,1:sim%r%nbound,1:sim%r%nlevelmax+1))
+     bound_ckey_min=sim%m%bound_ckey_min
+     bound_ckey_max=sim%m%bound_ckey_max
+  endif
+  allocate(d_skip(1:ndim))
+  d_skip = sim%m%skip
+
+end subroutine gpu_allocate_amr
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine gpu_allocate_mg(sim)
+  use amr_parameters, ONLY: ndim, twotondim, threetondim
+  implicit none
+  type(ramses_t) :: sim
+
+#ifdef GRAV
+  allocate(grid_mg(1:sim%m_mg%ngridmax+sim%m_mg%ncachemax))
+  allocate(father_mg(1:sim%r%ngridmax+sim%r%ngridmax/7+sim%m_mg%ncachemax))
+  allocate(nbor_mg(1:threetondim,1:sim%m_mg%ngridmax))
+  father_mg=0
+  nbor_mg=0
+  ! Allocate hash table space
+  sim%m_mg%hash_size=2*(sim%m_mg%ngridmax+sim%m_mg%ncachemax)
+  allocate(hash_key_mg(1:sim%m_mg%hash_size))
+  allocate(hash_val_mg(1:sim%m_mg%hash_size))
+  hash_key_mg=0
+  hash_val_mg=0
+  allocate(phi_mg(1:twotondim,1:sim%m_mg%ngridmax+sim%m_mg%ncachemax))
+  allocate(f_mg(1:twotondim,1:3,1:sim%m_mg%ngridmax+sim%m_mg%ncachemax))
+#endif
+
+end subroutine gpu_allocate_mg
 !###########################################################
 !###########################################################
 !###########################################################
