@@ -9,13 +9,15 @@ subroutine m_cr_step(pst,ilevel)
   use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
   use cr_source_terms_module, only: r_cr_source_terms
   use cr_upload_module, only: m_cr_upload_fine
-  use cr_input_condinit_module, only: r_cr_input_source_regions  
+  use cr_input_condinit_module, only: r_cr_input_source_regions
+  use constants,only: c_cgs
   type(pst_t)::pst
   integer::ilevel
 
   real(kind=8) :: dt_save, t_save
   real(kind=8) :: dt_cr, t_cr
   integer  :: i, i_substep
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,mdl=>pst%s%mdl)
 
@@ -71,8 +73,12 @@ subroutine m_cr_step(pst,ilevel)
   ! Restriction operator to update coarser level split cells
   call m_cr_upload_fine(pst,ilevel)
 
-  if (g%myid==1 .and. r%cr_nsubcycle .gt. 1) write(*,901) ilevel, i_substep
-901 format (' Performed level', I3, ' CR-step with ', I5, ' subcycles')
+  if(mod(g%nstep_coarse,r%ncontrol)==0) then
+      call units(r, g, scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+      write(*,901) ilevel, i_substep, g%cr_c(ilevel)*scale_v/1e5, g%cr_c(ilevel)*scale_v/c_cgs, dt_cr
+   endif
+
+901 format (' Performed level', I3, ' CR-step with ', I5, ' sub-steps, cr_vmax(km/s)=', 1pe9.2, ' cr_c_fraction=', 1pe9.2, ',  dt_cr=', 1pe9.2)
 
   end associate
 
