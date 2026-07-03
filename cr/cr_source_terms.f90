@@ -78,7 +78,7 @@ subroutine cr_source_terms(s,ilevel)
      sqrt3=1.0d0
   endif
 
-  hash_key(0)=ilevel+1 ! Joki: is this correct?? Not ilevel?
+  hash_key(0)=ilevel+1
 
   call open_cache(mdl, m, pack_size=storage_size(dummy_large_realdp)/32, &
        pack=pack_fetch_refine, unpack=unpack_fetch_refine, &
