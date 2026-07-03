@@ -19,9 +19,8 @@
 #include "../metal_types.h"
 using namespace metal;
 
-constant int NSUBGRID_RF    = 1;
-constant int NSUBGRIDP2_RF  = 3;    /* NSUBGRID + 2          */
-constant int SUBGRIDSIZE_RF = 27;   /* NSUBGRIDP2^NDIM, NDIM=3 */
+constant int NSUBGRIDP2_RF  = 3;    /* nsubgrid + 2 (nsubgrid == 1) */
+constant int SUBGRIDSIZE_RF = 27;   /* NSUBGRIDP2^NDIM, NDIM=3      */
 
 /* =========================================================================
  * fnv64 / hash_bucket / hash_get — read-only hash helpers.

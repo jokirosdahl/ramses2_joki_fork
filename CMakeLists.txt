@@ -10,7 +10,7 @@ include(CMakePrintHelpers)
 #      or: FC=nvfortran cmake -DCOMPILER=NVHPC ..
 # Changing COMPILER after the initial configure requires a fresh build dir.
 # =============================================================================
-set(COMPILER "GNU" CACHE STRING "Compiler toolchain: GNU, INTEL, NVHPC")
+set(COMPILER "GNU" CACHE STRING "Compiler toolchain: GNU, INTEL, NVHPC, METAL")
 
 # Map COMPILER to the right executable on a fresh configure only.
 if(NOT CMAKE_Fortran_COMPILER)
@@ -47,6 +47,10 @@ set(NDIM     3    CACHE STRING "Number of dimensions (1, 2, or 3)")
 set(NVECTOR  32   CACHE STRING "SIMD vector length")
 set(NHILBERT 1    CACHE STRING "Hilbert key length exponent")
 set(NPRE     8    CACHE STRING "Floating-point precision in bytes")
+if(COMPILER STREQUAL "METAL")
+    # Apple GPU has no float64; force single precision regardless of user setting.
+    set(NPRE 4 CACHE STRING "Floating-point precision in bytes" FORCE)
+endif()
 set(NENER    0    CACHE STRING "Number of non-thermal energy variables")
 set(NMETAL   0    CACHE STRING "Number of metal species")
 set(NPSCAL   0    CACHE STRING "Number of passive scalar tracers")
@@ -164,6 +168,9 @@ endif()
 if(NOT MPI)
     list(APPEND defines WITHOUTMPI)
 endif()
+if(COMPILER STREQUAL "METAL")
+    list(APPEND defines _METAL)
+endif()
 
 # =============================================================================
 # Executable
@@ -200,6 +207,13 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
     endif()
     if(APPLE)
         target_link_options(${EXEC} PRIVATE -Wl,-no_compact_unwind)
+    endif()
+    if(COMPILER STREQUAL "METAL")
+        # -Wl,-framework,X keeps each flag as one token through gfortran to ld.
+        target_link_options(${EXEC} PRIVATE
+            -Wl,-framework,Metal
+            -Wl,-framework,Foundation
+            -lstdc++)
     endif()
 
 elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
@@ -554,6 +568,74 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
 endif()
 
 # =============================================================================
+# Metal sources (Apple Silicon, HYDRO=1 GRAV=0 MHD=0, NPRE=4, no MPI)
+# =============================================================================
+if(COMPILER STREQUAL "METAL")
+    list(APPEND fortran_files
+        metal/metal_interface.f90
+        metal/metal_runner.f90)
+
+    # ObjC++ bridge: compiled explicitly with xcrun clang++, same pattern as
+    # the CUB wrappers in the NVHPC block — avoids relying on CMake's CXX
+    # compiler detection (which may pick g++ instead of clang++ on macOS).
+    set(_metal_bridge_o ${CMAKE_BINARY_DIR}/metal_bridge.o)
+    add_custom_command(
+        OUTPUT  ${_metal_bridge_o}
+        COMMAND xcrun clang++ -std=c++17 -ObjC++ -fobjc-arc -O2
+                -I${CMAKE_SOURCE_DIR}/metal
+                -c ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
+                -o ${_metal_bridge_o}
+        DEPENDS ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
+                ${CMAKE_SOURCE_DIR}/metal/metal_types.h
+        COMMENT "Compiling metal_bridge.mm (xcrun clang++)"
+        VERBATIM
+    )
+    set_source_files_properties(${_metal_bridge_o}
+        PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    target_sources(${EXEC} PRIVATE ${_metal_bridge_o})
+
+    # Metal kernel pipeline: .metal -> .air -> .metallib
+    # NVAR is already a plain integer from math(EXPR) above.
+    set(_metalc     xcrun -sdk macosx metal)
+    set(_metallib   xcrun -sdk macosx metallib)
+    set(_metalflags -std=metal3.1 -O2
+        -DNDIM=${NDIM} -DNVAR=${NVAR}
+        -I${CMAKE_SOURCE_DIR}/metal
+        -I${CMAKE_SOURCE_DIR}/metal/kernels)
+
+    foreach(_kernel hydro hash refine)
+        add_custom_command(
+            OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
+            COMMAND ${_metalc} ${_metalflags}
+                    -c ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
+                    -o ${CMAKE_BINARY_DIR}/${_kernel}.air
+            DEPENDS ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
+                    ${CMAKE_SOURCE_DIR}/metal/metal_types.h
+            COMMENT "Compiling ${_kernel}.metal"
+            VERBATIM
+        )
+    endforeach()
+
+    add_custom_command(
+        OUTPUT  ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
+        COMMAND ${_metallib}
+                ${CMAKE_BINARY_DIR}/hydro.air
+                ${CMAKE_BINARY_DIR}/hash.air
+                ${CMAKE_BINARY_DIR}/refine.air
+                -o ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
+        DEPENDS ${CMAKE_BINARY_DIR}/hydro.air
+                ${CMAKE_BINARY_DIR}/hash.air
+                ${CMAKE_BINARY_DIR}/refine.air
+        COMMENT "Linking ramses_kernels.metallib"
+        VERBATIM
+    )
+
+    add_custom_target(metal_kernels ALL
+        DEPENDS ${CMAKE_BINARY_DIR}/ramses_kernels.metallib)
+    add_dependencies(${EXEC} metal_kernels)
+endif()
+
+# =============================================================================
 # MDL2 (optional, needs mdl2/ sub-tree present)
 # =============================================================================
 if(EXISTS ${CMAKE_SOURCE_DIR}/mdl2)
@@ -632,6 +714,45 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
             list(APPEND _deps "${_gpu_obj_dir}/gpu_manager.cuf.o")
         endif()
 
+        if(_deps)
+            set_source_files_properties("${_src}"
+                PROPERTIES OBJECT_DEPENDS "${_deps}")
+        endif()
+    endforeach()
+endif()
+
+# =============================================================================
+# Metal: enforce module compilation order via OBJECT_DEPENDS.
+# metal_runner uses metal_interface, so metal_interface.f90.o must exist first.
+# Files in amr/ and hydro/ that USE metal_runner/metal_interface are handled
+# the same way the NVHPC block above handles gpu_runner dependencies.
+# =============================================================================
+if(COMPILER STREQUAL "METAL")
+    set(_metal_obj_dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${EXEC}.dir/metal")
+
+    set_source_files_properties(metal/metal_runner.f90
+        PROPERTIES OBJECT_DEPENDS "${_metal_obj_dir}/metal_interface.f90.o")
+
+    foreach(_src IN LISTS fortran_files)
+        if(IS_ABSOLUTE "${_src}")
+            continue()
+        endif()
+        if("${_src}" MATCHES "^metal/")
+            continue()
+        endif()
+        set(_full "${CMAKE_SOURCE_DIR}/${_src}")
+        if(NOT EXISTS "${_full}")
+            continue()
+        endif()
+        set(_deps "")
+        file(STRINGS "${_full}" _use_runner REGEX "[Uu][Ss][Ee][ \t]+metal_runner([ \t,;]|$)")
+        file(STRINGS "${_full}" _use_iface  REGEX "[Uu][Ss][Ee][ \t]+metal_interface([ \t,;]|$)")
+        if(_use_runner)
+            list(APPEND _deps "${_metal_obj_dir}/metal_runner.f90.o")
+        endif()
+        if(_use_iface)
+            list(APPEND _deps "${_metal_obj_dir}/metal_interface.f90.o")
+        endif()
         if(_deps)
             set_source_files_properties("${_src}"
                 PROPERTIES OBJECT_DEPENDS "${_deps}")
