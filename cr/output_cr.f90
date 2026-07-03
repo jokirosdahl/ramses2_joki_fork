@@ -173,6 +173,7 @@ subroutine output_crinfo(r, g, filename)
   type(global_t)::g
   character(LEN=flen)::filename, fileloc
   integer :: ilun
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 !------------------------------------------------------------------------
   if (r%verbose) write(*,*)'Entering output_crinfo'
 
@@ -188,7 +189,8 @@ subroutine output_crinfo(r, g, filename)
 
 
   ! Write physical parameters
-  write(ilun,'("cr_c_fraction= ", 100(E15.7))') g%cr_c_cgs(r%levelmin:r%nlevelmax)/c_cgs
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  write(ilun,'("cr_c_fraction= ", 100(E15.7))') g%cr_c(r%levelmin:r%nlevelmax)*scale_t/c_cgs
   write(ilun,*)
 
   ! Write photon group properties

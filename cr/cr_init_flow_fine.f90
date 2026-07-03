@@ -50,9 +50,10 @@ end subroutine m_cr_init_flow_fine
 !###############################################
 !###############################################
 module update_cr_c_module
-  type :: in_broadcast_cr_c
-     real(kind=8)::rt_c
-  end type in_broadcast_cr_c
+  type :: in_broadcast_cr_c_t
+     integer::ilevel
+     real(kind=8)::cr_c
+  end type in_broadcast_cr_c_t
 contains
 !##############################################################
 !##############################################################
@@ -89,7 +90,7 @@ subroutine update_cr_vars(r, g)
   ! Update CR speed of light and diffusion coefficient in code units
   !-------------------------------------------------------------------------
   use amr_commons, only: run_t, global_t
-  use constants,only:c_cgs
+  !use constants,only:c_cgs
   use cr_parameters, only: ncrgrp
   implicit none
   type(run_t) :: r
@@ -98,10 +99,10 @@ subroutine update_cr_vars(r, g)
   integer::i,igrp
   !-------------------------------------------------------------------------
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-  do i=r%nlevelmax,r%levelmin,-1
-    g%cr_c_cgs(i) = c_cgs * r%cr_c_fraction
-    g%cr_c(i) = g%cr_c_cgs(i) / scale_v
-  enddo
+  !do i=r%nlevelmax,r%levelmin,-1
+  !  g%cr_c_cgs(i) = c_cgs * r%cr_c_fraction
+  !  g%cr_c(i) = g%cr_c_cgs(i) / scale_v
+  !enddo
 
   scale_kappa = scale_l**2/scale_t
   r%cr_dmax_code=r%cr_dmax/scale_kappa
@@ -110,5 +111,50 @@ subroutine update_cr_vars(r, g)
   end do
 
 end subroutine update_cr_vars
+!#####################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
+subroutine get_cr_c_min(r, g, cr_c_min)
+  ! Get CR speed of light according to the speed of light fraction
+  !-------------------------------------------------------------------------
+  use amr_commons, only: run_t, global_t
+  use constants,only:c_cgs
+  implicit none
+  type(run_t) :: r
+  type(global_t) :: g
+  real(kind=8),intent(out)::cr_c_min
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
+  integer::i,igrp
+  !-------------------------------------------------------------------------
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  cr_c_min = c_cgs * r%cr_c_fraction / scale_v
+
+end subroutine get_cr_c_min
+!#####################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
+
+recursive subroutine r_broadcast_cr_c(pst,input,input_size)
+  use mdl_module
+  use ramses_commons, only: pst_t
+  use mdl_parameters
+  implicit none
+  type(pst_t)::pst
+  integer,VALUE::input_size
+  type(in_broadcast_cr_c_t)::input
+
+  integer::rID
+
+  if(pst%nLower>0)then
+     rID = mdl_send_request(pst%s%mdl,MDL_BROADCAST_CR_C,pst%iUpper+1,input_size,0,input)
+     call r_broadcast_cr_c(pst%pLower,input,input_size)
+     call mdl_get_reply(pst%s%mdl,rID,0)
+  else
+     pst%s%g%cr_c(input%ilevel)=input%cr_c
+  endif
+
+end subroutine r_broadcast_cr_c
 
 end module update_cr_c_module

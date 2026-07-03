@@ -139,6 +139,7 @@ module mdl_parameters
      enumerator::MDL_CR_INPUT_CONDINIT
      enumerator::MDL_CR_INPUT_SOURCE_REGIONS
      enumerator::MDL_CR_UPDATES
+     enumerator::MDL_BROADCAST_CR_C
      enumerator::MDL_CR_UPLOAD_FINE
      enumerator::MDL_OUTPUT_CR
      enumerator::MDL_CR_GODUNOV_FINE

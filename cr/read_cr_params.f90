@@ -37,7 +37,7 @@ subroutine m_read_cr_params(pst)
   real(kind=8)::cr_dmax=1d30              ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
   real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
-  real(kind=8)::cr_varc_fudge=3.0
+  real(kind=8)::cr_varc_fudge=10.0
   real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
   character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
   real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29

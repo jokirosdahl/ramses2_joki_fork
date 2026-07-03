@@ -53,6 +53,7 @@ end subroutine r_courant_fine
 subroutine courant_fine(r,g,m,ilevel,mass,ekin,eint,emag,dt)
   use amr_parameters, only: nvector, ndim, twotondim
   use hydro_parameters, only: nvar, nener
+  use cr_parameters, only: ncrgrp
   use amr_commons, only: run_t,global_t,mesh_t
   implicit none
   type(run_t)::r
@@ -66,7 +67,7 @@ subroutine courant_fine(r,g,m,ilevel,mass,ekin,eint,emag,dt)
   !----------------------------------------------------------------------
   integer::ivar,idim,ind,igrid
   real(kind=8)::dt_lev,dx,vol
-  real(kind=8),dimension(1:nvar)::uu
+  real(kind=8),dimension(1:nvar+ncrgrp)::uu
   real(kind=8),dimension(1:ndim)::gg
   real(kind=8),dimension(1:6)::bb
 
@@ -145,6 +146,11 @@ subroutine courant_fine(r,g,m,ilevel,mass,ekin,eint,emag,dt)
            do idim=1,3
               emag=emag+0.125D0*(bb(idim)+bb(idim+3))**2*vol
               eint=eint-0.125D0*(bb(idim)+bb(idim+3))**2*vol
+           end do
+#endif
+#ifdef CRS
+           do ivar=1,ncrgrp
+              uu(nvar+ivar) = m%cruold(ind,1+(ndim+1)*(ivar-1),igrid)
            end do
 #endif
            ! Compute CFL time-step

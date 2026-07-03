@@ -160,7 +160,7 @@ function worker_init(mdl) result(pst)
   use init_cr_module, only: r_init_cr
   use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
   use cr_source_terms_module, only: r_cr_source_terms
-  use update_cr_c_module, only: r_cr_updates
+  use update_cr_c_module, only: r_cr_updates, r_broadcast_cr_c
   use cr_input_condinit_module, only: r_cr_input_condinit, r_cr_input_source_regions
   use cr_upload_module, only: r_cr_upload_fine
   use output_cr_module, only: r_output_cr
@@ -327,6 +327,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUNEW,             pst,C_FUNLOC(r_set_crunew),1,0,"set_crunew")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
   call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
+  call mdl_add_service(pst%s%mdl,MDL_BROADCAST_CR_C,         pst,C_FUNLOC(r_broadcast_cr_c),24,0,"broadcast_cr_c")
 #ifdef _CUDA
   call mdl_add_service(pst%s%mdl,MDL_SET_GRID_DEVICE,        pst,C_FUNLOC(r_set_grid_device),0,0,"set_grid_device")
   call mdl_add_service(pst%s%mdl,MDL_TRANSFER_GRID_HOST,     pst,C_FUNLOC(r_transfer_grid_host),0,0,"transfer_grid_host")

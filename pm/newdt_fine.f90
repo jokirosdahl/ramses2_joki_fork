@@ -23,6 +23,7 @@ subroutine m_newdt_fine(pst,ilevel)
   use ramses_commons, only: pst_t
   use courant_fine_module, only: r_courant_fine, out_courant_fine_t
   use constants, only: twopi
+  use update_cr_c_module
   implicit none
   type(pst_t)::pst
   integer::ilevel
@@ -35,10 +36,11 @@ subroutine m_newdt_fine(pst,ilevel)
   !-----------------------------------------------------------
   real(kind=8)::dx,tff,fourpi,threepi2
   real(kind=8)::ekin,vmax
-  real(kind=8)::dt_gyro, dt_courant, max_b, max_q
+  real(kind=8)::dt_gyro, dt_courant, max_b, max_q, cr_c_min
   type(out_courant_fine_t)::out_courant_fine
   type(out_newdt_part_t)::out_newdt_part
   type(in_broadcast_dt_t)::in_broadcast_dt
+  type(in_broadcast_cr_c_t)::in_broadcast_cr_c
 
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
@@ -121,6 +123,18 @@ subroutine m_newdt_fine(pst,ilevel)
   endif
 
   if(r%cr.and.r%cr_advect)then
+     call get_cr_c_min(r, g, cr_c_min)
+     g%cr_c(ilevel) = cr_c_min
+     if(r%cr_varc) then
+       ! Update the variable light speed
+       g%cr_c(ilevel) = max(cr_c_min, dx/3./out_courant_fine%dt * r%cr_varc_fudge)
+     endif
+     ! Broadcast the new value of cr_c
+     in_broadcast_cr_c%ilevel=ilevel
+     in_broadcast_cr_c%cr_c=g%cr_c(ilevel)
+     call r_broadcast_cr_c(pst,in_broadcast_cr_c,storage_size(in_broadcast_cr_c)/32)
+
+     ! Limit timestep to Nsubcycle times dt_cr
      call get_cr_courant_dt(r,g,dt_courant,ilevel)
      g%dtnew(ilevel)=MIN(real(g%dtnew(ilevel),kind=8),r%cr_nsubcycle*dt_courant)
   endif
