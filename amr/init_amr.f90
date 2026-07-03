@@ -48,6 +48,9 @@ recursive subroutine r_init_amr(pst)
 #ifdef _CUDA
   use gpu_manager
 #endif
+#ifdef _METAL
+  use metal_runner, only: metal_allocate_amr
+#endif
   implicit none
   type(pst_t)::pst
 
@@ -71,6 +74,9 @@ recursive subroutine r_init_amr(pst)
 #ifdef _CUDA
      call gpu_allocate_amr(pst%s)
      if(pst%s%r%poisson) call gpu_allocate_mg(pst%s)
+#endif
+#ifdef _METAL
+     call metal_allocate_amr(pst%s)
 #endif
   endif
 

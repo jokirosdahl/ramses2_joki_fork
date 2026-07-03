@@ -25,6 +25,9 @@ subroutine m_update_time(pst,ilevel,done)
   real(kind=8)::dt,econs,mcons
   integer::i,itest
   type(in_broadcast_aexp_t)::in_broadcast_aexp
+#ifdef _METAL
+  real(kind=8), external :: wallclock
+#endif
   
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
@@ -32,7 +35,11 @@ subroutine m_update_time(pst,ilevel,done)
   dt=g%dtnew(ilevel)
   itest=0
 
+#ifdef _METAL
+  if(ttstart.eq.0.0) ttstart = wallclock()
+#else
   if(ttstart.eq.0.0) ttstart = mdl_wtime(mdl)
+#endif
 
   ! Update the outer lightcone shell boundary after restart
   if(g%first_coarse_restart)then 
@@ -140,7 +147,11 @@ subroutine m_update_time(pst,ilevel,done)
      !---------------
      if(g%t>=r%tout(r%noutput).or.g%aexp>=r%aout(r%noutput).or.g%nstep_coarse>=r%nstepmax)then
         write(*,*)'Run completed'
+#ifdef _METAL
+        ttend = wallclock()
+#else
         ttend = mdl_wtime(mdl)
+#endif
         print '(A,F0.7)',' Total elapsed time: ',ttend-ttstart
         done=.true.
         return

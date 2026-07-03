@@ -310,6 +310,9 @@ contains
 #ifdef _CUDA
     use cudafor
 #endif
+#ifdef _METAL
+    use metal_interface, only: mtl_init
+#endif
     type(mdl_t)::mdl
 #ifndef WITHOUTMPI
     include 'mpif.h'
@@ -342,6 +345,9 @@ contains
     write(*,'(" Compute Capability: ",i0,".",i0)')prop%major,prop%minor
     write(*,'(" Shared Memory per Block: ",i0)')prop%sharedMemPerBlock
     write(*,'(" Maximum Shared Memory per Block: ",i0)')prop%sharedMemPerBlockOptIn
+#endif
+#ifdef _METAL
+    call mtl_init()
 #endif
   end subroutine mdl_initialize
   !##############################################################
