@@ -93,6 +93,16 @@ subroutine input_hydro_condinit(r,g,m,ilevel)
            m%bold(ind,6,igrid+i-1)=qq(i,nvar+1)
         end do
 #endif
+#if INIT==HOMOGENEOUS_B_FIELD
+        do i=1,ngrid
+           m%bold(ind,1,igrid+i-1)=r%A_ave
+           m%bold(ind,4,igrid+i-1)=r%A_ave
+           m%bold(ind,2,igrid+i-1)=r%B_region(1)
+           m%bold(ind,5,igrid+i-1)=r%B_region(1)
+           m%bold(ind,3,igrid+i-1)=r%C_region(1)
+           m%bold(ind,6,igrid+i-1)=r%C_region(1)
+        end do
+#endif
 #endif
      end do
      ! End loop over cells
@@ -100,8 +110,10 @@ subroutine input_hydro_condinit(r,g,m,ilevel)
   ! End loop over grids
 #endif
 
+#if INIT!=HOMOGENEOUS_B_FIELD
   ! Compute initial magnetic field
   call input_hydro_vecpot(r,g,m,ilevel)
+#endif
 
   ! Convert primitive to conservative
   call cons_from_prim(r,g,m,ilevel)
