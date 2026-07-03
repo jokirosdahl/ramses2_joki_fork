@@ -289,7 +289,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
            end do
         end do
 #endif
-#ifdef CR
+#ifdef CRS
         do ivar=1,ncrvar
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind2_left(ind,dir),ivar,igrid_ref)
