@@ -122,7 +122,7 @@ subroutine m_update_time(pst,ilevel,done)
         ! Output fine step information and used memory
         !----------------------------------------------
         if(r%part)then
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
@@ -131,7 +131,7 @@ subroutine m_update_time(pst,ilevel,done)
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
 #endif
         else
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
 #else
@@ -167,7 +167,7 @@ subroutine m_update_time(pst,ilevel,done)
   if(mod(g%nstep,r%ncontrol)==0)then
      if(itest==0)then
         if(r%part)then
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
@@ -176,7 +176,7 @@ subroutine m_update_time(pst,ilevel,done)
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
 #endif
         else
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
 #else

@@ -106,6 +106,10 @@ inline float u_get(device const float *u, int oct_1, int ivar_1, int cell_1) {
 inline void u_set(device float *u, int oct_1, int ivar_1, int cell_1, float v) {
     u[(oct_1-1)*(NVAR)*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1)] = v;
 }
+/* Flat 0-based index into u — for atomic operations that need a raw pointer. */
+inline int u_flat(int oct_1, int ivar_1, int cell_1) {
+    return (oct_1-1)*(NVAR)*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1);
+}
 /* nbor(ind_nbor, subgrid_idx) in Fortran — ind_nbor varies fastest */
 inline int nbor_get(device const int *nb, int sg_1, int ind_1) {
     return nb[(sg_1-1)*SUBGRIDSIZE + (ind_1-1)];
@@ -625,6 +629,190 @@ void riemann_driver(
 }
 
 /* ===========================================================================
+ * zero_fine_fluxes — mirrors gpu_hydro.cuf (no MHD, no scalars).
+ *
+ * For each interface between two cells where either is refined, zero the flux
+ * so fine-fine fluxes do not contaminate the coarse update.
+ * Called when ilevel < levelmax.
+ * ========================================================================= */
+void zero_fine_fluxes(
+    threadgroup const local_subgrid_t &ls,
+    int thread_idx, uint threads_per_tg,
+    threadgroup interfaces_x_t &fluxes_x,
+    threadgroup interfaces_y_t &fluxes_y,
+    threadgroup interfaces_z_t &fluxes_z)
+{
+    const int ias = (2*NSUBGRID+1) * (2*NSUBGRID) * (2*NSUBGRID); /* =12 for nsubgrid=1 */
+
+    for (int work_idx = thread_idx; work_idx < 3 * ias; work_idx += int(threads_per_tg)) {
+        int i, j, k;
+        if (work_idx < ias) {
+            /* X interfaces */
+            index_1Dto3D(work_idx, 2*NSUBGRID+1, 2*NSUBGRID, i, j, k);
+            /* Fortran: refined(i+1,j+2,k+2) or refined(i+2,j+2,k+2)
+             * Metal 0-based: refined[i][j+1][k+1] or refined[i+1][j+1][k+1] */
+            if (ls.refined[i][j+1][k+1] || ls.refined[i+1][j+1][k+1]) {
+                fluxes_x.density   [i][j][k] = 0.0f;
+                fluxes_x.velocity_x[i][j][k] = 0.0f;
+                fluxes_x.velocity_y[i][j][k] = 0.0f;
+                fluxes_x.velocity_z[i][j][k] = 0.0f;
+                fluxes_x.pressure  [i][j][k] = 0.0f;
+            }
+        } else if (work_idx < 2 * ias) {
+            /* Y interfaces */
+            index_1Dto3D(work_idx - ias, 2*NSUBGRID, 2*NSUBGRID+1, i, j, k);
+            /* Fortran: refined(i+2,j+1,k+2) or refined(i+2,j+2,k+2)
+             * Metal 0-based: refined[i+1][j][k+1] or refined[i+1][j+1][k+1] */
+            if (ls.refined[i+1][j][k+1] || ls.refined[i+1][j+1][k+1]) {
+                fluxes_y.density   [i][j][k] = 0.0f;
+                fluxes_y.velocity_x[i][j][k] = 0.0f;
+                fluxes_y.velocity_y[i][j][k] = 0.0f;
+                fluxes_y.velocity_z[i][j][k] = 0.0f;
+                fluxes_y.pressure  [i][j][k] = 0.0f;
+            }
+        } else {
+            /* Z interfaces */
+            index_1Dto3D(work_idx - 2*ias, 2*NSUBGRID, 2*NSUBGRID, i, j, k);
+            /* Fortran: refined(i+2,j+2,k+1) or refined(i+2,j+2,k+2)
+             * Metal 0-based: refined[i+1][j+1][k] or refined[i+1][j+1][k+1] */
+            if (ls.refined[i+1][j+1][k] || ls.refined[i+1][j+1][k+1]) {
+                fluxes_z.density   [i][j][k] = 0.0f;
+                fluxes_z.velocity_x[i][j][k] = 0.0f;
+                fluxes_z.velocity_y[i][j][k] = 0.0f;
+                fluxes_z.velocity_z[i][j][k] = 0.0f;
+                fluxes_z.pressure  [i][j][k] = 0.0f;
+            }
+        }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+}
+
+/* ===========================================================================
+ * coarse_cell_update — mirrors gpu_hydro.cuf (no MHD, no scalars).
+ *
+ * Applies boundary flux corrections to coarser-level cells in unew.
+ * For nsubgrid=1: interface_array_size=1 → exactly 6 active threads (one per face).
+ * The correction reaches ghost-cache octs (source_idx > ngridmax): their
+ * father oct is the actual coarse grid oct to be corrected.
+ * Called when ilevel > levelmin.
+ * ========================================================================= */
+void coarse_cell_update(
+    device float              *unew,
+    device const int          *nbor,
+    device const oct_t        *grid,
+    device const int          *father,
+    threadgroup const interfaces_x_t &fluxes_x,
+    threadgroup const interfaces_y_t &fluxes_y,
+    threadgroup const interfaces_z_t &fluxes_z,
+    int head_idx, int block_idx, int ngridmax,
+    int thread_idx, float coarse_flux_scale)
+{
+    /* For nsubgrid=1: interface_array_size = nsubgrid^(ndim-1) = 1 */
+    const int ias = NSUBGRID * NSUBGRID;   /* =1 for nsubgrid=1 */
+    if (thread_idx >= 6 * ias) return;
+
+    int subgrid_idx = head_idx + block_idx;   /* 1-based */
+    int face    = thread_idx / ias;
+    int work_idx = thread_idx % ias;
+
+    /* Decode 2D position within the face (for nsubgrid=1, always 0) */
+    int j_raw = work_idx % NSUBGRID;
+    int k_raw = work_idx / NSUBGRID;
+
+    float fd=0.0f, fmx=0.0f, fmy=0.0f, fmz=0.0f, fe=0.0f;
+    int ind_nbor = 0;
+
+    if (face == 0) {
+        /* Left X: i_sg=0, j_sg=j_raw+1, k_sg=k_raw+1 */
+        int j_sg = j_raw + 1, k_sg = k_raw + 1;
+        for (int j = 2*j_sg-2; j <= 2*j_sg-1; j++)
+            for (int k = 2*k_sg-2; k <= 2*k_sg-1; k++) {
+                fd  -= fluxes_x.density   [0][j][k] * coarse_flux_scale;
+                fmx -= fluxes_x.velocity_x[0][j][k] * coarse_flux_scale;
+                fmy -= fluxes_x.velocity_y[0][j][k] * coarse_flux_scale;
+                fmz -= fluxes_x.velocity_z[0][j][k] * coarse_flux_scale;
+                fe  -= fluxes_x.pressure  [0][j][k] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + 0 + NSUBGRIDP2*j_sg + NSUBGRIDP2*NSUBGRIDP2*k_sg;
+    } else if (face == 1) {
+        /* Right X: i_sg=NSUBGRID+1, j_sg=j_raw+1, k_sg=k_raw+1 */
+        int j_sg = j_raw + 1, k_sg = k_raw + 1;
+        for (int j = 2*j_sg-2; j <= 2*j_sg-1; j++)
+            for (int k = 2*k_sg-2; k <= 2*k_sg-1; k++) {
+                fd  += fluxes_x.density   [2*NSUBGRID][j][k] * coarse_flux_scale;
+                fmx += fluxes_x.velocity_x[2*NSUBGRID][j][k] * coarse_flux_scale;
+                fmy += fluxes_x.velocity_y[2*NSUBGRID][j][k] * coarse_flux_scale;
+                fmz += fluxes_x.velocity_z[2*NSUBGRID][j][k] * coarse_flux_scale;
+                fe  += fluxes_x.pressure  [2*NSUBGRID][j][k] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + (NSUBGRID+1) + NSUBGRIDP2*j_sg + NSUBGRIDP2*NSUBGRIDP2*k_sg;
+    } else if (face == 2) {
+        /* Left Y: i_sg=j_raw+1, j_sg=0, k_sg=k_raw+1 */
+        int i_sg = j_raw + 1, k_sg = k_raw + 1;
+        for (int i = 2*i_sg-2; i <= 2*i_sg-1; i++)
+            for (int k = 2*k_sg-2; k <= 2*k_sg-1; k++) {
+                fd  -= fluxes_y.density   [i][0][k] * coarse_flux_scale;
+                fmx -= fluxes_y.velocity_x[i][0][k] * coarse_flux_scale;
+                fmy -= fluxes_y.velocity_y[i][0][k] * coarse_flux_scale;
+                fmz -= fluxes_y.velocity_z[i][0][k] * coarse_flux_scale;
+                fe  -= fluxes_y.pressure  [i][0][k] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + i_sg + NSUBGRIDP2*0 + NSUBGRIDP2*NSUBGRIDP2*k_sg;
+    } else if (face == 3) {
+        /* Right Y: i_sg=j_raw+1, j_sg=NSUBGRID+1, k_sg=k_raw+1 */
+        int i_sg = j_raw + 1, k_sg = k_raw + 1;
+        for (int i = 2*i_sg-2; i <= 2*i_sg-1; i++)
+            for (int k = 2*k_sg-2; k <= 2*k_sg-1; k++) {
+                fd  += fluxes_y.density   [i][2*NSUBGRID][k] * coarse_flux_scale;
+                fmx += fluxes_y.velocity_x[i][2*NSUBGRID][k] * coarse_flux_scale;
+                fmy += fluxes_y.velocity_y[i][2*NSUBGRID][k] * coarse_flux_scale;
+                fmz += fluxes_y.velocity_z[i][2*NSUBGRID][k] * coarse_flux_scale;
+                fe  += fluxes_y.pressure  [i][2*NSUBGRID][k] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + i_sg + NSUBGRIDP2*(NSUBGRID+1) + NSUBGRIDP2*NSUBGRIDP2*k_sg;
+    } else if (face == 4) {
+        /* Left Z: i_sg=j_raw+1, j_sg=k_raw+1, k_sg=0 */
+        int i_sg = j_raw + 1, j_sg = k_raw + 1;
+        for (int i = 2*i_sg-2; i <= 2*i_sg-1; i++)
+            for (int j = 2*j_sg-2; j <= 2*j_sg-1; j++) {
+                fd  -= fluxes_z.density   [i][j][0] * coarse_flux_scale;
+                fmx -= fluxes_z.velocity_x[i][j][0] * coarse_flux_scale;
+                fmy -= fluxes_z.velocity_y[i][j][0] * coarse_flux_scale;
+                fmz -= fluxes_z.velocity_z[i][j][0] * coarse_flux_scale;
+                fe  -= fluxes_z.pressure  [i][j][0] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + i_sg + NSUBGRIDP2*j_sg + NSUBGRIDP2*NSUBGRIDP2*0;
+    } else {
+        /* Right Z: i_sg=j_raw+1, j_sg=k_raw+1, k_sg=NSUBGRID+1 */
+        int i_sg = j_raw + 1, j_sg = k_raw + 1;
+        for (int i = 2*i_sg-2; i <= 2*i_sg-1; i++)
+            for (int j = 2*j_sg-2; j <= 2*j_sg-1; j++) {
+                fd  += fluxes_z.density   [i][j][2*NSUBGRID] * coarse_flux_scale;
+                fmx += fluxes_z.velocity_x[i][j][2*NSUBGRID] * coarse_flux_scale;
+                fmy += fluxes_z.velocity_y[i][j][2*NSUBGRID] * coarse_flux_scale;
+                fmz += fluxes_z.velocity_z[i][j][2*NSUBGRID] * coarse_flux_scale;
+                fe  += fluxes_z.pressure  [i][j][2*NSUBGRID] * coarse_flux_scale;
+            }
+        ind_nbor = 1 + i_sg + NSUBGRIDP2*j_sg + NSUBGRIDP2*NSUBGRIDP2*(NSUBGRID+1);
+    }
+
+    /* Condition: source is ghost-cache oct → its father is the actual coarse oct */
+    int source_idx = nbor_get(nbor, subgrid_idx, ind_nbor);
+    if (source_idx > ngridmax) {
+        int father_idx = father[source_idx - 1];
+        int ic = grid[source_idx - 1].ckey[0] - 2 * grid[father_idx - 1].ckey[0];
+        int jc = grid[source_idx - 1].ckey[1] - 2 * grid[father_idx - 1].ckey[1];
+        int kc = grid[source_idx - 1].ckey[2] - 2 * grid[father_idx - 1].ckey[2];
+        int cell_idx = 1 + ic + 2*jc + 4*kc;
+        atomic_add_float((device atomic_uint*)&unew[u_flat(father_idx,1,cell_idx)], fd);
+        atomic_add_float((device atomic_uint*)&unew[u_flat(father_idx,2,cell_idx)], fmx);
+        atomic_add_float((device atomic_uint*)&unew[u_flat(father_idx,3,cell_idx)], fmy);
+        atomic_add_float((device atomic_uint*)&unew[u_flat(father_idx,4,cell_idx)], fmz);
+        atomic_add_float((device atomic_uint*)&unew[u_flat(father_idx,5,cell_idx)], fe);
+    }
+}
+
+/* ===========================================================================
  * conservative_update — mirrors gpu_hydro.cuf (no MHD, no scalars)
  *
  * Applies flux divergence to unew for the 2×2×2 inner cells of the subgrid.
@@ -881,6 +1069,7 @@ kernel void hydro_integrator_kernel(
     constant int        &slope          [[buffer(15)]],
     constant int        &riemann        [[buffer(16)]],
     constant float      *constant_gravity [[buffer(17)]],
+    device const int    *father           [[buffer(18)]],
     uint block_idx      [[threadgroup_position_in_grid]],
     uint thread_idx     [[thread_position_in_threadgroup]],
     uint threads_per_tg [[threads_per_threadgroup]])
@@ -916,7 +1105,11 @@ kernel void hydro_integrator_kernel(
     riemann_driver(left_x, right_x, left_y, right_y, left_z, right_z,
                    int(thread_idx), threads_per_tg, gamma, smallr, smallc2, riemann);
 
-    /* zero_fine_fluxes: skipped for levelmin==levelmax */
+    /* Zero fine-level fluxes at refined faces so they do not corrupt coarse update. */
+    if (ilevel < levelmax) {
+        zero_fine_fluxes(local_subgrid, int(thread_idx), threads_per_tg,
+                         left_x, left_y, left_z);
+    }
 
     /* =========================================================================
      * Update conserved variables at current level
@@ -926,5 +1119,76 @@ kernel void hydro_integrator_kernel(
                         head_idx, int(block_idx), int(thread_idx), threads_per_tg,
                         dtdx);
 
-    /* coarse_cell_update: skipped for levelmin==levelmax (ilevel==levelmin) */
+    /* Correct the coarser level's unew via boundary flux contributions. */
+    if (ilevel > levelmin) {
+        float cfs = dtdx / float(TWOTONDIM);   /* dtdx / 8 */
+        coarse_cell_update(unew, nbor, grid, father,
+                           left_x, left_y, left_z,
+                           head_idx, int(block_idx), ngridmax,
+                           int(thread_idx), cfs);
+    }
+}
+
+/* ===========================================================================
+ * upload_kernel — restriction (averaging down) for fine→coarse levels.
+ * Mirrors attributes(global) upload_kernel in gpu_hydro.cuf (no MHD, no NENER).
+ *
+ * One thread per fine oct (ilevel+1).  Looks up the parent oct via father[],
+ * then averages all 8 children uold values into the parent cell.
+ * For internal_energy!=0: converts total→internal energy before averaging,
+ * then converts back to total using the averaged parent momenta.
+ * ========================================================================= */
+kernel void upload_kernel(
+    device const oct_t  *grid             [[buffer(0)]],
+    device const int    *father           [[buffer(1)]],
+    device float        *uold             [[buffer(2)]],
+    constant int        &head_idx         [[buffer(3)]],
+    constant int        &num_octs         [[buffer(4)]],
+    constant int        &internal_energy  [[buffer(5)]],
+    constant float      &gamma            [[buffer(6)]],
+    constant float      &smallr           [[buffer(7)]],
+    constant float      &smallc2          [[buffer(8)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if ((int)tid >= num_octs) return;
+    int oct_idx    = head_idx + (int)tid;   /* 1-based fine oct */
+    int father_idx = father[oct_idx - 1];   /* 1-based parent oct */
+
+    /* Child cell position within parent: ckey difference (0 or 1 per axis) */
+    int ic = grid[oct_idx - 1].ckey[0] - 2 * grid[father_idx - 1].ckey[0];
+    int jc = grid[oct_idx - 1].ckey[1] - 2 * grid[father_idx - 1].ckey[1];
+    int kc = grid[oct_idx - 1].ckey[2] - 2 * grid[father_idx - 1].ckey[2];
+    int cell_idx = 1 + ic + 2*jc + 4*kc;   /* 1-based parent cell (1..8) */
+
+    float inv8 = 1.0f / 8.0f;
+
+    /* Average all NVAR conserved variables from 8 fine children → parent cell */
+    for (int ivar = 1; ivar <= (NVAR); ivar++) {
+        float avg = 0.0f;
+        for (int ind = 1; ind <= 8; ind++)
+            avg += u_get(uold, oct_idx, ivar, ind);
+        u_set(uold, father_idx, ivar, cell_idx, avg * inv8);
+    }
+
+    /* Non-conservative upload: average internal energy, restore total */
+    if (internal_energy != 0) {
+        float smalle = smallc2 / gamma / (gamma - 1.0f);
+        float eint_sum = 0.0f;
+        for (int ind = 1; ind <= 8; ind++) {
+            float dens = max(u_get(uold, oct_idx, 1, ind), smallr);
+            float mx   = u_get(uold, oct_idx, 2, ind);
+            float my   = u_get(uold, oct_idx, 3, ind);
+            float mz   = u_get(uold, oct_idx, 4, ind);
+            float etot = u_get(uold, oct_idx, 5, ind);
+            float ekin = 0.5f * (mx*mx + my*my + mz*mz) / dens;
+            eint_sum += max(etot - ekin, smalle * dens);
+        }
+        /* Recompute parent kinetic energy from averaged parent momenta */
+        float dens = max(u_get(uold, father_idx, 1, cell_idx), smallr);
+        float mx   = u_get(uold, father_idx, 2, cell_idx);
+        float my   = u_get(uold, father_idx, 3, cell_idx);
+        float mz   = u_get(uold, father_idx, 4, cell_idx);
+        float ekin = 0.5f * (mx*mx + my*my + mz*mz) / dens;
+        u_set(uold, father_idx, 5, cell_idx, eint_sum * inv8 + ekin);
+    }
 }

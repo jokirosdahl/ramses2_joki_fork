@@ -6,6 +6,8 @@ module flag_utils
 #ifdef _CUDA
   use gpu_utils, only: nsubgrid
   use gpu_runner, only: gpu_init_flag, gpu_enforce_rules, gpu_user_flag, gpu_enforce_subgrid
+#elif defined(_METAL)
+  use metal_runner, only: metal_init_flag, metal_user_flag, metal_enforce_rules
 #endif
 contains
 
@@ -94,6 +96,12 @@ recursive subroutine r_init_flag(pst,ilevel,input_size,noct,output_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_init_flag(pst%s, ilevel, nflag)
+     else
+        call init_flag(pst%s,ilevel,nflag)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_init_flag(pst%s, ilevel, nflag)
      else
         call init_flag(pst%s,ilevel,nflag)
      endif
@@ -348,6 +356,12 @@ recursive subroutine r_user_flag(pst,ilevel,input_size,noct,output_size)
      else
         call user_flag(pst%s, ilevel, nflag)
      endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_user_flag(pst%s, ilevel, nflag)
+     else
+        call user_flag(pst%s, ilevel, nflag)
+     endif
 #else
      call user_flag(pst%s, ilevel, nflag)
 #endif
@@ -411,6 +425,12 @@ recursive subroutine r_ensure_ref_rules(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_enforce_rules(pst%s, ilevel)
+     else
+        call ensure_ref_rules(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_enforce_rules(pst%s, ilevel)
      else
         call ensure_ref_rules(pst%s,ilevel)
      endif

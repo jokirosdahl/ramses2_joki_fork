@@ -603,7 +603,7 @@ if(COMPILER STREQUAL "METAL")
         -I${CMAKE_SOURCE_DIR}/metal
         -I${CMAKE_SOURCE_DIR}/metal/kernels)
 
-    foreach(_kernel hydro hash refine)
+    foreach(_kernel hydro hash refine flag scan)
         add_custom_command(
             OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
             COMMAND ${_metalc} ${_metalflags}
@@ -622,10 +622,14 @@ if(COMPILER STREQUAL "METAL")
                 ${CMAKE_BINARY_DIR}/hydro.air
                 ${CMAKE_BINARY_DIR}/hash.air
                 ${CMAKE_BINARY_DIR}/refine.air
+                ${CMAKE_BINARY_DIR}/flag.air
+                ${CMAKE_BINARY_DIR}/scan.air
                 -o ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
         DEPENDS ${CMAKE_BINARY_DIR}/hydro.air
                 ${CMAKE_BINARY_DIR}/hash.air
                 ${CMAKE_BINARY_DIR}/refine.air
+                ${CMAKE_BINARY_DIR}/flag.air
+                ${CMAKE_BINARY_DIR}/scan.air
         COMMENT "Linking ramses_kernels.metallib"
         VERBATIM
     )

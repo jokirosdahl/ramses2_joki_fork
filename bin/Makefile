@@ -347,7 +347,11 @@ hash.air: $(METAL_KPATH)/hash.metal $(METAL_PATH)/metal_types.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air hash.air refine.air
+flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ramses_kernels.metallib: hydro.air hash.air refine.air flag.air scan.air
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################
