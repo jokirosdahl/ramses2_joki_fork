@@ -301,11 +301,22 @@ subroutine writemem(usedmem)
 end subroutine writemem
 
 subroutine getmem(outmem)
+  use iso_c_binding, only: c_long
   real::outmem
   character(len=300) :: dir, dir2, file
   integer::ind,j,nmem,read_status
   logical::file_exists
-  
+#ifdef _METAL
+  interface
+    function getmem_mac() bind(c, name='getmem_mac')
+      import c_long
+      integer(c_long) :: getmem_mac
+    end function getmem_mac
+  end interface
+  outmem = real(getmem_mac(), kind=4)
+  return
+#endif
+
   file='/proc/self/stat'
   inquire(file=file, exist=file_exists)
   if (file_exists) then
