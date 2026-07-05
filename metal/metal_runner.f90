@@ -524,6 +524,7 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
 
      ! Update nkill: slots consumed but not in any valid level.
      nkill          = int(n_all - total_valid)
+     sim%m%noct_used = sim%m%tail(sim%r%nlevelmax)
      sim%m%ifree    = int(cur_head)   ! first free slot after valid octs
 
      ! --- Step 6: Hilbert sort per level ------------------------------------

@@ -26,7 +26,10 @@ static id<MTLBuffer>               s_father           = nil;
 static id<MTLBuffer>               s_swap_local       = nil;
 static id<MTLBuffer>               s_swap_global      = nil;
 static id<MTLBuffer>               s_prefix_sum       = nil;
-static id<MTLBuffer>               s_partial_sums     = nil;
+static id<MTLBuffer>               s_partial_sums     = nil;  /* level-1 scratch (ps0): ceil(n/256)      */
+static id<MTLBuffer>               s_partial_sums_2   = nil;  /* level-2 scratch (ps1): ceil(n/256^2)    */
+static id<MTLBuffer>               s_partial_sums_3   = nil;  /* level-3 scratch (ps2): ceil(n/256^3)    */
+static id<MTLBuffer>               s_partial_sums_4   = nil;  /* dummy sink for deepest single-block pass */
 static id<MTLBuffer>               s_ifree_dev        = nil;
 static id<MTLBuffer>               s_ifree_cache_dev  = nil;
 static id<MTLBuffer>               s_ckey_max_dev     = nil;
@@ -548,13 +551,18 @@ extern "C" void mtl_upload(int head_idx, int num_octs,
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_alloc_refine(int ngridmax, int ncachemax, int nlevelmax)
 {
-    int ntotal   = ngridmax + ncachemax;
-    int npartial = (ntotal + 255) / 256;   /* partial_sums for 2-phase scan */
-    int nlevels  = nlevelmax + 1;
+    int ntotal    = ngridmax + ncachemax;
+    int npartial  = (ntotal    + 255) / 256;  /* ps0: ceil(n/256)   */
+    int npartial2 = (npartial  + 255) / 256;  /* ps1: ceil(n/256^2) */
+    int npartial3 = (npartial2 + 255) / 256;  /* ps2: ceil(n/256^3) */
+    int nlevels   = nlevelmax + 1;
 
-    NSUInteger flag_bytes    = (NSUInteger)8 * ntotal  * sizeof(int);  /* 8 = twotondim NDIM=3 */
-    NSUInteger oct_bytes     = (NSUInteger)ntotal       * sizeof(int);  /* father/swap/prefix */
-    NSUInteger partial_bytes = (NSUInteger)npartial     * sizeof(int);
+    NSUInteger flag_bytes     = (NSUInteger)8 * ntotal   * sizeof(int);  /* 8 = twotondim NDIM=3 */
+    NSUInteger oct_bytes      = (NSUInteger)ntotal        * sizeof(int);  /* father/swap/prefix */
+    NSUInteger partial_bytes  = (NSUInteger)npartial      * sizeof(int);
+    NSUInteger partial2_bytes = (NSUInteger)npartial2     * sizeof(int);
+    NSUInteger partial3_bytes = (NSUInteger)npartial3     * sizeof(int);
+    NSUInteger partial4_bytes = sizeof(int);                              /* 1-element dummy sink */
     NSUInteger scalar_bytes  = sizeof(int);
     NSUInteger ckey_bytes    = (NSUInteger)nlevels      * sizeof(int);
     NSUInteger koff_bytes    = (NSUInteger)nlevels      * sizeof(long);
@@ -567,7 +575,10 @@ extern "C" void mtl_alloc_refine(int ngridmax, int ncachemax, int nlevelmax)
     s_swap_local   = [s_device newBufferWithLength:oct_bytes     options:MTLResourceStorageModeShared];
     s_swap_global  = [s_device newBufferWithLength:oct_bytes     options:MTLResourceStorageModeShared];
     s_prefix_sum   = [s_device newBufferWithLength:oct_bytes     options:MTLResourceStorageModeShared];
-    s_partial_sums = [s_device newBufferWithLength:partial_bytes options:MTLResourceStorageModeShared];
+    s_partial_sums   = [s_device newBufferWithLength:partial_bytes  options:MTLResourceStorageModeShared];
+    s_partial_sums_2 = [s_device newBufferWithLength:partial2_bytes options:MTLResourceStorageModeShared];
+    s_partial_sums_3 = [s_device newBufferWithLength:partial3_bytes options:MTLResourceStorageModeShared];
+    s_partial_sums_4 = [s_device newBufferWithLength:partial4_bytes options:MTLResourceStorageModeShared];
     s_ifree_dev        = [s_device newBufferWithLength:scalar_bytes options:MTLResourceStorageModeShared];
     s_ifree_cache_dev  = [s_device newBufferWithLength:scalar_bytes options:MTLResourceStorageModeShared];
     s_ckey_max_dev     = [s_device newBufferWithLength:ckey_bytes   options:MTLResourceStorageModeShared];
@@ -583,6 +594,9 @@ extern "C" void mtl_alloc_refine(int ngridmax, int ncachemax, int nlevelmax)
     memset(s_swap_global.contents,     0, oct_bytes);
     memset(s_prefix_sum.contents,      0, oct_bytes);
     memset(s_partial_sums.contents,    0, partial_bytes);
+    memset(s_partial_sums_2.contents,  0, partial2_bytes);
+    memset(s_partial_sums_3.contents,  0, partial3_bytes);
+    memset(s_partial_sums_4.contents,  0, partial4_bytes);
     memset(s_ifree_dev.contents,       0, scalar_bytes);
     memset(s_ifree_cache_dev.contents, 0, scalar_bytes);
 }
@@ -645,33 +659,76 @@ static void scan_phase(id<MTLComputePipelineState> pso,
  * waitUntilCompleted between phases (phase 2 needs phase 1 done; phase 3 needs
  * phase 2 done).
  * ----------------------------------------------------------------------- */
+/* -----------------------------------------------------------------------
+ * mtl_prefix_scan — inclusive prefix scan of s_prefix_sum[offset..offset+n-1].
+ *
+ * Mirrors gpu_scan in gpu_runner.cuf exactly: three separate scratch buffers
+ * (s_partial_sums / _2 / _3) hold block totals at successive levels so that
+ * no scan pass ever aliases its data buffer with its partial-sums output.
+ * s_partial_sums_4 is a 1-element dummy sink for the deepest single-block
+ * pass (which must write its block total somewhere but the value is unused).
+ *
+ * Three cases, identical to the CUDA port:
+ *   n ≤ 256^2 = 65,536          : 2-level (ps0 only)
+ *   n ≤ 256^3 = 16,777,216      : 3-level (ps0, ps1)
+ *   n ≤ INT_MAX                  : 4-level (ps0, ps1, ps2)
+ * ----------------------------------------------------------------------- */
 extern "C" void mtl_prefix_scan(int offset, int n)
 {
     if (n <= 0) return;
 
-    int num_blocks = (n + 255) / 256;
+    const int BS  = 256;
+    int nb0 = (n   + BS - 1) / BS;
+    int nb1 = (nb0 + BS - 1) / BS;
+    int nb2 = (nb1 + BS - 1) / BS;
 
-    /* Phase 1: within-block scan → partial_sums[0..num_blocks-1] */
-    id<MTLCommandBuffer> cmd1 = [s_queue commandBuffer];
-    scan_phase(s_pso_scan_block, s_prefix_sum, s_partial_sums, offset, n, cmd1);
-    [cmd1 commit];
-    [cmd1 waitUntilCompleted];
+#define CMD_WAIT(body) do { \
+    id<MTLCommandBuffer> _c = [s_queue commandBuffer]; \
+    body; \
+    [_c commit]; [_c waitUntilCompleted]; \
+} while(0)
 
-    if (num_blocks == 1) return;   /* single block: already globally correct */
+    if (n <= BS * BS) {
+        /* ---- 2-level: n ≤ 65,536 ---------------------------------------- */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_prefix_sum,   s_partial_sums,   offset, n,   _c));
+        if (nb0 == 1) goto done;
+        /* single-block scan of ps0; total → ps1[0] (unused dummy) */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums,   s_partial_sums_2, 0,      nb0, _c));
+        CMD_WAIT(scan_phase(s_pso_scan_fixup, s_prefix_sum,   s_partial_sums,   offset, n,   _c));
 
-    /* Phase 2: scan partial_sums (produces cumulative block totals) */
-    int ps_offset = 0;
-    id<MTLCommandBuffer> cmd2 = [s_queue commandBuffer];
-    scan_phase(s_pso_scan_block, s_partial_sums, s_partial_sums,
-               ps_offset, num_blocks, cmd2);
-    [cmd2 commit];
-    [cmd2 waitUntilCompleted];
+    } else if (n <= BS * BS * BS) {
+        /* ---- 3-level: n ≤ 16,777,216 ------------------------------------- */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_prefix_sum,   s_partial_sums,   offset, n,   _c));
+        /* scan ps0 with nb1 blocks; block totals → ps1 */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums,   s_partial_sums_2, 0,      nb0, _c));
+        if (nb1 > 1) {
+            /* single-block scan of ps1; total → ps2[0] (unused dummy) */
+            CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums_2, s_partial_sums_3, 0,      nb1, _c));
+            /* fixup ps0 using ps1 */
+            CMD_WAIT(scan_phase(s_pso_scan_fixup, s_partial_sums,   s_partial_sums_2, 0,      nb0, _c));
+        }
+        CMD_WAIT(scan_phase(s_pso_scan_fixup, s_prefix_sum,   s_partial_sums,   offset, n,   _c));
 
-    /* Phase 3: fixup — add partial_sums[bid-1] to elements of each block bid > 0 */
-    id<MTLCommandBuffer> cmd3 = [s_queue commandBuffer];
-    scan_phase(s_pso_scan_fixup, s_prefix_sum, s_partial_sums, offset, n, cmd3);
-    [cmd3 commit];
-    [cmd3 waitUntilCompleted];
+    } else {
+        /* ---- 4-level: n ≤ INT_MAX ---------------------------------------- */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_prefix_sum,     s_partial_sums,   offset, n,   _c));
+        /* scan ps0 with nb1 blocks; block totals → ps1 */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums,   s_partial_sums_2, 0,      nb0, _c));
+        /* scan ps1 with nb2 blocks; block totals → ps2 */
+        CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums_2, s_partial_sums_3, 0,      nb1, _c));
+        if (nb2 > 1) {
+            /* single-block scan of ps2; total → ps3[0] (unused dummy) */
+            CMD_WAIT(scan_phase(s_pso_scan_block, s_partial_sums_3, s_partial_sums_4, 0,  nb2, _c));
+            /* fixup ps1 using ps2 */
+            CMD_WAIT(scan_phase(s_pso_scan_fixup, s_partial_sums_2, s_partial_sums_3, 0,  nb1, _c));
+        }
+        /* fixup ps0 using ps1 */
+        CMD_WAIT(scan_phase(s_pso_scan_fixup, s_partial_sums,   s_partial_sums_2, 0,      nb0, _c));
+        CMD_WAIT(scan_phase(s_pso_scan_fixup, s_prefix_sum,     s_partial_sums,   offset, n,   _c));
+    }
+
+done:;
+#undef CMD_WAIT
 }
 
 /* -----------------------------------------------------------------------
@@ -1462,10 +1519,20 @@ extern "C" void mtl_hilbert_sort_level(int head_idx, int num_octs, int num_bits)
         scan_phase_fenced(s_pso_scan_block, s_prefix_sum, s_partial_sums,
                           offset, n, cmd, s_sort_fence, s_sort_fence);
         if (need_fixup) {
-            /* phase 2: scan partial sums */
-            scan_phase_fenced(s_pso_scan_block, s_partial_sums, s_partial_sums,
+            int nblk_scan2 = (nblk_scan + 255) / 256;
+            /* phase 2: scan partial_sums; block totals → partial_sums_2 (separate buffer) */
+            scan_phase_fenced(s_pso_scan_block, s_partial_sums, s_partial_sums_2,
                               0, nblk_scan, cmd, s_sort_fence, s_sort_fence);
-            /* phase 3: fixup */
+            if (nblk_scan2 > 1) {
+                /* nblk_scan > 256: need a third level.
+                 * single-block scan of partial_sums_2; block totals → partial_sums_3. */
+                scan_phase_fenced(s_pso_scan_block, s_partial_sums_2, s_partial_sums_3,
+                                  0, nblk_scan2, cmd, s_sort_fence, s_sort_fence);
+                /* fixup partial_sums using partial_sums_2 */
+                scan_phase_fenced(s_pso_scan_fixup, s_partial_sums, s_partial_sums_2,
+                                  0, nblk_scan, cmd, s_sort_fence, s_sort_fence);
+            }
+            /* phase 3: fixup prefix_sum using partial_sums */
             scan_phase_fenced(s_pso_scan_fixup, s_prefix_sum, s_partial_sums,
                               offset, n, cmd, s_sort_fence, s_sort_fence);
         }
@@ -1748,8 +1815,15 @@ extern "C" int mtl_nbor_scan(int head_idx, int num_subgrids,
     scan_phase_fenced(s_pso_scan_block, s_prefix_sum, s_partial_sums,
                       offset, n, cmd, s_sort_fence, s_sort_fence);
     if (need_fixup) {
-        scan_phase_fenced(s_pso_scan_block, s_partial_sums, s_partial_sums,
+        int nblk_scan2 = (nblk_scan + 255) / 256;
+        scan_phase_fenced(s_pso_scan_block, s_partial_sums, s_partial_sums_2,
                           0, nblk_scan, cmd, s_sort_fence, s_sort_fence);
+        if (nblk_scan2 > 1) {
+            scan_phase_fenced(s_pso_scan_block, s_partial_sums_2, s_partial_sums_3,
+                              0, nblk_scan2, cmd, s_sort_fence, s_sort_fence);
+            scan_phase_fenced(s_pso_scan_fixup, s_partial_sums, s_partial_sums_2,
+                              0, nblk_scan, cmd, s_sort_fence, s_sort_fence);
+        }
         scan_phase_fenced(s_pso_scan_fixup, s_prefix_sum, s_partial_sums,
                           offset, n, cmd, s_sort_fence, s_sort_fence);
     }
