@@ -270,13 +270,27 @@ extern "C" void mtl_upload_flag1(void *flag1_host, int ngridmax)
  * mtl_transfer_grid_host — copy Metal uold buffer back to host (D->H).
  * Mirrors the cudaMemcpy calls in r_transfer_grid_host (gpu_manager.cuf).
  * Called before each output dump so m%uold reflects the GPU result.
- * Only uold is needed for I/O; grid is static for levelmin==levelmax.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_transfer_grid_host(void *uold_ptr,
                                        int ngridmax, int nvar, int twotondim)
 {
     size_t u_bytes = (size_t)ngridmax * nvar * twotondim * sizeof(float);
     memcpy(uold_ptr, s_uold.contents, u_bytes);
+}
+
+/* -----------------------------------------------------------------------
+ * mtl_transfer_grid_struct_host — copy Metal s_grid buffer back to host.
+ * Required for AMR runs (levelmin < levelmax): metal_refine reorders octs
+ * via Hilbert sort + scatter, updating s_grid on the device.  Without this
+ * readback, output_amr reads stale host ckey/refined values and amr2map
+ * produces a garbled level/density map.
+ * Only the first ngridmax slots are written (cache octs start at ngridmax+1
+ * and are never referenced by the output routines).
+ * ----------------------------------------------------------------------- */
+extern "C" void mtl_transfer_grid_struct_host(void *grid_ptr, int ngridmax)
+{
+    size_t grid_bytes = (size_t)ngridmax * sizeof(oct_t);
+    memcpy(grid_ptr, s_grid.contents, grid_bytes);
 }
 
 /* -----------------------------------------------------------------------

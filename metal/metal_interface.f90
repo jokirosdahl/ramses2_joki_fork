@@ -60,15 +60,23 @@ module metal_interface
       integer(c_int), value :: ngridmax
     end subroutine mtl_upload_flag1
 
-    ! Copy Metal buffers back into host arrays (D->H), called before I/O.
+    ! Copy Metal uold buffer back to host (D->H), called before I/O.
     ! Mirrors r_transfer_grid_host / cudaMemcpy in the CUDA path.
-    ! Only uold is needed for output; grid is static for levelmin==levelmax.
     subroutine mtl_transfer_grid_host(uold, ngridmax, nvar, twotondim) &
         bind(C, name="mtl_transfer_grid_host")
       import c_ptr, c_int
       type(c_ptr), value  :: uold
       integer(c_int), value :: ngridmax, nvar, twotondim
     end subroutine mtl_transfer_grid_host
+
+    ! Copy Metal s_grid buffer (oct ckey/refined/lev) back to host (D->H).
+    ! Required for AMR runs where metal_refine reorders octs on the device.
+    subroutine mtl_transfer_grid_struct_host(grid, ngridmax) &
+        bind(C, name="mtl_transfer_grid_struct_host")
+      import c_ptr, c_int
+      type(c_ptr), value    :: grid
+      integer(c_int), value :: ngridmax
+    end subroutine mtl_transfer_grid_struct_host
 
     ! Dispatch set_unew_kernel: unew(:,:,oct) = uold(:,:,oct) for octs at ilevel.
     subroutine mtl_set_unew(head_idx, num_octs) bind(C, name="mtl_set_unew")

@@ -136,6 +136,14 @@ recursive subroutine r_transfer_grid_host(pst)
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
+     ! For AMR runs, metal_refine reorders octs on the device (Hilbert sort +
+     ! scatter), so the host m%grid ckey/refined are stale.  Copy s_grid back
+     ! so output_amr writes correct oct positions and refinement flags.
+     if (pst%s%r%nlevelmax > pst%s%r%levelmin) then
+        call mtl_transfer_grid_struct_host( &
+             c_loc(pst%s%m%grid(1)), &
+             int(pst%s%m%ngridmax, c_int))
+     end if
   endif
 
 end subroutine r_transfer_grid_host
