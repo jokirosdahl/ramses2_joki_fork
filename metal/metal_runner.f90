@@ -130,15 +130,13 @@ recursive subroutine r_transfer_grid_host(pst)
      call r_transfer_grid_host(pst%pLower)
      call mdl_get_reply(pst%s%mdl, rID, 0)
   else
-     ! Copy Metal buffer back into host uold (mirrors D->H cudaMemcpy in gpu_manager.cuf).
+     ! Copy Metal buffer back into host uold
      call mtl_transfer_grid_host( &
           c_loc(pst%s%m%uold(1,1,1)), &
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
-     ! For AMR runs, metal_refine reorders octs on the device (Hilbert sort +
-     ! scatter), so the host m%grid ckey/refined are stale.  Copy s_grid back
-     ! so output_amr writes correct oct positions and refinement flags.
+     ! Copy s_grid back into host grid
      if (pst%s%r%nlevelmax > pst%s%r%levelmin) then
         call mtl_transfer_grid_struct_host( &
              c_loc(pst%s%m%grid(1)), &
