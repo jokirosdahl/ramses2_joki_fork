@@ -68,6 +68,8 @@ subroutine m_timer(label,cmd)
   use timer_module
 #ifdef _CUDA
   use cudafor
+#elif defined(_METAL)
+  use metal_interface
 #endif
   implicit none
   character(len=*) label, cmd
@@ -75,6 +77,8 @@ subroutine m_timer(label,cmd)
 #ifdef _CUDA
   integer :: cuda_ierr
   cuda_ierr = cudaDeviceSynchronize()
+#elif defined(_METAL)
+  call mtl_device_sync()
 #endif
   current = wallclock()                                                 ! current time
   if (itimer > 0) then                                                  ! if timer is active ..

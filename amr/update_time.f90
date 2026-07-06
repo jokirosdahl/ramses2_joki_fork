@@ -25,6 +25,9 @@ subroutine m_update_time(pst,ilevel,done)
   real(kind=8)::dt,econs,mcons
   integer::i,itest
   type(in_broadcast_aexp_t)::in_broadcast_aexp
+#ifdef _METAL
+  real(kind=8), external :: wallclock
+#endif
   
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
@@ -32,7 +35,11 @@ subroutine m_update_time(pst,ilevel,done)
   dt=g%dtnew(ilevel)
   itest=0
 
+#ifdef _METAL
+  if(ttstart.eq.0.0) ttstart = wallclock()
+#else
   if(ttstart.eq.0.0) ttstart = mdl_wtime(mdl)
+#endif
 
   ! Update the outer lightcone shell boundary after restart
   if(g%first_coarse_restart)then 
@@ -115,7 +122,7 @@ subroutine m_update_time(pst,ilevel,done)
         ! Output fine step information and used memory
         !----------------------------------------------
         if(r%part)then
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
@@ -124,7 +131,7 @@ subroutine m_update_time(pst,ilevel,done)
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
 #endif
         else
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
 #else
@@ -140,7 +147,11 @@ subroutine m_update_time(pst,ilevel,done)
      !---------------
      if(g%t>=r%tout(r%noutput).or.g%aexp>=r%aout(r%noutput).or.g%nstep_coarse>=r%nstepmax)then
         write(*,*)'Run completed'
+#ifdef _METAL
+        ttend = wallclock()
+#else
         ttend = mdl_wtime(mdl)
+#endif
         print '(A,F0.7)',' Total elapsed time: ',ttend-ttstart
         done=.true.
         return
@@ -156,7 +167,7 @@ subroutine m_update_time(pst,ilevel,done)
   if(mod(g%nstep,r%ncontrol)==0)then
      if(itest==0)then
         if(r%part)then
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
@@ -165,7 +176,7 @@ subroutine m_update_time(pst,ilevel,done)
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
 #endif
         else
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
 #else
@@ -290,11 +301,22 @@ subroutine writemem(usedmem)
 end subroutine writemem
 
 subroutine getmem(outmem)
+  use iso_c_binding, only: c_long
   real::outmem
   character(len=300) :: dir, dir2, file
   integer::ind,j,nmem,read_status
   logical::file_exists
-  
+#ifdef _METAL
+  interface
+    function getmem_mac() bind(c, name='getmem_mac')
+      import c_long
+      integer(c_long) :: getmem_mac
+    end function getmem_mac
+  end interface
+  outmem = real(getmem_mac(), kind=4)
+  return
+#endif
+
   file='/proc/self/stat'
   inquire(file=file, exist=file_exists)
   if (file_exists) then

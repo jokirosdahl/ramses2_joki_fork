@@ -206,6 +206,37 @@ ifeq ($(COMPILER),NVHPC)
    endif
 endif
 #############################################################################
+# Metal compiler (Apple Silicon, HYDRO=1 GRAV=0 MHD=0, always NPRE=4/float32)
+ifeq ($(COMPILER),METAL)
+   # _METAL define gates the Metal path in CPU source files.
+   # NPRE=4 is hardcoded: Apple GPU has no float64.
+   # No MPI support for the PoC.
+   DEFINES     += -D_METAL -DNPRE=4 -DWITHOUTMPI
+   FFLAGS       = -cpp $(DEFINES)
+   F90          = gfortran -ffree-line-length-none -fimplicit-none
+   FC           = gfortran -ffree-line-length-none -fimplicit-none
+   ifeq ($(DEBUG),1)
+      F90       += -O0 -fcheck=bounds -g -fbacktrace \
+                   -ffpe-trap=zero,overflow,invalid -finit-real=nan -Wall
+      FFLAGS    += -g
+   else
+      F90       += -O3
+   endif
+   # Obj-C++ bridge
+   METAL_PATH   = ../metal
+   METAL_KPATH  = ../metal/kernels
+   CXX          = xcrun clang++
+   CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
+   # Metal kernel compiler and metallib linker (Xcode command-line tools)
+   METALC       = xcrun -sdk macosx metal
+   METALLIB     = xcrun -sdk macosx metallib
+   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
+   # Link flags: Metal + Foundation frameworks, C++ runtime for the bridge
+   LIBS         = -framework Metal -framework Foundation -lstdc++
+   # metallib must sit next to the executable so the bridge can load it
+   METAL_METALLIB = ramses_kernels.metallib
+endif
+#############################################################################
 C = ifort
 CFLAGS = -g -O3
 #############################################################################
@@ -225,7 +256,7 @@ endif
 LIBS += $(LIBMPI) $(LIBFFTW)
 #############################################################################
 # Sources directories are searched in this exact order
-VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt:../lightcone
+VPATH = $(PATCH):$(GPU_PATH):$(METAL_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt:../lightcone
 #############################################################################
 # Modules
 MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o oct_commons.o \
@@ -252,6 +283,9 @@ ifeq ($(COMPILER),NVHPC)
       gpu_cooling.o gpu_star.o gpu_feedback.o gpu_rho.o gpu_mg.o gpu_refine.o gpu_flag.o gpu_turb.o gpu_runner.o \
       gpu_part.o gpu_manager.o
 endif
+ifeq ($(COMPILER),METAL)
+   MODOBJ := metal_interface.o metal_bridge.o $(MODOBJ) metal_runner.o
+endif
 MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
 	 rt_condinit.o rt_flag.o rt_upload.o interpol_rt.o rt_godunov_utils.o read_rt_params.o \
@@ -272,7 +306,7 @@ MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 sink_evolution.o sink_merger.o task_manager.o rt_step.o amr_step.o adaptive_loop.o \
 	 write_gitinfo.o
 #############################################################################
-ramses:	$(MODOBJ) ramses.o
+ramses:	$(MODOBJ) ramses.o $(METAL_METALLIB)
 	$(F90) $(FFLAGS) $(MODOBJ) ramses.o -o $(EXEC)$(NDIM)d $(LIBS)
 #############################################################################
 test_cooling:	$(MODOBJ) test_cooling.o
@@ -300,12 +334,31 @@ cub_module_radix_sort_f.o: cub_module_radix_sort.cuf cub_module_radix_sort_c.o
 	$(F90) $(FFLAGS) -c $< -o $@ $(LIBS)
 %.o:%.c
 	$(C) $(CFLAGS) -c $< -o $@
+#############################################################################
+# Metal-specific build rules
+metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+# hash.metal provides insert_hash_kernel (compiled separately).
+# refine.metal provides build_nbor_kernel (reads hash non-atomically).
+# hydro.metal provides set_uold/set_unew/cmpdt/hydro_integrator kernels.
+hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+hash.air: $(METAL_KPATH)/hash.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ramses_kernels.metallib: hydro.air hash.air refine.air flag.air scan.air
+	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################
 -include deps.mk
 #############################################################################
 clean :
-	rm -f *.o *.$(MOD)
+	rm -f *.o *.$(MOD) *.air *.metallib
 
 clobber: clean
 	-find . -type d -name "NDIM*" -prune -exec rm -rf '{}' \;
