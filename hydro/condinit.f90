@@ -323,4 +323,10 @@ subroutine condinit(r,g,x,q,dx,nn)
      q(1:nn,r%imetal)=r%z_ave*0.02
   endif
 
+  if(r%cr_test_setup=='1d_cr_cloud') then
+     q(1:nn,1)=0.1d0+(10d0-0.1d0)*(1d0+tanh((x(1:nn,1)-200d0)/25d0)) &
+          &                       *(1d0+tanh((200d0-x(1:nn,1))/25d0))
+  endif
+
+
 end subroutine condinit
