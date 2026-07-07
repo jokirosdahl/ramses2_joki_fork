@@ -2,6 +2,9 @@ module godunov_fine_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_godunov, gpu_set_unew, gpu_set_uold
 #endif
+#ifdef _METAL
+  use metal_runner, only: metal_godunov, metal_set_unew, metal_set_uold
+#endif
 contains
 !###########################################################
 !###########################################################
@@ -25,6 +28,8 @@ recursive subroutine r_godunov_fine(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_godunov(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_godunov(pst%s, ilevel)
 #else
      call godunov_fine(pst%s, ilevel)
 #endif
@@ -108,6 +113,8 @@ recursive subroutine r_set_unew(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_set_unew(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_set_unew(pst%s, ilevel)
 #else
      call set_unew(pst%s%r,pst%s%g,pst%s%m,ilevel)
 #endif
@@ -174,6 +181,8 @@ recursive subroutine r_set_uold(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_set_uold(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_set_uold(pst%s, ilevel)
 #else
      call set_uold(pst%s%r,pst%s%g,pst%s%m,ilevel)
 #endif

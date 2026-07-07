@@ -22,6 +22,9 @@ subroutine adaptive_loop(pst)
   use gpu_manager, only: r_set_grid_device
   use nvtx
 #endif
+#ifdef _METAL
+  use metal_runner, only: r_set_grid_device
+#endif
 
   implicit none
   type(pst_t)::pst
@@ -31,6 +34,9 @@ subroutine adaptive_loop(pst)
   integer::ilevel, dummy
   double precision::tt1,tt2
   real(kind=4)::core_mem
+#ifdef _METAL
+  real(kind=8), external :: wallclock
+#endif
 #ifdef _CUDA
   character(len=32) :: str_step
   integer step
@@ -98,6 +104,9 @@ subroutine adaptive_loop(pst)
   ! Copy entire grid from host to device
   call r_set_grid_device(pst)
 #endif
+#ifdef _METAL
+  call r_set_grid_device(pst)
+#endif
 
   ! Just in case we only do clump finding
   if(r%clump_only)then
@@ -121,7 +130,11 @@ subroutine adaptive_loop(pst)
      step = step + 1
 #endif
 
+#ifdef _METAL
+     tt1 = wallclock()
+#else
      tt1 = mdl_wtime(mdl)
+#endif
 
      if(r%verbose)write(*,*)'Entering amr_step_coarse'
 
@@ -137,7 +150,11 @@ subroutine adaptive_loop(pst)
      ! New coarse time-step
      g%nstep_coarse=g%nstep_coarse+1
 
+#ifdef _METAL
+     tt2 = wallclock()
+#else
      tt2 = mdl_wtime(mdl)
+#endif
      if(mod(g%nstep_coarse,r%ncontrol)==0)then
         if(.not. done)print '(A,F0.7)',' Time elapsed since last coarse step: ',tt2-tt1
      endif

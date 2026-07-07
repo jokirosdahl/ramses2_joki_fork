@@ -22,6 +22,7 @@ from collections import defaultdict
 SRCDIRS = [
     'amr', 'hydro', 'pm', 'poisson', 'cooling', 'rt', 'gpu',
     'turb', 'clump', 'sink', 'star', 'feedback', 'mdl1', 'lightcone',
+    'metal',
 ]
 EXTS = ('.f90', '.cuf')
 
@@ -30,7 +31,7 @@ BASENAME_OVERRIDE = {
     'cub_module_radix_sort': 'cub_module_radix_sort_f',
 }
 
-# Fortran preprocessor macro -> Makefile variable
+# Fortran preprocessor macro -> Makefile variable (guard emitted as ifeq ($(VAR),1))
 MACRO_TO_MAKE = {
     'HYDRO': 'HYDRO',
     'MHD':   'MHD',
@@ -38,6 +39,11 @@ MACRO_TO_MAKE = {
     'RT':    'RT',
     'RTZ':   'RTZ',
     'TURB':  'TURB',
+}
+
+# Macros whose guard is a full literal ifeq string (not the $(VAR),1 pattern)
+MACRO_FULL_GUARD = {
+    '_METAL': 'ifeq ($(COMPILER),METAL)',
 }
 
 
@@ -75,6 +81,9 @@ def parse_uses(path):
             if m:
                 guard = None
                 for macro, neg in reversed(stack):
+                    if macro in MACRO_FULL_GUARD and not neg:
+                        guard = MACRO_FULL_GUARD[macro]
+                        break
                     if macro in MACRO_TO_MAKE:
                         val = '0' if neg else '1'
                         guard = f'ifeq ($({MACRO_TO_MAKE[macro]}),{val})'
@@ -84,9 +93,10 @@ def parse_uses(path):
 
 
 def main():
-    # Pass 1: map module name -> object name, collect GPU-only objects
+    # Pass 1: map module name -> object name, collect GPU-only and Metal-only objects
     mod_to_obj = {}
-    gpu_only = set()  # objects that come from .cuf files
+    gpu_only   = set()  # objects that come from .cuf files
+    metal_only = set()  # objects that come from metal/ directory
 
     for d in SRCDIRS:
         if not os.path.isdir(d):
@@ -98,6 +108,8 @@ def main():
             obj = BASENAME_OVERRIDE.get(base, base)
             if fname.endswith('.cuf'):
                 gpu_only.add(obj)
+            if d == 'metal':
+                metal_only.add(obj)
             with open(os.path.join(d, fname)) as f:
                 for line in f:
                     m = re.match(r'^\s*module\s+(\w+)\s*$', line, re.IGNORECASE)
@@ -121,9 +133,11 @@ def main():
                 if mod not in mod_to_obj or mod_to_obj[mod] == obj:
                     continue
                 dep_obj = mod_to_obj[mod]
-                # GPU objects override other guards
+                # Compiler-specific objects override other guards
                 if obj in gpu_only or dep_obj in gpu_only:
                     guard = 'ifeq ($(COMPILER),NVHPC)'
+                elif obj in metal_only or dep_obj in metal_only:
+                    guard = 'ifeq ($(COMPILER),METAL)'
                 else:
                     guard = src_guard
                 deps[(obj, guard)].add(dep_obj)

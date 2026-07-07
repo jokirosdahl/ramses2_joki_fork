@@ -1,6 +1,8 @@
 module refine_utils
 #ifdef _CUDA
   use gpu_runner, only: gpu_refine
+#elif defined(_METAL)
+  use metal_runner, only: metal_refine
 #endif
   type out_refine_fine_t
     integer::make,kill
@@ -111,6 +113,12 @@ recursive subroutine r_refine_fine(pst,ilevel,input_size,output,output_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_refine(pst%s,ilevel,output%make,output%kill)
+     else
+        call refine_fine(pst%s,ilevel,output%make,output%kill)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_refine(pst%s,ilevel,output%make,output%kill)
      else
         call refine_fine(pst%s,ilevel,output%make,output%kill)
      endif

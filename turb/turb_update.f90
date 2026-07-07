@@ -10,6 +10,9 @@ contains
     use mdl_module
     use ramses_commons, only: pst_t
     use mdl_parameters
+#ifdef _CUDA
+    use gpu_manager, only: gpu_update_turb
+#endif
     implicit none
     type(pst_t)::pst
 
@@ -20,7 +23,11 @@ contains
        call r_update_turb(pst%pLower)
        call mdl_get_reply(pst%s%mdl,rID,0)
     else
+#ifdef _CUDA
+       call gpu_update_turb(pst)
+#else
        call turb_check_time(pst%s%r, pst%s%g, pst%s%turb)
+#endif
     endif
 
   end subroutine r_update_turb
@@ -49,7 +56,7 @@ contains
     turb_last_tfrac = real((global%t - turb%turb_last_time) / turb%turb_dt, kind=8)
     turb_next_tfrac = 1.0 - turb_last_tfrac
 
-    turb%afield_now = turb_last_tfrac*turb%afield_last + turb_next_tfrac*turb%afield_next
+    turb%afield_now = turb_next_tfrac*turb%afield_last + turb_last_tfrac*turb%afield_next
 
   end subroutine turb_check_time
   !################################################################

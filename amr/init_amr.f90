@@ -45,6 +45,12 @@ recursive subroutine r_init_amr(pst)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
+#ifdef _CUDA
+  use gpu_manager
+#endif
+#ifdef _METAL
+  use metal_runner, only: metal_allocate_amr
+#endif
   implicit none
   type(pst_t)::pst
 
@@ -65,6 +71,13 @@ recursive subroutine r_init_amr(pst)
         allocate(pst%s%c)
      endif
      call init_params(pst%s%mdl,pst%s%r,pst%s%g)
+#ifdef _CUDA
+     call gpu_allocate_amr(pst%s)
+     if(pst%s%r%poisson) call gpu_allocate_mg(pst%s)
+#endif
+#ifdef _METAL
+     call metal_allocate_amr(pst%s)
+#endif
   endif
 
 end subroutine r_init_amr
@@ -79,11 +92,6 @@ subroutine init_amr(r,g,m,type)
   use amr_commons, ONLY: run_t, global_t, mesh_t
   use hash
   use hilbert
-#ifdef _CUDA
-  use gpu_runner
-  use gpu_utils
-  use cudafor
-#endif
   implicit none
   type(run_t)::r
   type(global_t)::g
@@ -91,7 +99,6 @@ subroutine init_amr(r,g,m,type)
   character(len=*)::type
   ! Local variables
   integer::idim,ilevel,icpu,igrid,ibound,ilevelmin
-  integer::nborarrsize
   integer(kind=8)::max_key
   real(kind=8)::dx
   integer(kind=8)::ngrid_tot,ikey
@@ -120,57 +127,6 @@ subroutine init_amr(r,g,m,type)
   allocate(m%flag2(1:twotondim,1:m%ngridmax+m%ncachemax))
   m%flag1=0
   m%flag2=0
-
-  ! Allocate the device arrays
-#ifdef _CUDA
-  if(type=='amr')then
-     allocate(grid(1:m%ngridmax+m%ncachemax))
-     ! flag1, flag2 and father are only needed for adaptive mesh refinement
-     ! (nlevelmax > levelmin). Skip their allocation for unigrid runs.
-     if(r%nlevelmax > r%levelmin)then
-        allocate(flag1(1:twotondim,1:m%ngridmax+m%ncachemax))
-        allocate(flag2(1:twotondim,1:m%ngridmax+m%ncachemax))
-        allocate(father(1:m%ngridmax+m%ncachemax))
-        flag1=0
-        flag2=0
-        father=0
-     endif
-     nborarrsize = (m%ngridmax + nsubgridtondim - 1) / nsubgridtondim
-     allocate(nbor(1:subgridsize,1:nborarrsize))
-     nbor=0
-     ! Allocate hash table space
-     m%hash_size=2*(m%ngridmax+m%ncachemax)
-     allocate(hash_key(1:m%hash_size))
-     allocate(hash_val(1:m%hash_size))
-     hash_key=0
-     hash_val=0
-     ! Work buffers for GPU scan/sort/refine
-     allocate(swap_local(1:m%ngridmax+m%ncachemax))
-     allocate(swap_global(1:m%ngridmax+m%ncachemax))
-     allocate(prefix_sum(1:m%ngridmax+m%ncachemax))
-     allocate(partial_sums_0(1:max(1,(m%ngridmax+m%ncachemax)/256)))
-     allocate(partial_sums_1(1:max(1,(m%ngridmax+m%ncachemax)/65536)))
-     allocate(partial_sums_2(1:max(1,(m%ngridmax+m%ncachemax)/16777216)))
-     swap_local=0
-     swap_global=0
-     prefix_sum=0
-  endif
-  if(type=='mg')then
-#ifdef GRAV
-     allocate(grid_mg(1:m%ngridmax+m%ncachemax))
-     allocate(father_mg(1:r%ngridmax+r%ngridmax/7+m%ncachemax))
-     allocate(nbor_mg(1:threetondim,1:m%ngridmax))
-     father_mg=0
-     nbor_mg=0
-     ! Allocate hash table space
-     m%hash_size=2*(m%ngridmax+m%ncachemax)
-     allocate(hash_key_mg(1:m%hash_size))
-     allocate(hash_val_mg(1:m%hash_size))
-     hash_key_mg=0
-     hash_val_mg=0
-#endif
-  endif
-#endif
 
   ! Allocate AMR specific arrays
   if(type=='amr')then
@@ -206,52 +162,12 @@ subroutine init_amr(r,g,m,type)
 #endif
   endif
 
-  ! Allocate the device arrays
-#ifdef _CUDA
-  if(type=='amr')then
-#ifdef HYDRO
-     allocate(uold(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
-     allocate(unew(1:twotondim,1:nvar,1:m%ngridmax+m%ncachemax))
-     uold=0d0
-     unew=0d0
-#endif
-#ifdef MHD
-     allocate(bold(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
-     allocate(bnew(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
-     bold=0d0
-     bnew=0d0
-#endif
-#ifdef GRAV
-     allocate(rho(1:twotondim,1:m%ngridmax+m%ncachemax))
-     allocate(phi(1:twotondim,1:m%ngridmax+m%ncachemax))
-     allocate(nref(1:twotondim,1:m%ngridmax+m%ncachemax))
-     allocate(f(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
-     allocate(phi_old(1:twotondim,1:m%ngridmax+m%ncachemax))
-     f=0d0
-     rho=0d0
-     phi=0d0
-     nref=0d0
-     phi_old=0d0
-#endif
-  endif
-#endif
-
   ! Allocate MG solver specific arrays
 #ifdef GRAV
   if(type=='mg')then
      allocate(m%phi(1:twotondim,1:m%ngridmax+m%ncachemax))
      allocate(m%f(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
   endif
-#endif
-
-  ! Allocate the device arrays
-#ifdef GRAV
-#ifdef _CUDA
-  if(type=='mg')then
-     allocate(phi_mg(1:twotondim,1:m%ngridmax+m%ncachemax))
-     allocate(f_mg(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))
-  endif
-#endif
 #endif
 
   ! Allocate cache-related arrays
@@ -502,46 +418,6 @@ subroutine init_amr(r,g,m,type)
   allocate(m%noct_min(1:r%nlevelmax))
   allocate(m%noct_max(1:r%nlevelmax))
   allocate(m%noct_tot(1:r%nlevelmax))
-
-#ifdef _CUDA
-  if(type=='amr')then
-     allocate(m%head_cache(1:r%nlevelmax))
-     allocate(m%tail_cache(1:r%nlevelmax))
-     allocate(m%noct_cache(1:r%nlevelmax))
-     m%head_cache=1
-     m%tail_cache=0
-     m%noct_cache=0
-     m%ifree_cache=1
-     ! Compute Cartesian key offset for GPU hash table
-     allocate(m%key_off(1:r%nlevelmax+1))
-     m%key_off(1)=1
-     do ilevel=2,r%nlevelmax+1
-        m%key_off(ilevel)=m%key_off(ilevel-1)+m%hkey_max(1,ilevel-1)
-     end do
-     ! Transfer debug parameter to host global
-     gpu_debug = r%debug
-     ! Allocate and transfer bounding box to device
-     allocate(ckey_max(1:r%nlevelmax+1))
-     allocate(key_off(1:r%nlevelmax+1))
-     allocate(box_ckey_min(1:3,1:r%nlevelmax+1))
-     allocate(box_ckey_max(1:3,1:r%nlevelmax+1))
-     ckey_max=m%ckey_max
-     key_off=m%key_off
-     periodic=r%periodic
-     box_size=r%box_size
-     constant_gravity=r%constant_gravity
-     box_ckey_min=m%box_ckey_min
-     box_ckey_max=m%box_ckey_max
-     if(r%nbound>0)then
-        allocate(bound_ckey_min(1:3,1:r%nbound,1:r%nlevelmax+1))
-        allocate(bound_ckey_max(1:3,1:r%nbound,1:r%nlevelmax+1))
-        bound_ckey_min=m%bound_ckey_min
-        bound_ckey_max=m%bound_ckey_max
-     endif
-  endif
-  allocate(d_skip(1:ndim))
-  d_skip = m%skip
-#endif
 
   ! Initialize level-based arrays
   m%head=1       ! Head oct in the level

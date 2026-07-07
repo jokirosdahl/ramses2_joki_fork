@@ -41,6 +41,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
   use gpu_manager, only: r_transfer_grid_host
 #endif
+#ifdef _METAL
+  use metal_runner, only: r_transfer_grid_host
+#endif
 
   implicit none
 
@@ -112,6 +115,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
            call r_transfer_grid_host(pst)
 #endif
+#ifdef _METAL
+           call r_transfer_grid_host(pst)
+#endif
            call m_dump_all(pst,.false.)
         endif
      endif
@@ -124,6 +130,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
            call r_transfer_grid_host(pst)
 #endif
+#ifdef _METAL
+           call r_transfer_grid_host(pst)
+#endif
         call m_dump_all(pst,.true.)
         tprev=tcurr
      endif
@@ -131,6 +140,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         if(tcurr>r%run_time_hrs*3600-r%bkp_last_min*60)then
            call m_timer('backup','start')
 #ifdef _CUDA
+           call r_transfer_grid_host(pst)
+#endif
+#ifdef _METAL
            call r_transfer_grid_host(pst)
 #endif
            call m_dump_all(pst,.true.)

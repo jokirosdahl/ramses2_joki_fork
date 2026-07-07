@@ -1,6 +1,8 @@
 module upload_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_upload
+#elif defined(_METAL)
+  use metal_runner, only: metal_upload
 #endif
 contains
 !#########################################################################
@@ -50,6 +52,12 @@ recursive subroutine r_upload_fine(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_upload(pst%s,ilevel)
+     else
+        call upload_fine(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_upload(pst%s,ilevel)
      else
         call upload_fine(pst%s,ilevel)
      endif

@@ -10,6 +10,9 @@ contains
   recursive subroutine r_init_turb(pst)
     use mdl_module
     use mdl_parameters
+#ifdef _CUDA
+    use gpu_manager, only: gpu_turb_init_fields
+#endif
     implicit none
     type(pst_t)::pst
 
@@ -21,6 +24,9 @@ contains
        call mdl_get_reply(pst%s%mdl,rID,0)
     else
        call init_turb(pst%s%r,pst%s%g, pst%s%turb)
+#ifdef _CUDA
+       call gpu_turb_init_fields(pst)
+#endif
     endif
 
   end subroutine r_init_turb
@@ -168,7 +174,7 @@ contains
     turb_last_tfrac = real((global%t - turb%turb_last_time) / turb%turb_dt, kind=8)
     turb_next_tfrac = 1.0 - turb_last_tfrac
 
-    turb%afield_now = turb_last_tfrac*turb%afield_last + turb_next_tfrac*turb%afield_next
+    turb%afield_now = turb_next_tfrac*turb%afield_last + turb_last_tfrac*turb%afield_next
 
   end subroutine init_turb
 !################################################################
