@@ -130,6 +130,7 @@ module cooling_module
      real(kind=8), dimension(6) :: coef_fit= 20
      integer, dimension(6)      :: beta_fit = 6
 
+     ! UVB change tracking
      real(kind=8) :: uvb_delta = 0.05d0      ! Relative change threshold
      real(kind=8) :: uvb_last_update = -1.0d0 ! UVB HI rate when table was last computed
 
@@ -702,6 +703,7 @@ subroutine cmp_table(c,nH_min,nH_max,T2_min,T2_max,nbin_n,nbin_T,aexp)
   ! Compute radiative ionization and heating rates
   call set_rates(c,t_rad_spec,h_rad_spec,aexp)
 
+  ! Record the reference rate (HI photo-ionization rate)
   c%uvb_last_update = t_rad_spec(HI)
 
   ! Create the c%table
@@ -1400,15 +1402,19 @@ function HsurH0(z,omega0,omegaL,OmegaR)
   HsurH0=sqrt(Omega0*(1d0+z)**3+OmegaR*(1d0+z)**2+OmegaL)
 end function HsurH0
 
+!=======================================================================
 function cooling_needs_update(c, aexp)
+!=======================================================================
   implicit none
   logical :: cooling_needs_update
   type(cooling_t), intent(in) :: c
   real(kind=8), intent(in) :: aexp
   real(kind=8), dimension(1:3) :: t_rad_spec, h_rad_spec
 
+  ! Evaluate current rates at scale factor aexp
   call set_rates(c, t_rad_spec, h_rad_spec, aexp)
 
+  ! Determine if an update is needed
   if (c%uvb_last_update < 0.0d0) then
      cooling_needs_update = .true.
   else

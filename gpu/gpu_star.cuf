@@ -123,8 +123,10 @@ attributes(global) subroutine count_site_kernel(grid, uold, bold, flag1, prefix_
 
   endif
 
+  ! Store nstar in flag1 array
   flag1(cell_idx, oct_idx) = nstar
 
+  ! Count numbr of SF sites in prefix_sum array
   global_cell_idx = cell_idx + (oct_idx - 1) * twotondim
   if (nstar > 0) then
      prefix_sum(global_cell_idx) = 1

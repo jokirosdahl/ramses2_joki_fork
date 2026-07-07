@@ -5,6 +5,10 @@ module metal_runner
 
 contains
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_allocate_amr(sim)
   use amr_parameters, only: twotondim, ndim
   use hydro_parameters, only: nvar
@@ -14,14 +18,21 @@ subroutine metal_allocate_amr(sim)
   integer :: ilevel
   integer(c_int) :: periodic_i(3)
 
+  ! Set hash_size the same way gpu_allocate_amr does (gpu_manager.cuf:274).
   sim%m%hash_size = 2 * (sim%m%ngridmax + sim%m%ncachemax)
 
+  ! Allocate key_off (mirrors gpu_allocate_amr, gpu_manager.cuf:333-336).
+  ! init_amr populates hkey_max but never allocates key_off; the CUDA path
+  ! does it in gpu_allocate_amr.  metal_set_nbor reads key_off(ilevel).
   allocate(sim%m%key_off(1:sim%r%nlevelmax+1))
   sim%m%key_off(1) = 1_8
   do ilevel = 2, sim%r%nlevelmax + 1
      sim%m%key_off(ilevel) = sim%m%key_off(ilevel-1) + sim%m%hkey_max(1, ilevel-1)
   end do
 
+  ! Allocate Metal-owned buffers for uold/unew/grid/nbor/hash.
+  ! ncachemax is now passed so grid and nbor cover the full
+  ! ngridmax+ncachemax range needed for AMR ghost-zone caching.
   call mtl_alloc_amr( &
        int(sim%m%ngridmax,   c_int), &
        int(sim%m%ncachemax,  c_int), &
@@ -29,13 +40,19 @@ subroutine metal_allocate_amr(sim)
        int(twotondim,        c_int), &
        int(sim%m%hash_size,  c_int))
 
+  ! Allocate AMR refinement device buffers (flag1/2, father, sort, cache,
+  ! per-level params).
   call mtl_alloc_refine( &
        int(sim%m%ngridmax,  c_int), &
        int(sim%m%ncachemax, c_int), &
        int(sim%r%nlevelmax, c_int))
 
+  ! Initialise ifree_cache (CUDA path does this in gpu_allocate_amr).
   sim%m%ifree_cache = 1
 
+  ! Upload per-level Hilbert parameters (ckey_max, key_off, box bounds,
+  ! periodicity) to device.  These are populated by init_amr before this
+  ! subroutine is called, and key_off was just allocated above.
   periodic_i = merge(int(1, c_int), int(0, c_int), sim%r%periodic)
   call mtl_upload_level_params( &
        c_loc(sim%m%ckey_max(1)),          &
@@ -47,6 +64,10 @@ subroutine metal_allocate_amr(sim)
 
 end subroutine metal_allocate_amr
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 recursive subroutine r_set_grid_device(pst)
   use mdl_module
   use mdl_parameters, only: MDL_SET_GRID_DEVICE
@@ -63,6 +84,7 @@ recursive subroutine r_set_grid_device(pst)
      call r_set_grid_device(pst%pLower)
      call mdl_get_reply(pst%s%mdl, rID, 0)
   else
+     ! Copy host arrays into Metal buffers (mirrors H->D cudaMemcpy in gpu_manager.cuf).
      call mtl_set_grid_device( &
           c_loc(pst%s%m%uold(1,1,1)), &
           c_loc(pst%s%m%unew(1,1,1)), &
@@ -71,18 +93,27 @@ recursive subroutine r_set_grid_device(pst)
           int(nvar,             c_int), &
           int(twotondim,        c_int))
 
+     ! Mirror CUDA: flag1 = pst%s%m%flag1 under nlevelmax > levelmin guard.
+     ! derefine_kernel reads device flag1; without this upload it sees zeros
+     ! and kills all fine octs on the first metal_refine call.
      if (pst%s%r%nlevelmax > pst%s%r%levelmin) then
         call mtl_upload_flag1( &
              c_loc(pst%s%m%flag1(1,1)), &
              int(pst%s%m%ngridmax, c_int))
      end if
 
+     ! Build nbor on device via insert_hash + build_nbor kernels
+     ! (mirrors insert_hash_kernel + update_nbor_array in gpu_manager.cuf).
      call metal_set_nbor(pst%s, pst%s%r%levelmin)
      pst%s%m%data_on_device = .true.
   endif
 
 end subroutine r_set_grid_device
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 recursive subroutine r_transfer_grid_host(pst)
   use mdl_module
   use mdl_parameters, only: MDL_TRANSFER_GRID_HOST
@@ -99,11 +130,13 @@ recursive subroutine r_transfer_grid_host(pst)
      call r_transfer_grid_host(pst%pLower)
      call mdl_get_reply(pst%s%mdl, rID, 0)
   else
+     ! Copy Metal buffer back into host uold
      call mtl_transfer_grid_host( &
           c_loc(pst%s%m%uold(1,1,1)), &
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
+     ! Copy s_grid back into host grid
      if (pst%s%r%nlevelmax > pst%s%r%levelmin) then
         call mtl_transfer_grid_struct_host( &
              c_loc(pst%s%m%grid(1)), &
@@ -113,6 +146,10 @@ recursive subroutine r_transfer_grid_host(pst)
 
 end subroutine r_transfer_grid_host
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_set_unew(sim, ilevel)
   use ramses_commons, only: ramses_t
   implicit none
@@ -125,6 +162,10 @@ subroutine metal_set_unew(sim, ilevel)
 
 end subroutine metal_set_unew
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_set_uold(sim, ilevel)
   use ramses_commons, only: ramses_t
   implicit none
@@ -137,6 +178,10 @@ subroutine metal_set_uold(sim, ilevel)
 
 end subroutine metal_set_uold
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_cmpdt(sim, ilevel, mass, ekin, eint, emag, dt)
   use ramses_commons, only: ramses_t
   implicit none
@@ -171,6 +216,10 @@ subroutine metal_cmpdt(sim, ilevel, mass, ekin, eint, emag, dt)
 
 end subroutine metal_cmpdt
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_godunov(sim, ilevel)
   use ramses_commons, only: ramses_t
   implicit none
@@ -180,6 +229,8 @@ subroutine metal_godunov(sim, ilevel)
   real(c_float) :: gamma, smallr, smallc2, dt, dx
   real(c_float) :: constant_gravity(3)
 
+  ! nsubgrid=1, so nsubgridtondim=1: head_idx and num_subgrids equal
+  ! sim%m%head(ilevel) and sim%m%noct(ilevel) directly.
   gamma            = real(sim%r%gamma,                   c_float)
   smallr           = real(sim%r%smallr,                  c_float)
   smallc2          = real(sim%r%smallc**2,               c_float)
@@ -205,7 +256,20 @@ subroutine metal_godunov(sim, ilevel)
 
 end subroutine metal_godunov
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_set_nbor(sim, ilevel)
+  ! Insert all oct Hilbert keys into the device hash table, then build
+  ! the device nbor array for octs at ilevel.
+  ! Mirrors the two-step block in r_set_grid_device (gpu_manager.cuf):
+  !   call insert_hash_kernel<<<...>>>(...)         ! all 1..ifree-1 octs
+  !   do ind = 1, subgridsize
+  !     call update_nbor_array<<<...>>>(..., ind)   ! octs at ilevel
+  !   end do
+  ! NOTE: father[] is NOT populated here — it is built inside metal_refine
+  ! (mirrors gpu_refine: update_father_array called after sort/scatter).
   use amr_parameters, only: ndim
   use ramses_commons,  only: ramses_t
   use iso_c_binding
@@ -224,11 +288,16 @@ subroutine metal_set_nbor(sim, ilevel)
   bmax        = int(sim%m%box_ckey_max(1:ndim,ilevel), c_int)
   periodic_i  = merge(int(1, c_int), int(0, c_int), sim%r%periodic)
 
+  ! Step 1: insert all allocated octs into the hash table (1 .. ifree-1).
+  ! Use insert_hash_all (reads grid[].lev per oct) so fine octs get their own
+  ! level's ckey_max/key_off rather than the coarse-level scalars.  The CUDA
+  ! insert_hash_kernel likewise receives device arrays indexed by ilevel.
   call mtl_insert_hash_all( &
        int(1,             c_int), &
        int(sim%m%ifree-1, c_int), &
        hash_size_l)
 
+  ! Step 2: build nbor for octs at ilevel
   call mtl_build_nbor( &
        int(sim%m%head(ilevel), c_int), &
        int(sim%m%noct(ilevel), c_int), &
@@ -237,8 +306,17 @@ subroutine metal_set_nbor(sim, ilevel)
 
 end subroutine metal_set_nbor
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 
 subroutine metal_init_flag(sim, ilevel, nflag)
+  ! Mirrors gpu_init_flag in gpu_runner.cuf.
+  ! 1. Zero flag1 for all cells at ilevel.
+  ! 2. For each fine oct (ilevel+1), flag its parent cell if any child
+  !    is refined or already flagged (uses father[] built by metal_refine).
+  ! 3. Return total flagged-cell count.
   use ramses_commons, only: ramses_t
   use iso_c_binding
   implicit none
@@ -255,8 +333,15 @@ subroutine metal_init_flag(sim, ilevel, nflag)
 
 end subroutine metal_init_flag
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 
 subroutine metal_user_flag(sim, ilevel, nflag)
+  ! Mirrors gpu_user_flag in gpu_runner.cuf (HYDRO=1, GRAV=0, MHD=0).
+  ! Applies gradient-based density/pressure refinement criterion then
+  ! returns updated flagged-cell count.
   use ramses_commons, only: ramses_t
   use iso_c_binding
   implicit none
@@ -283,8 +368,15 @@ subroutine metal_user_flag(sim, ilevel, nflag)
 
 end subroutine metal_user_flag
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 
 subroutine metal_enforce_rules(sim, ilevel)
+  ! Mirrors gpu_enforce_rules in gpu_runner.cuf.
+  ! Clears flag1 for any oct whose 3x3x3 nbor stencil contains a
+  ! missing or ghost-cache entry (enforces 2:1 refinement constraint).
   use ramses_commons, only: ramses_t
   use iso_c_binding
   implicit none
@@ -299,8 +391,17 @@ subroutine metal_enforce_rules(sim, ilevel)
 
 end subroutine metal_enforce_rules
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 
 subroutine metal_smooth_flag(sim, ilevel, nflag)
+  ! Mirrors gpu_smooth_flag in gpu_runner.cuf (NDIM=3).
+  ! Performs ndim dilatation steps: each step counts flagged face-adjacent
+  ! neighbours (→ flag2) then promotes flag1 when count >= n_nbor(idim).
+  ! n_nbor = [1, 2, 2] for NDIM=3 (matches gpu_runner.cuf line 9).
+  ! Returns updated flagged-cell count.
   use amr_parameters, only: ndim
   use ramses_commons,  only: ramses_t
   use iso_c_binding
@@ -315,7 +416,24 @@ subroutine metal_smooth_flag(sim, ilevel, nflag)
 
 end subroutine metal_smooth_flag
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_refine(sim, ilevel, nmake, nkill)
+  ! Mirrors gpu_refine in gpu_runner.cuf (HYDRO=1, GRAV=0, MHD=0, NDIM=3).
+  ! Steps:
+  !  1. Wipe hash entries for existing cache octs.
+  !  2. refine_kernel → read back new ifree.
+  !  3. insert_hash_all for newly created octs.
+  !  4. derefine_kernel per level (nlevelmax → ilevel+1).
+  !  5. Level bucket sort: compact [head_child..new_ifree-1] by level;
+  !     update sim%m%head/noct/tail and sim%m%ifree.
+  !  6. Hilbert sort per level.
+  !  7. sort_gather/scatter grid/flag/hydro; blit unew→uold.
+  !  8. update_hash for sorted range.
+  !  9. update_father per level (mtl_build_father).
+  ! 10. Per-level cache rebuild (27 neighbour directions).
   use amr_parameters, only: ndim
   use ramses_commons, only: ramses_t
   use iso_c_binding
@@ -333,6 +451,11 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
 
   hash_size_l = int(sim%m%hash_size, c_int)
 
+  ! --- Step 1: wipe old cache hash entries -----------------------------------
+  ! Cache octs live in grid(ngridmax+1 .. ngridmax+ifree_cache-1).
+  ! ifree_cache is 1-based: first cache slot is ngridmax+1.
+  ! We wipe the range [ngridmax+1 .. ngridmax+noct_cache_total] where
+  ! noct_cache_total = ifree_cache - 1.
   if (sim%m%ifree_cache > 1) then
      call mtl_free_hash_range( &
           int(sim%m%ngridmax + 1, c_int), &
@@ -340,8 +463,10 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
           hash_size_l)
   end if
 
+  ! Reset cache pointer to start of cache region.
   sim%m%ifree_cache = 1
 
+  ! --- Step 2: refine_kernel -------------------------------------------------
   old_ifree = int(sim%m%ifree, c_int)
   call mtl_set_ifree(old_ifree)
 
@@ -352,11 +477,13 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   new_ifree = mtl_get_ifree()
   nmake     = int(new_ifree - old_ifree)
 
+  ! --- Step 3: insert new octs into hash table -------------------------------
   call mtl_insert_hash_all( &
        old_ifree, &
        int(nmake, c_int), &
        hash_size_l)
 
+  ! --- Step 4: derefine per level (top-down) ---------------------------------
   do ilev = int(sim%r%nlevelmax, c_int), int(ilevel + 1, c_int), -1
      if (sim%m%noct(ilev) > 0) then
         call mtl_derefine_cells( &
@@ -366,10 +493,16 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
      end if
   end do
 
+  ! --- Step 5: level bucket sort on [head_child .. new_ifree-1] --------------
+  ! head_child = head(ilevel+1); after refine_kernel these may not be set yet
+  ! if nmake > 0 created them.  The existing head(ilevel+1) is the old value;
+  ! new octs were appended starting at old_ifree.  We need to sort all octs
+  ! in the range [head(ilevel+1) .. new_ifree-1] regardless of their level.
   head_child = int(sim%m%head(ilevel + 1), c_int)
   n_all      = new_ifree - head_child   ! total slots in child region
 
   if (n_all > 0) then
+     ! Init identity permutation.
      call mtl_init_swap_table(head_child, n_all)
 
      cur_head    = head_child
@@ -378,11 +511,13 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
         n_rem = new_ifree - cur_head
         if (n_rem <= 0) exit
 
+        ! Init prefix: bit = (lev != ilev) → 0 for octs at this level.
         call mtl_init_prefix_level(cur_head, n_rem, ilev)
         call mtl_prefix_scan(int(cur_head - 1, c_int), n_rem)
         nones   = mtl_get_prefix_total(int(cur_head - 1, c_int), n_rem)
         new_noct = n_rem - nones   ! octs at level ilev
 
+        ! Scatter octs at ilev to front of [cur_head..cur_head+n_rem-1].
         call mtl_compute_local_swap(cur_head, n_rem)
         call mtl_update_global_swap(cur_head, n_rem)
 
@@ -393,10 +528,14 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
         total_valid = total_valid + int(new_noct)
      end do
 
+     ! Update nkill: slots consumed but not in any valid level.
      nkill          = int(n_all - total_valid)
      sim%m%noct_used = sim%m%tail(sim%r%nlevelmax)
      sim%m%ifree    = int(cur_head)   ! first free slot after valid octs
 
+     ! --- Step 6: Hilbert sort per level ------------------------------------
+     ! All passes for a given level are batched into one command buffer by
+     ! mtl_hilbert_sort_level, replacing ndim*ilev × 4 commit/waits with 1.
      do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
         if (sim%m%noct(ilev) <= 0) cycle
         call mtl_hilbert_sort_level( &
@@ -405,6 +544,7 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
              int(ndim * ilev,      c_int))
      end do
 
+     ! --- Step 7: sort_gather/scatter grid/flag/hydro; blit ----------------
      call mtl_sort_gather_grid(head_child, n_all)
      call mtl_sort_scatter_grid(head_child, n_all)
      call mtl_sort_gather_flag(head_child, n_all)
@@ -412,8 +552,10 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
      call mtl_sort_gather_hydro(head_child, n_all)
      call mtl_blit_unew_to_uold(head_child, n_all)
 
+     ! --- Step 8: update hash with new positions ----------------------------
      call mtl_update_hash_range(head_child, n_all, hash_size_l)
 
+     ! --- Step 9: update father array per level (uses existing bridge) ------
      do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
         if (sim%m%noct(ilev) <= 0) cycle
         call mtl_build_father( &
@@ -425,21 +567,28 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
      end do
 
   else
+     ! No new or existing child octs — nothing to sort.
      nkill = 0
   end if
 
+  ! --- Step 10: per-level cache rebuild -------------------------------------
+  ! For each level above ilevel, walk all 27 neighbour directions.
+  ! For each direction, find subgrids missing that nbor, create cache octs.
+  ! ifree_cache_now is 1-based: first cache slot = ngridmax + ifree_cache_now.
   ifree_cache_now = int(sim%m%ifree_cache, c_int)   ! starts at 1
 
   do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
      if (sim%m%noct(ilev) <= 0) cycle
 
      do ind = 1_c_int, 27_c_int
+        ! nbor_prefix + scan in one command buffer; returns missing-nbor count.
         cache_noct_lev = mtl_nbor_scan( &
              int(sim%m%head(ilev), c_int), &
              int(sim%m%noct(ilev), c_int), &
              hash_size_l, ind)
         if (cache_noct_lev <= 0) cycle
 
+        ! cache_swap + make_cache_octs + insert_hash in one command buffer.
         call mtl_cache_fill( &
              int(sim%m%head(ilev), c_int), &
              int(sim%m%noct(ilev), c_int), &
@@ -454,6 +603,7 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
 
   sim%m%ifree_cache = int(ifree_cache_now)
 
+  ! Mirror CUDA: reset hash every coarse step so stale cache entries are purged.
   if (ilevel == sim%r%levelmin) then
      call mtl_reset_hash( &
           int(sim%m%ifree,       c_int), &
@@ -464,7 +614,13 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
 
 end subroutine metal_refine
 
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
 subroutine metal_upload(sim, ilevel)
+  ! Restriction: average 8 fine octs (ilevel+1) → coarse parent cells (ilevel).
+  ! Mirrors gpu_upload in gpu_runner.cuf.
   use ramses_commons, only: ramses_t
   use iso_c_binding
   implicit none

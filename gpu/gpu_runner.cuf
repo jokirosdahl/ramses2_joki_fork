@@ -30,6 +30,7 @@ module gpu_runner
   !> Arrays to hold face-centred B (MHD) on the device
   real(kind=dp), device, allocatable, dimension(:,:,:) :: bold, bnew
 
+  !> Arrays to hold Turbulent acceleration fields on the device
   real(kind=8), device, allocatable, dimension(:,:,:,:) :: afield_last_d, afield_next_d, afield_now_d
   real(kind=dp), device, allocatable, dimension(:,:,:) :: fturb
 
@@ -257,6 +258,15 @@ contains
 
   end subroutine gpu_sync_hydro
 
+  !> @brief
+  !> Time-interpolate the turbulent acceleration field on the device.
+  !>
+  !> @detail
+  !> afield_now_d = next_tfrac*afield_last_d + last_tfrac*afield_next_d, computed from the
+  !> host turbulence times.
+  !>
+  !> @param[in] sim : The simulation object
+  !>
   subroutine gpu_turb_interp(sim)
     use nvtx
     use turb_device, only: turb_interp_field_kernel
@@ -276,6 +286,8 @@ contains
     num_blocks = (ntot + num_threads - 1)/num_threads
 
     call nvtxStartRange("GPU turb_interp", color=0)!green
+    ! Pass element references so the flattened (assumed-size) kernel dummies bind to the
+    ! contiguous base address of each field.
     call turb_interp_field_kernel<<<num_blocks, num_threads>>>(afield_last_d(1,0,0,0), &
          & afield_next_d(1,0,0,0), afield_now_d(1,0,0,0), last_tfrac, next_tfrac, ntot)
     call GPU_Error_Check(__FILE__, __LINE__)
@@ -283,6 +295,12 @@ contains
 
   end subroutine gpu_turb_interp
 
+  !> @brief
+  !> Compute the turbulent driving force on a level, filling fturb.
+  !>
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to drive
+  !>
   subroutine gpu_drive_turb(sim, ilevel)
     use nvtx
     use turb_device, only: turb_drive_kernel
@@ -313,6 +331,13 @@ contains
 
   end subroutine gpu_drive_turb
 
+  !> @brief
+  !> Apply the turbulent source term to uold on a level.
+  !>
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to update
+  !> @param[in] dteff : The effective time step
+  !>
   subroutine gpu_turb_hydro(sim, ilevel, dteff)
     use nvtx
     use turb_device, only: turb_hydro_kernel
@@ -428,6 +453,7 @@ contains
     riemann2d = sim%r%riemann2d
     switch_llf_dmin = sim%r%switch_llf_dmin
     switch_llf_pmin = sim%r%switch_llf_pmin
+    ! Publish LLF-switch thresholds to the device for the 1D Riemann path.
     switch_llf_dmin_d = switch_llf_dmin
     switch_llf_pmin_d = switch_llf_pmin
     induction = sim%r%induction
@@ -449,6 +475,9 @@ contains
     if(nsubgrid == 1)threads_per_block = 64
     if(nsubgrid == 2)threads_per_block = 256
 #ifdef MHD
+    ! nsubgrid>1 MHD: the resident working set exceeds the 48 KB static-shared cap,
+    ! so the integrator keeps it all in dynamic shared (mhd_smem_t). Opt into the
+    ! >48 KB carveout and pass the byte size as the 3rd chevron argument.
     shmem_bytes = storage_size(smem_probe) / 8
     istat = cudaFuncSetAttribute(hydro_integrator_kernel, &
          & cudaFuncAttributeMaxDynamicSharedMemorySize, shmem_bytes)
@@ -669,6 +698,7 @@ contains
 
    if (npart_new > 0) then
 
+      ! Array swap_local contains the parent AMR cell index of each new star
       call compute_star_swap_table<<<num_blocks, num_threads>>>(swap_local, prefix_sum, head_idx, num_octs)
 
       head_part = sim%star%npart + 1
@@ -693,6 +723,7 @@ contains
       call GPU_Error_Check(__FILE__, __LINE__)
       call nvtxEndRange()
 
+      ! Update host star particle count
       sim%star%npart = sim%star%npart + npart_new
       sim%star%npart_tot = sim%star%npart_tot + npart_new
       sim%star%tailp(sim%r%nlevelmax) = sim%star%tailp(sim%r%nlevelmax) + npart_new
@@ -701,6 +732,14 @@ contains
 
   end subroutine gpu_star_formation
 
+  !> @brief
+  !> Thermal feedback routine on a GPU
+  !>
+  !> @detail
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to update
+  !> @param[out] msn_loc : The mass ejected on this rank
+  !>
   subroutine gpu_thermal_feedback(sim, ilevel, msn_loc)
     use nvtx
     use feedback_device, only: select_feedback_stars_kernel, compute_feedback_swap_table, thermal_feedback_kernel
@@ -716,6 +755,7 @@ contains
     integer(kind=4), device :: num_selected_d
     integer(kind=4) :: num_threads, num_blocks
 
+    ! Check if active stars exist on this level
     head_idx = sim%star%headp(ilevel)
     num_stars = sim%star%tailp(ilevel) - head_idx + 1
 
@@ -723,35 +763,44 @@ contains
 
     if (num_stars <= 0) return
 
+    ! Conversion factor from user units to cgs units
     call units(sim%r,sim%g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
+    ! Mesh spacing in that level
     dx=sim%r%boxlen/2**ilevel 
     vol=dx**ndim
 
+    ! Supernovae progenitors life time from Myr to proper time in code units
     t_SN=sim%r%t_SNII*1d6*(365.*24.*3600.)/(scale_t/sim%g%aexp**2)
 
+    ! Supernovae specific energy from cgs to code units
     e_SN=sim%r%E_SNII/(sim%r%M_SNII*2d33)/scale_v**2
 
+    ! Time step for stars at this level
     dteff=sim%g%dtnew(ilevel)*sim%g%aexp**2
 
     num_threads = 256
     num_blocks = (num_stars + num_threads - 1) / num_threads
 
+    ! Select feedback stars and count them in prefix_sum array
     call nvtxStartRange("Select Feedback Stars", color=3)!blue
     call select_feedback_stars_kernel<<<num_blocks, num_threads>>>(star_tp, prefix_sum, head_idx, num_stars, &
          & sim%g%texp, t_SN, dteff)
     call GPU_Error_Check(__FILE__, __LINE__)
     call nvtxEndRange()
 
+    ! Scan to compute cumulative selected star count
     num_selected_d = 0
     call gpu_scan(prefix_sum, 1, num_stars, num_selected_d)
     num_selected = num_selected_d
 
     if (num_selected > 0) then
 
+       ! Compute swap table in isp_swap
        call compute_feedback_swap_table<<<num_blocks, num_threads>>>(isp_swap, prefix_sum, head_idx, num_stars)
        call GPU_Error_Check(__FILE__, __LINE__)
 
+       ! Now launch the feedback kernel
        msn_loc_d = 0.0d0
        num_blocks = (num_selected + num_threads - 1) / num_threads
 
@@ -767,12 +816,22 @@ contains
        call GPU_Error_Check(__FILE__, __LINE__)
        call nvtxEndRange()
 
+       ! Copy back the total mass of ejecta from device to host
        msn_loc = msn_loc_d
 
     endif
 
   end subroutine gpu_thermal_feedback
 
+  !> @brief
+  !> Mechanical feedback routine on a GPU
+  !>
+  !> @detail
+  !> @param[in] sim : The simulation object
+  !> @param[in] ilevel : The refinement level to update
+  !> @param[out] msn_loc : The mass ejected on this rank
+  !>
+  !>
   subroutine gpu_mechanical_feedback(sim, ilevel, msn_loc)
     use nvtx
     use feedback_device, only: select_feedback_stars_kernel, compute_feedback_swap_table, mechanical_feedback_kernel
@@ -788,6 +847,7 @@ contains
     integer(kind=4), device :: num_selected_d
     integer(kind=4) :: num_threads, num_blocks
 
+    ! Check if active stars exist on this level
     head_idx = sim%star%headp(ilevel)
     num_stars = sim%star%tailp(ilevel) - head_idx + 1
 
@@ -795,37 +855,48 @@ contains
 
     if (num_stars <= 0) return
 
+    ! Conversion factor from user units to cgs units
     call units(sim%r,sim%g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
+    ! Mesh spacing in that level
     dx=sim%r%boxlen/2**ilevel
     vol=dx**ndim
 
+    ! Supernovae progenitors life time from Myr to proper time in code units
     t_SN=sim%r%t_SNII*1d6*(365.*24.*3600.)/(scale_t/sim%g%aexp**2)
 
+    ! Supernovae specific energy from cgs to code units
     e_SN=sim%r%E_SNII/(sim%r%M_SNII*2d33)/scale_v**2
 
+    ! Supernovae progenitor mass in code units
     m_SN=sim%r%M_SNII*2d33/(scale_d*scale_l**3)
 
+    ! Time step for stars at this level
     dteff=sim%g%dtnew(ilevel)*sim%g%aexp**2
 
     num_threads = 256
     num_blocks = (num_stars + num_threads - 1) / num_threads
 
+    ! Select feedback stars and count them in prefix_sum array
     call nvtxStartRange("Select Feedback Stars", color=3)!blue
     call select_feedback_stars_kernel<<<num_blocks, num_threads>>>(star_tp, prefix_sum, head_idx, num_stars, &
          & sim%g%texp, t_SN, dteff)
     call GPU_Error_Check(__FILE__, __LINE__)
     call nvtxEndRange()
 
+    ! Scan to compute cumulative selected star count
     num_selected_d = 0
     call gpu_scan(prefix_sum, 1, num_stars, num_selected_d)
     num_selected = num_selected_d
 
     if (num_selected > 0) then
 
+       ! Compute swap table in isp_swap
        call compute_feedback_swap_table<<<num_blocks, num_threads>>>(isp_swap, prefix_sum, head_idx, num_stars)
        call GPU_Error_Check(__FILE__, __LINE__)
 
+       ! Now launch the mechanical feedback kernel.
+       ! We use 48 threads per selected star, so let's choose block size 192 (4 stars per block).
        num_threads = 192
        num_blocks = (num_selected * 48 + num_threads - 1) / num_threads
        msn_loc_d = 0.0d0
@@ -843,6 +914,7 @@ contains
        call GPU_Error_Check(__FILE__, __LINE__)
        call nvtxEndRange()
 
+       ! Copy back the total mass of ejecta from device to host
        msn_loc = msn_loc_d
 
     endif
