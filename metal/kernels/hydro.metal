@@ -25,6 +25,7 @@
 using namespace metal;
 
 #include "../metal_types.h"
+#include "metal_utils.h"
 
 /* ---------------------------------------------------------------------------
  * Compile-time constants — injected via xcrun metal -DNDIM=3 etc.
@@ -36,7 +37,6 @@ using namespace metal;
 constant int TWOTONDIM   = 8;    /* 2^NDIM                      */
 constant int NSUBGRID    = 1;    /* subgrid size for PoC        */
 constant int NSUBGRIDP2  = 3;    /* NSUBGRID + 2                */
-constant int SUBGRIDSIZE = 27;   /* NSUBGRIDP2^NDIM             */
 constant int NTHREADS_Y  = 16;   /* threadgroup y-dim for set_* */
 
 /* Riemann solver IDs (mirrors hydro_parameters.f90) */
@@ -110,42 +110,8 @@ inline void u_set(device float *u, int oct_1, int ivar_1, int cell_1, float v) {
 inline int u_flat(int oct_1, int ivar_1, int cell_1) {
     return (oct_1-1)*(NVAR)*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1);
 }
-/* nbor(ind_nbor, subgrid_idx) in Fortran — ind_nbor varies fastest */
-inline int nbor_get(device const int *nb, int sg_1, int ind_1) {
-    return nb[(sg_1-1)*SUBGRIDSIZE + (ind_1-1)];
-}
-
-/* ===========================================================================
- * Atomic helpers for the cmpdt reduction.
- * Buffers are declared device atomic_uint* in the kernel to satisfy MSL's
- * requirement that atomic operations use atomically-typed pointers.
- *
- * atomic_add_float: CAS loop on the bit-cast uint — correct fp32 accumulation.
- * atomic_min_float_bits: positive IEEE-754 floats compare identically as uints.
- * ========================================================================= */
-void atomic_add_float(device atomic_uint *a, float val) {
-    uint expected = atomic_load_explicit(a, memory_order_relaxed);
-    uint desired;
-    do {
-        desired = as_type<uint>(as_type<float>(expected) + val);
-    } while (!atomic_compare_exchange_weak_explicit(
-             a, &expected, desired, memory_order_relaxed, memory_order_relaxed));
-}
-
-void atomic_min_float_bits(device atomic_uint *a, float val) {
-    atomic_fetch_min_explicit(a, as_type<uint>(val), memory_order_relaxed);
-}
-
-/* ===========================================================================
- * index_1Dto3D — mirrors index_1Dto3D in gpu_hydro.cuf
- * Decomposes a 1-D index into (i, j, k), with i varying fastest.
- * ========================================================================= */
-void index_1Dto3D(int idx, int sx, int sy,
-                  thread int &i, thread int &j, thread int &k) {
-    i = idx % sx;
-    j = (idx / sx) % sy;
-    k = idx / (sx * sy);
-}
+/* nbor_get, atomic_add_float, atomic_min_float_bits, index_1Dto3D
+ * are now provided as static inline by metal_utils.h */
 
 /* ===========================================================================
  * Scalar helpers — mirror gpu_hydro.cuf

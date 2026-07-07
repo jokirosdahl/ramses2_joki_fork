@@ -131,11 +131,21 @@ ifeq ($(COMPILER),METAL)
 adaptive_loop.o: metal_runner.o
 amr_step.o: metal_runner.o
 courant_fine.o: metal_runner.o
+flag_utils.o: metal_runner.o
+force_fine.o: metal_runner.o
 godunov_fine.o: metal_runner.o
 init_amr.o: metal_runner.o
+interpol_phi.o: metal_runner.o
 mdl.o: metal_interface.o
 metal_runner.o: amr_parameters.o hydro_parameters.o mdl.o mdl_commons.o metal_interface.o ramses_commons.o
+multigrid_fine_coarse.o: metal_runner.o
+multigrid_fine_commons.o: metal_runner.o
+phi_fine_cg.o: metal_runner.o
+refine_utils.o: metal_runner.o
+rho_fine.o: metal_runner.o
+smooth.o: metal_runner.o
 timer.o: metal_interface.o
+upload.o: metal_runner.o
 endif
 
 ifeq ($(COMPILER),NVHPC)

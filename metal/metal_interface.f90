@@ -159,16 +159,18 @@ module metal_interface
       integer(c_int), value :: head_coarse, noct_coarse, head_fine, noct_fine
     end function mtl_init_flag_batch
 
-    ! Batch: hydro_flag + count_flag1 in one cmd buf.
-    ! Replaces metal_user_flag's 2 separate commit/waits with 1.
+    ! Batch: poisson_flag + hydro_flag + count_flag1 in one cmd buf.
+    ! Replaces metal_user_flag's separate calls with 1 batch.
     function mtl_user_flag_batch(head_idx, num_octs, &
-        gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p) &
+        gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p, &
+        mass_sph, m_refine, jeans_refine, factG, dx_loc) &
         bind(C, name="mtl_user_flag_batch")
       import c_int, c_float
       integer(c_int)        :: mtl_user_flag_batch
       integer(c_int), value :: head_idx, num_octs
       real(c_float),  value :: gamma, smallr, smallc2
       real(c_float),  value :: err_grad_d, err_grad_p, floor_d, floor_p
+      real(c_float),  value :: mass_sph, m_refine, jeans_refine, factG, dx_loc
     end function mtl_user_flag_batch
 
     ! Batch: 3×(count_neighbors + flag_count) + count_flag1 in one cmd buf.
@@ -405,6 +407,30 @@ module metal_interface
       integer(c_int), value :: head_idx, num_octs
     end subroutine mtl_blit_unew_to_uold
 
+    subroutine mtl_sort_gather_force(head_idx, num_octs, idim) &
+        bind(C, name="mtl_sort_gather_force")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs, idim
+    end subroutine mtl_sort_gather_force
+
+    subroutine mtl_sort_scatter_force(head_idx, num_octs, idim) &
+        bind(C, name="mtl_sort_scatter_force")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs, idim
+    end subroutine mtl_sort_scatter_force
+
+    subroutine mtl_sort_gather_phi(head_idx, num_octs, is_phi_old) &
+        bind(C, name="mtl_sort_gather_phi")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs, is_phi_old
+    end subroutine mtl_sort_gather_phi
+
+    subroutine mtl_sort_scatter_phi(head_idx, num_octs, is_phi_old) &
+        bind(C, name="mtl_sort_scatter_phi")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs, is_phi_old
+    end subroutine mtl_sort_scatter_phi
+
     ! Run update_nbor_prefix + all prefix-scan phases in one command buffer.
     ! Returns total number of subgrids needing a cache oct for direction input_ind.
     ! Replaces mtl_update_nbor_prefix + mtl_prefix_scan + mtl_get_prefix_total.
@@ -485,6 +511,306 @@ module metal_interface
       integer(c_int), value :: slope, riemann
       real(c_float), intent(in) :: constant_gravity(3)
     end subroutine mtl_godunov
+
+    ! -------------------------------------------------------------------------
+    ! Gravity / Poisson solver bindings
+    ! -------------------------------------------------------------------------
+
+    ! Allocate all gravity-related device buffers (AMR + MG).
+    subroutine mtl_alloc_grav(ngridmax, ncachemax, ngridmax_mg, ncachemax_mg, &
+        hash_size_mg) bind(C, name="mtl_alloc_grav")
+      import c_int
+      integer(c_int), value :: ngridmax, ncachemax, ngridmax_mg, ncachemax_mg
+      integer(c_int), value :: hash_size_mg
+    end subroutine mtl_alloc_grav
+
+    ! Upload rho array (cell densities for all octs) to device.
+    subroutine mtl_upload_rho(rho_host, head_idx, num_octs) bind(C, name="mtl_upload_rho")
+      import c_ptr, c_int
+      type(c_ptr), value :: rho_host
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_upload_rho
+
+    ! Download phi array from device to host.
+    subroutine mtl_download_phi(phi_host, head_idx, num_octs) bind(C, name="mtl_download_phi")
+      import c_ptr, c_int
+      type(c_ptr), value :: phi_host
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_download_phi
+
+    ! Download f array (force/gradient) from device to host.
+    subroutine mtl_download_f(f_host, head_idx, num_octs) bind(C, name="mtl_download_f")
+      import c_ptr, c_int
+      type(c_ptr), value :: f_host
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_download_f
+
+    ! Reset rho to zero (reset_rho_kernel, 2D {8,16}).
+    subroutine mtl_reset_rho(head_idx, num_octs) bind(C, name="mtl_reset_rho")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_reset_rho
+
+    ! Compute multipole leaf contributions (multipole_leaf_kernel, 2D {8,16}).
+    subroutine mtl_multipole_leaf(head_idx, num_octs, scale) &
+        bind(C, name="mtl_multipole_leaf")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: scale
+    end subroutine mtl_multipole_leaf
+
+    ! Upload multipole to coarser level (multipole_upload_kernel, 1D 256).
+    subroutine mtl_multipole_upload(head_idx, num_octs) &
+        bind(C, name="mtl_multipole_upload")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_multipole_upload
+
+    ! Reduce total multipole (multipole_tot_kernel, 1D 256); result in *tot4.
+    subroutine mtl_multipole_tot(head_idx, num_octs, tot4) &
+        bind(C, name="mtl_multipole_tot")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: tot4(4)
+    end subroutine mtl_multipole_tot
+
+    ! CIC density deposit (deposit_rho_kernel, 2D {8,16}).
+    subroutine mtl_deposit_rho(head_idx, num_octs, dx, vol_loc, &
+        m_refine, mass_sph, var_cut_refine, ivar_refine, ngridmax) &
+        bind(C, name="mtl_deposit_rho")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: dx, vol_loc, m_refine, mass_sph, var_cut_refine
+      integer(c_int), value :: ivar_refine, ngridmax
+    end subroutine mtl_deposit_rho
+
+    ! Initialise phi from time-extrapolated coarser-level interpolation.
+    subroutine mtl_init_phi(head_idx, num_octs, ngridmax, tfrac) &
+        bind(C, name="mtl_init_phi")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: tfrac
+    end subroutine mtl_init_phi
+
+    ! Compute gravitational force gradient (gradient_phi_kernel, 2D {8,16}).
+    ! "fine" variant uses AMR phi/f; "mg" uses MG phi/f.
+    subroutine mtl_gradient_phi_fine(head_idx, num_octs, dx) &
+        bind(C, name="mtl_gradient_phi_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: dx
+    end subroutine mtl_gradient_phi_fine
+
+    subroutine mtl_gradient_phi_mg(head_idx, num_octs, dx) &
+        bind(C, name="mtl_gradient_phi_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: dx
+    end subroutine mtl_gradient_phi_mg
+
+    ! Compute potential energy (cmp_epot_kernel, 1D 256); result in epot_out.
+    subroutine mtl_cmp_epot(head_idx, num_octs, epot_out) &
+        bind(C, name="mtl_cmp_epot")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: epot_out
+    end subroutine mtl_cmp_epot
+
+    ! Compute maximum density (cmp_rhomax_kernel, 1D 256); result in rhomax_out.
+    subroutine mtl_cmp_rhomax(head_idx, num_octs, rhomax_out) &
+        bind(C, name="mtl_cmp_rhomax")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: rhomax_out
+    end subroutine mtl_cmp_rhomax
+
+    ! Zero MG hash tables (removes tombstones before each multigrid cycle).
+    subroutine mtl_clean_mg_hashes() bind(C, name="mtl_clean_mg_hashes")
+    end subroutine mtl_clean_mg_hashes
+
+    ! Build the MG level (prefix sum → father octs → hash → nbor).
+    ! "fine": source octs from AMR grid; "mg": source octs from MG grid.
+    subroutine mtl_build_mg_fine(ifine, ilevel, head_idx, num_octs, &
+        head_father, head_mg, new_noct) bind(C, name="mtl_build_mg_fine")
+      import c_int
+      integer(c_int), value  :: ifine, ilevel, head_idx, num_octs, head_father, head_mg
+      integer(c_int), intent(out) :: new_noct
+    end subroutine mtl_build_mg_fine
+
+    subroutine mtl_build_mg_mg(ifine, ilevel, head_idx, num_octs, &
+        head_father, head_mg, new_noct) bind(C, name="mtl_build_mg_mg")
+      import c_int
+      integer(c_int), value  :: ifine, ilevel, head_idx, num_octs, head_father, head_mg
+      integer(c_int), intent(out) :: new_noct
+    end subroutine mtl_build_mg_mg
+
+    ! Reset mask to mask_val in f(cell,3,oct) (reset_mask_kernel, 2D {8,16}).
+    ! "fine" binds s_f; "mg" binds s_f_mg.
+    subroutine mtl_reset_mask_fine(head_idx, num_octs, mask_val) &
+        bind(C, name="mtl_reset_mask_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: mask_val
+    end subroutine mtl_reset_mask_fine
+
+    subroutine mtl_reset_mask_mg(head_idx, num_octs, mask_val) &
+        bind(C, name="mtl_reset_mask_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: mask_val
+    end subroutine mtl_reset_mask_mg
+
+    ! Restrict mask from fine → coarser MG level (restrict_mask_kernel, 1D 128).
+    subroutine mtl_restrict_mask_fine(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_restrict_mask_fine")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_restrict_mask_fine
+
+    subroutine mtl_restrict_mask_mg(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_restrict_mask_mg")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_restrict_mask_mg
+
+    ! Convert volume accumulation to signed mask (volume_to_mask_kernel, 1D 256).
+    subroutine mtl_volume_to_mask_fine(head_idx, num_octs, mask_max_out) &
+        bind(C, name="mtl_volume_to_mask_fine")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: mask_max_out
+    end subroutine mtl_volume_to_mask_fine
+
+    subroutine mtl_volume_to_mask_mg(head_idx, num_octs, mask_max_out) &
+        bind(C, name="mtl_volume_to_mask_mg")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: mask_max_out
+    end subroutine mtl_volume_to_mask_mg
+
+    ! Compute residual (cmp_residual_kernel, 2D {8,16}).
+    subroutine mtl_cmp_residual_fine(head_idx, num_octs, ngridmax, &
+        fourpi, offset, oneoverdx2) bind(C, name="mtl_cmp_residual_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: fourpi, offset, oneoverdx2
+    end subroutine mtl_cmp_residual_fine
+
+    subroutine mtl_cmp_residual_mg(head_idx, num_octs, ngridmax, &
+        fourpi, offset, oneoverdx2) bind(C, name="mtl_cmp_residual_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: fourpi, offset, oneoverdx2
+    end subroutine mtl_cmp_residual_mg
+
+    ! Gauss-Seidel smoother red/black step (gauss_seidel_kernel, 2D {4,32}).
+    subroutine mtl_gauss_seidel_fine(head_idx, num_octs, ngridmax, &
+        dx2, safe, redstep) bind(C, name="mtl_gauss_seidel_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: dx2
+      integer(c_int), value :: safe, redstep
+    end subroutine mtl_gauss_seidel_fine
+
+    subroutine mtl_gauss_seidel_mg(head_idx, num_octs, ngridmax, &
+        dx2, safe, redstep) bind(C, name="mtl_gauss_seidel_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: dx2
+      integer(c_int), value :: safe, redstep
+    end subroutine mtl_gauss_seidel_mg
+
+    ! Restrict residual from fine → coarser MG level (restrict_residual_kernel).
+    subroutine mtl_restrict_residual_fine(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_restrict_residual_fine")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_restrict_residual_fine
+
+    subroutine mtl_restrict_residual_mg(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_restrict_residual_mg")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_restrict_residual_mg
+
+
+    ! Interpolate coarse correction and add to fine grid.
+    subroutine mtl_interpolate_correct_fine(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_interpolate_correct_fine")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_interpolate_correct_fine
+
+    subroutine mtl_interpolate_correct_mg(head_idx, head_father, num_octs) &
+        bind(C, name="mtl_interpolate_correct_mg")
+      import c_int
+      integer(c_int), value :: head_idx, head_father, num_octs
+    end subroutine mtl_interpolate_correct_mg
+
+    ! L2 residual norm (residual_norm_kernel, 1D 256); result in norm_out.
+    subroutine mtl_residual_norm_fine(head_idx, num_octs, norm_out) &
+        bind(C, name="mtl_residual_norm_fine")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: norm_out
+    end subroutine mtl_residual_norm_fine
+
+    subroutine mtl_residual_norm_mg(head_idx, num_octs, norm_out) &
+        bind(C, name="mtl_residual_norm_mg")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: norm_out
+    end subroutine mtl_residual_norm_mg
+
+    ! Save phi → phi_old (save_phi_old_kernel, 2D {8,16}).
+    subroutine mtl_save_phi_old_fine(head_idx, num_octs) &
+        bind(C, name="mtl_save_phi_old_fine")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_save_phi_old_fine
+
+    ! Reset phi (and f[1..3]) to zero (reset_phi_kernel_mg, 2D {8,16}).
+    subroutine mtl_reset_phi_fine(head_idx, num_octs) &
+        bind(C, name="mtl_reset_phi_fine")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_reset_phi_fine
+
+    subroutine mtl_reset_phi_mg(head_idx, num_octs) &
+        bind(C, name="mtl_reset_phi_mg")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_reset_phi_mg
+
+    ! Set phi to a uniform value (reset_phi_val_kernel, 2D {8,16}).
+    subroutine mtl_reset_phi_val_fine(head_idx, num_octs, phi_val) &
+        bind(C, name="mtl_reset_phi_val_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: phi_val
+    end subroutine mtl_reset_phi_val_fine
+
+    subroutine mtl_reset_phi_val_mg(head_idx, num_octs, phi_val) &
+        bind(C, name="mtl_reset_phi_val_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: phi_val
+    end subroutine mtl_reset_phi_val_mg
+
+    ! Set RHS in f(cell,2,oct) (reset_rhs_kernel_mg, 2D {8,16}).
+    subroutine mtl_reset_rhs_fine(head_idx, num_octs, ngridmax, &
+        fourpi, offset, oneoverdx2) bind(C, name="mtl_reset_rhs_fine")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: fourpi, offset, oneoverdx2
+    end subroutine mtl_reset_rhs_fine
+
+    subroutine mtl_reset_rhs_mg(head_idx, num_octs, ngridmax, &
+        fourpi, offset, oneoverdx2) bind(C, name="mtl_reset_rhs_mg")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, ngridmax
+      real(c_float),  value :: fourpi, offset, oneoverdx2
+    end subroutine mtl_reset_rhs_mg
 
   end interface
 

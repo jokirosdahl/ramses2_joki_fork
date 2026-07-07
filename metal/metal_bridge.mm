@@ -68,6 +68,7 @@ static id<MTLComputePipelineState> s_pso_reset_flag2       = nil;
 static id<MTLComputePipelineState> s_pso_init_flag         = nil;
 static id<MTLComputePipelineState> s_pso_count_flag1       = nil;
 static id<MTLComputePipelineState> s_pso_hydro_flag        = nil;
+static id<MTLComputePipelineState> s_pso_poisson_flag      = nil;
 static id<MTLComputePipelineState> s_pso_count_neighbors   = nil;
 static id<MTLComputePipelineState> s_pso_flag_count        = nil;
 static id<MTLComputePipelineState> s_pso_enforce_rules     = nil;
@@ -75,6 +76,10 @@ static id<MTLComputePipelineState> s_pso_update_father     = nil;
 
 /* PSOs for AMR refine/sort/cache kernels (refine.metal) */
 static id<MTLComputePipelineState> s_pso_refine            = nil;
+static id<MTLComputePipelineState> s_pso_gather_force      = nil;
+static id<MTLComputePipelineState> s_pso_scatter_force     = nil;
+static id<MTLComputePipelineState> s_pso_gather_phi        = nil;
+static id<MTLComputePipelineState> s_pso_scatter_phi       = nil;
 static id<MTLComputePipelineState> s_pso_derefine          = nil;
 static id<MTLComputePipelineState> s_pso_free_hash         = nil;
 static id<MTLComputePipelineState> s_pso_update_hash       = nil;
@@ -94,6 +99,59 @@ static id<MTLComputePipelineState> s_pso_cache_swap        = nil;
 static id<MTLComputePipelineState> s_pso_make_cache        = nil;
 static id<MTLComputePipelineState> s_pso_insert_hash_cache = nil;
 static id<MTLComputePipelineState> s_pso_upload            = nil;
+
+/* PSOs for gravity / rho kernels (rho.metal) */
+static id<MTLComputePipelineState> s_pso_reset_rho              = nil;
+static id<MTLComputePipelineState> s_pso_multipole_leaf         = nil;
+static id<MTLComputePipelineState> s_pso_multipole_upload       = nil;
+static id<MTLComputePipelineState> s_pso_multipole_tot          = nil;
+static id<MTLComputePipelineState> s_pso_deposit_rho            = nil;
+
+/* PSOs for multigrid Poisson kernels (mg.metal) */
+static id<MTLComputePipelineState> s_pso_save_phi_old           = nil;
+static id<MTLComputePipelineState> s_pso_reset_phi_mg           = nil;
+static id<MTLComputePipelineState> s_pso_make_initial_phi       = nil;
+static id<MTLComputePipelineState> s_pso_reset_mask_mg          = nil;
+static id<MTLComputePipelineState> s_pso_reset_rhs_mg           = nil;
+static id<MTLComputePipelineState> s_pso_update_father_array    = nil;
+static id<MTLComputePipelineState> s_pso_init_prefix_sum_mg     = nil;
+static id<MTLComputePipelineState> s_pso_compute_father_swap    = nil;
+static id<MTLComputePipelineState> s_pso_make_father_octs       = nil;
+static id<MTLComputePipelineState> s_pso_restrict_mask_mg       = nil;
+static id<MTLComputePipelineState> s_pso_volume_to_mask         = nil;
+static id<MTLComputePipelineState> s_pso_cmp_residual           = nil;
+static id<MTLComputePipelineState> s_pso_gauss_seidel           = nil;
+static id<MTLComputePipelineState> s_pso_reset_phi_val          = nil;
+static id<MTLComputePipelineState> s_pso_restrict_residual      = nil;
+static id<MTLComputePipelineState> s_pso_interpolate_correct    = nil;
+static id<MTLComputePipelineState> s_pso_residual_norm          = nil;
+static id<MTLComputePipelineState> s_pso_cmp_epot               = nil;
+static id<MTLComputePipelineState> s_pso_cmp_rhomax             = nil;
+static id<MTLComputePipelineState> s_pso_gradient_phi           = nil;
+static id<MTLComputePipelineState> s_pso_update_nbor_array_mg   = nil;
+
+/* Gravity AMR buffers */
+static id<MTLBuffer> s_rho          = nil;   /* rho(8, ngridmax+ncachemax) float */
+static id<MTLBuffer> s_nref         = nil;   /* nref(8, ngridmax+ncachemax) int  */
+static id<MTLBuffer> s_phi          = nil;   /* phi(8, ngridmax+ncachemax) float */
+static id<MTLBuffer> s_phi_old      = nil;   /* phi_old same shape               */
+static id<MTLBuffer> s_f_grav       = nil;   /* f(8,3, ngridmax+ncachemax) float */
+static id<MTLBuffer> s_multipole_buf = nil;  /* multipole(4,ngridmax) float       */
+static id<MTLBuffer> s_scalar_buf   = nil;   /* single float for scalar reductions */
+
+/* MG buffers */
+static id<MTLBuffer> s_grid_mg      = nil;   /* oct_t[ngridmax_mg]           */
+static id<MTLBuffer> s_phi_mg       = nil;   /* phi(8, ncachemax_mg) float    */
+static id<MTLBuffer> s_f_mg         = nil;   /* f(8,3, ncachemax_mg) float    */
+static id<MTLBuffer> s_nbor_mg      = nil;   /* nbor(27, ncachemax_mg) int    */
+static id<MTLBuffer> s_father_mg    = nil;   /* father(ngridmax) int          */
+static id<MTLBuffer> s_hash_key_mg  = nil;   /* hash_key_mg(hash_size_mg) long */
+static id<MTLBuffer> s_hash_val_mg  = nil;   /* hash_val_mg(hash_size_mg) int  */
+
+/* MG sizing kept for runtime use */
+static int s_ngridmax_mg  = 0;
+static int s_ncachemax_mg = 0;
+static int s_hash_size_mg = 0;
 
 static int s_nvar = 5;   /* set in mtl_alloc_amr; used in mtl_blit_unew_to_uold */
 
@@ -158,6 +216,7 @@ extern "C" void mtl_init(void)
     s_pso_init_flag         = make_pso(@"init_flag_kernel");
     s_pso_count_flag1       = make_pso(@"count_flag1_kernel");
     s_pso_hydro_flag        = make_pso(@"hydro_flag_kernel");
+    s_pso_poisson_flag      = make_pso(@"poisson_flag_kernel");
     s_pso_count_neighbors   = make_pso(@"count_neighbors_kernel");
     s_pso_flag_count        = make_pso(@"flag_count_kernel");
     s_pso_enforce_rules     = make_pso(@"enforce_rules_kernel");
@@ -174,6 +233,10 @@ extern "C" void mtl_init(void)
     s_pso_local_swap        = make_pso(@"compute_local_swap_table_kernel");
     s_pso_global_swap       = make_pso(@"update_global_swap_table_kernel");
     s_pso_gather_grid       = make_pso(@"sort_gather_grid_kernel");
+    s_pso_gather_force      = make_pso(@"sort_gather_force_kernel");
+    s_pso_scatter_force     = make_pso(@"sort_scatter_force_kernel");
+    s_pso_gather_phi        = make_pso(@"sort_gather_phi_kernel");
+    s_pso_scatter_phi       = make_pso(@"sort_scatter_phi_kernel");
     s_pso_scatter_grid      = make_pso(@"sort_scatter_grid_kernel");
     s_pso_gather_flag       = make_pso(@"sort_gather_flag_kernel");
     s_pso_scatter_flag      = make_pso(@"sort_scatter_flag_kernel");
@@ -183,6 +246,36 @@ extern "C" void mtl_init(void)
     s_pso_make_cache        = make_pso(@"make_cache_octs_kernel");
     s_pso_insert_hash_cache = make_pso(@"insert_hash_cache_kernel");
     s_pso_upload            = make_pso(@"upload_kernel");
+
+    /* gravity / rho kernels */
+    s_pso_reset_rho              = make_pso(@"reset_rho_kernel");
+    s_pso_multipole_leaf         = make_pso(@"multipole_leaf_kernel");
+    s_pso_multipole_upload       = make_pso(@"multipole_upload_kernel");
+    s_pso_multipole_tot          = make_pso(@"multipole_tot_kernel");
+    s_pso_deposit_rho            = make_pso(@"deposit_rho_kernel");
+
+    /* multigrid Poisson kernels */
+    s_pso_save_phi_old           = make_pso(@"save_phi_old_kernel");
+    s_pso_reset_phi_mg           = make_pso(@"reset_phi_kernel_mg");
+    s_pso_make_initial_phi       = make_pso(@"make_initial_phi_kernel");
+    s_pso_reset_mask_mg          = make_pso(@"reset_mask_kernel_mg");
+    s_pso_reset_rhs_mg           = make_pso(@"reset_rhs_kernel_mg");
+    s_pso_update_father_array    = make_pso(@"update_father_array_kernel");
+    s_pso_init_prefix_sum_mg     = make_pso(@"init_prefix_sum_mg_kernel");
+    s_pso_compute_father_swap    = make_pso(@"compute_father_swap_kernel");
+    s_pso_make_father_octs       = make_pso(@"make_father_octs_kernel");
+    s_pso_restrict_mask_mg       = make_pso(@"restrict_mask_kernel_mg");
+    s_pso_volume_to_mask         = make_pso(@"volume_to_mask_kernel");
+    s_pso_cmp_residual           = make_pso(@"cmp_residual_kernel");
+    s_pso_gauss_seidel           = make_pso(@"gauss_seidel_kernel");
+    s_pso_reset_phi_val          = make_pso(@"reset_phi_val_kernel");
+    s_pso_restrict_residual      = make_pso(@"restrict_residual_kernel");
+    s_pso_interpolate_correct    = make_pso(@"interpolate_correct_kernel");
+    s_pso_residual_norm          = make_pso(@"residual_norm_kernel");
+    s_pso_cmp_epot               = make_pso(@"cmp_epot_kernel");
+    s_pso_cmp_rhomax             = make_pso(@"cmp_rhomax_kernel");
+    s_pso_gradient_phi           = make_pso(@"gradient_phi_kernel");
+    s_pso_update_nbor_array_mg   = make_pso(@"update_nbor_array_mg_kernel");
 
     fprintf(stdout, " Launching METAL.\n");
     s_sort_fence = [s_device newFence];
@@ -1051,7 +1144,9 @@ extern "C" int mtl_init_flag_batch(int head_coarse, int noct_coarse,
 extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
                                     float gamma,      float smallr,  float smallc2,
                                     float err_grad_d, float err_grad_p,
-                                    float floor_d,    float floor_p)
+                                    float floor_d,    float floor_p,
+                                    float mass_sph,   float m_refine, float jeans_refine,
+                                    float factG,      float dx_loc)
 {
     if (num_octs <= 0) return 0;
 
@@ -1063,10 +1158,32 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
       [blit updateFence:s_sort_fence];
       [blit endEncoding]; }
 
-    /* hydro_flag */
+    /* poisson_flag and hydro_flag */
     { NSUInteger nblk = ((NSUInteger)num_octs + 15) / 16;
       id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
       [enc waitForFence:s_sort_fence];
+
+      /* 1. poisson_flag if gravity is active (s_pso_poisson_flag) */
+      if (s_pso_poisson_flag) {
+          [enc setComputePipelineState:s_pso_poisson_flag];
+          [enc setBuffer:s_flag1      offset:0 atIndex:0];
+          [enc setBuffer:s_nref       offset:0 atIndex:1];
+          [enc setBuffer:s_uold       offset:0 atIndex:2];
+          [enc setBuffer:nil          offset:0 atIndex:3]; /* bold: nil for MHD=0 */
+          [enc setBytes:&head_idx     length:sizeof(int)   atIndex:4];
+          [enc setBytes:&num_octs     length:sizeof(int)   atIndex:5];
+          [enc setBytes:&gamma        length:sizeof(float) atIndex:6];
+          [enc setBytes:&smallr       length:sizeof(float) atIndex:7];
+          [enc setBytes:&smallc2      length:sizeof(float) atIndex:8];
+          [enc setBytes:&mass_sph     length:sizeof(float) atIndex:9];
+          [enc setBytes:&m_refine     length:sizeof(float) atIndex:10];
+          [enc setBytes:&jeans_refine length:sizeof(float) atIndex:11];
+          [enc setBytes:&factG        length:sizeof(float) atIndex:12];
+          [enc setBytes:&dx_loc       length:sizeof(float) atIndex:13];
+          [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{128,1,1}];
+      }
+
+      /* 2. hydro_flag */
       [enc setComputePipelineState:s_pso_hydro_flag];
       [enc setBuffer:s_flag1      offset:0 atIndex:0];
       [enc setBuffer:s_nbor       offset:0 atIndex:1];
@@ -1081,6 +1198,7 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
       [enc setBytes:&floor_d      length:sizeof(float) atIndex:10];
       [enc setBytes:&floor_p      length:sizeof(float) atIndex:11];
       [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{128,1,1}];
+
       [enc updateFence:s_sort_fence];
       [enc endEncoding]; }
 
@@ -1694,6 +1812,79 @@ extern "C" void mtl_sort_gather_hydro(int head_idx, int num_octs)
     [cmd waitUntilCompleted];
 }
 
+/* --- gravity sort_gather/scatter functions --- */
+extern "C" void mtl_sort_gather_force(int head_idx, int num_octs, int idim)
+{
+    if (num_octs <= 0) return;
+    NSUInteger tg = 128, nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gather_force];
+    [enc setBuffer:s_nref        offset:0 atIndex:0]; // s_nref as scratch
+    [enc setBuffer:s_f_grav      offset:0 atIndex:1];
+    [enc setBuffer:s_swap_global offset:0 atIndex:2];
+    [enc setBytes:&idim     length:sizeof(int) atIndex:3];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:4];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:5];
+    [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_sort_scatter_force(int head_idx, int num_octs, int idim)
+{
+    if (num_octs <= 0) return;
+    NSUInteger tg = 128, nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_scatter_force];
+    [enc setBuffer:s_f_grav      offset:0 atIndex:0];
+    [enc setBuffer:s_nref        offset:0 atIndex:1];
+    [enc setBytes:&idim     length:sizeof(int) atIndex:2];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:3];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:4];
+    [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_sort_gather_phi(int head_idx, int num_octs, int is_phi_old)
+{
+    if (num_octs <= 0) return;
+    NSUInteger tg = 128, nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gather_phi];
+    [enc setBuffer:s_nref        offset:0 atIndex:0];
+    [enc setBuffer:(is_phi_old ? s_phi_old : s_phi) offset:0 atIndex:1];
+    [enc setBuffer:s_swap_global offset:0 atIndex:2];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:3];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:4];
+    [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_sort_scatter_phi(int head_idx, int num_octs, int is_phi_old)
+{
+    if (num_octs <= 0) return;
+    NSUInteger tg = 128, nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_scatter_phi];
+    [enc setBuffer:(is_phi_old ? s_phi_old : s_phi) offset:0 atIndex:0];
+    [enc setBuffer:s_nref        offset:0 atIndex:1];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:3];
+    [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+
 /* --- mtl_blit_unew_to_uold: copy unew[head..] → uold (mirrors cudaMemcpy) */
 
 extern "C" void mtl_blit_unew_to_uold(int head_idx, int num_octs)
@@ -1790,6 +1981,9 @@ extern "C" void mtl_make_cache_octs(int head_idx, int num_subgrids,
     [enc setBytes:&ifree_cache length:sizeof(int) atIndex:15];
     [enc setBytes:&new_noct    length:sizeof(int) atIndex:16];
     [enc setBytes:&input_ind   length:sizeof(int) atIndex:17];
+    [enc setBuffer:s_f_grav    offset:0 atIndex:18];
+    [enc setBuffer:s_phi       offset:0 atIndex:19];
+    [enc setBuffer:s_phi_old   offset:0 atIndex:20];
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding];
     [cmd commit];
@@ -1910,6 +2104,9 @@ extern "C" void mtl_cache_fill(int head_idx, int num_subgrids,
         [enc setBytes:&ifree_cache  length:sizeof(int) atIndex:15];
         [enc setBytes:&new_noct     length:sizeof(int) atIndex:16];
         [enc setBytes:&input_ind    length:sizeof(int) atIndex:17];
+        [enc setBuffer:s_f_grav     offset:0 atIndex:18];
+        [enc setBuffer:s_phi        offset:0 atIndex:19];
+        [enc setBuffer:s_phi_old    offset:0 atIndex:20];
         [enc dispatchThreadgroups:{(NSUInteger)nblk_cache,1,1}
              threadsPerThreadgroup:{128,1,1}];
         [enc updateFence:s_sort_fence];
@@ -1961,4 +2158,946 @@ extern "C" void mtl_insert_hash_cache_r(int hash_size, int ngridmax,
     [enc endEncoding];
     [cmd commit];
     [cmd waitUntilCompleted];
+}
+
+/* =======================================================================
+ * Gravity / Poisson bridge functions
+ * Mirrors gpu_manager.cuf + gpu_runner.cuf gravity routines for Metal.
+ * ======================================================================= */
+
+/* -----------------------------------------------------------------------
+ * mtl_alloc_grav — allocate all gravity AMR + MG device buffers.
+ * Called once from metal_allocate_grav in metal_runner.f90.
+ * ----------------------------------------------------------------------- */
+extern "C" void mtl_alloc_grav(int ngridmax, int ncachemax,
+                                int ngridmax_mg, int ncachemax_mg,
+                                int hash_size_mg_in)
+{
+    s_ngridmax_mg  = ngridmax_mg;
+    s_ncachemax_mg = ncachemax_mg;
+    s_hash_size_mg = hash_size_mg_in;
+
+    int ntotal    = ngridmax + ncachemax;
+    int ntotal_mg = ngridmax_mg + ncachemax_mg;   /* CUDA: grid/phi/f indexed up to ngridmax_mg+ncachemax_mg */
+
+    NSUInteger rho_bytes       = (NSUInteger)ntotal    * 8 * sizeof(float);
+    NSUInteger nref_bytes      = (NSUInteger)ntotal    * 8 * sizeof(int);
+    NSUInteger phi_bytes       = (NSUInteger)ntotal    * 8 * sizeof(float);
+    NSUInteger f_grav_bytes    = (NSUInteger)ntotal    * 24 * sizeof(float);  /* 8 cells × 3 dims */
+    NSUInteger multipole_bytes = (NSUInteger)ngridmax  * 4 * sizeof(float);
+    NSUInteger scalar_bytes    = 4 * sizeof(float);  /* multipole_tot writes [m,mx,my,mz] */
+
+    NSUInteger grid_mg_bytes   = (NSUInteger)ntotal_mg    * sizeof(oct_t);        /* CUDA: ngridmax_mg+ncachemax_mg */
+    NSUInteger phi_mg_bytes    = (NSUInteger)ntotal_mg    * 8 * sizeof(float);
+    NSUInteger f_mg_bytes      = (NSUInteger)ntotal_mg    * 24 * sizeof(float);
+    NSUInteger nbor_mg_bytes   = (NSUInteger)ngridmax_mg  * 27 * sizeof(int);     /* CUDA: ngridmax_mg only, no cache */
+    NSUInteger father_mg_bytes = (NSUInteger)(ngridmax + ngridmax_mg + ncachemax_mg) * sizeof(int);
+    NSUInteger hkey_mg_bytes   = (NSUInteger)hash_size_mg_in * sizeof(long);
+    NSUInteger hval_mg_bytes   = (NSUInteger)hash_size_mg_in * sizeof(int);
+
+    s_rho           = [s_device newBufferWithLength:rho_bytes       options:MTLResourceStorageModeShared];
+    s_nref          = [s_device newBufferWithLength:nref_bytes      options:MTLResourceStorageModeShared];
+    s_phi           = [s_device newBufferWithLength:phi_bytes       options:MTLResourceStorageModeShared];
+    s_phi_old       = [s_device newBufferWithLength:phi_bytes       options:MTLResourceStorageModeShared];
+    s_f_grav        = [s_device newBufferWithLength:f_grav_bytes    options:MTLResourceStorageModeShared];
+    s_multipole_buf = [s_device newBufferWithLength:multipole_bytes options:MTLResourceStorageModeShared];
+    s_scalar_buf    = [s_device newBufferWithLength:scalar_bytes    options:MTLResourceStorageModeShared];
+
+    s_grid_mg       = [s_device newBufferWithLength:grid_mg_bytes   options:MTLResourceStorageModeShared];
+    s_phi_mg        = [s_device newBufferWithLength:phi_mg_bytes    options:MTLResourceStorageModeShared];
+    s_f_mg          = [s_device newBufferWithLength:f_mg_bytes      options:MTLResourceStorageModeShared];
+    s_nbor_mg       = [s_device newBufferWithLength:nbor_mg_bytes   options:MTLResourceStorageModeShared];
+    s_father_mg     = [s_device newBufferWithLength:father_mg_bytes options:MTLResourceStorageModeShared];
+    s_hash_key_mg   = [s_device newBufferWithLength:hkey_mg_bytes   options:MTLResourceStorageModeShared];
+    s_hash_val_mg   = [s_device newBufferWithLength:hval_mg_bytes   options:MTLResourceStorageModeShared];
+
+    memset(s_hash_key_mg.contents, 0, hkey_mg_bytes);
+    memset(s_hash_val_mg.contents, 0, hval_mg_bytes);
+}
+
+/* -----------------------------------------------------------------------
+ * Upload / download helpers for gravity arrays.
+ * ----------------------------------------------------------------------- */
+extern "C" void mtl_upload_rho(void *rho_host, int head_idx, int num_octs)
+{
+    size_t off = (size_t)(head_idx - 1) * 8 * sizeof(float);
+    size_t nb  = (size_t)num_octs * 8 * sizeof(float);
+    memcpy((char *)s_rho.contents + off, rho_host, nb);
+}
+
+extern "C" void mtl_download_phi(void *phi_host, int head_idx, int num_octs)
+{
+    size_t off = (size_t)(head_idx - 1) * 8 * sizeof(float);
+    size_t nb  = (size_t)num_octs * 8 * sizeof(float);
+    memcpy(phi_host, (char *)s_phi.contents + off, nb);
+}
+
+extern "C" void mtl_download_f(void *f_host, int head_idx, int num_octs)
+{
+    size_t off = (size_t)(head_idx - 1) * 24 * sizeof(float);
+    size_t nb  = (size_t)num_octs * 24 * sizeof(float);
+    memcpy(f_host, (char *)s_f_grav.contents + off, nb);
+}
+
+/* -----------------------------------------------------------------------
+ * mtl_run_scan — inclusive prefix scan on s_prefix_sum[head_idx-1 .. head_idx+num_octs-2].
+ * Returns the inclusive total (last element after scan).
+ * Reuses existing scan PSOs; no nbor_prefix marking step.
+ * ----------------------------------------------------------------------- */
+extern "C" int mtl_run_scan(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return 0;
+
+    int offset    = head_idx - 1;   /* 0-based */
+    int n         = num_octs;
+    int nb0       = (n   + 255) / 256;
+    int nb1       = (nb0 + 255) / 256;
+    bool need_fixup = (nb0 > 1);
+
+    id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
+
+    /* Phase 1: within-block scan; first encoder — no waitForFence */
+    {
+        NSUInteger nblk = (NSUInteger)nb0;
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_scan_block];
+        [enc setBuffer:s_prefix_sum   offset:0 atIndex:0];
+        [enc setBuffer:s_partial_sums offset:0 atIndex:1];
+        [enc setBytes:&offset length:sizeof(int) atIndex:2];
+        [enc setBytes:&n      length:sizeof(int) atIndex:3];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{256,1,1}];
+        [enc updateFence:s_sort_fence];
+        [enc endEncoding];
+    }
+
+    if (need_fixup) {
+        /* Phase 2: scan the block totals */
+        scan_phase_fenced(s_pso_scan_block, s_partial_sums, s_partial_sums_2,
+                          0, nb0, cmd, s_sort_fence, s_sort_fence);
+        if (nb1 > 1) {
+            /* 3rd level needed */
+            scan_phase_fenced(s_pso_scan_block, s_partial_sums_2, s_partial_sums_3,
+                              0, nb1, cmd, s_sort_fence, s_sort_fence);
+            scan_phase_fenced(s_pso_scan_fixup, s_partial_sums, s_partial_sums_2,
+                              0, nb0, cmd, s_sort_fence, s_sort_fence);
+        }
+        /* Phase 3: add block offsets back */
+        scan_phase_fenced(s_pso_scan_fixup, s_prefix_sum, s_partial_sums,
+                          offset, n, cmd, s_sort_fence, s_sort_fence);
+    }
+
+    [cmd commit];
+    [cmd waitUntilCompleted];
+
+    return ((int *)s_prefix_sum.contents)[offset + n - 1];
+}
+
+/* -----------------------------------------------------------------------
+ * Dispatch helpers — gravity kernel launchers.
+ * Thread layout macros:
+ *   DISPATCH_2D_8_16(pso, n):   {8,16} threads/tg, ceil(n/16) TGs
+ *   DISPATCH_1D_256(pso, n):    256 threads/tg, ceil(n/32) TGs  (8 octs/TG × 32 octs)
+ *   DISPATCH_1D_128(pso, n):    128 threads/tg, ceil(n/128) TGs
+ *   DISPATCH_2D_4_32(pso, n):   {4,32} threads/tg, ceil(n/32) TGs
+ * ----------------------------------------------------------------------- */
+#define DISPATCH_2D_8_16(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+15)/16,1,1} threadsPerThreadgroup:{8,16,1}]
+
+#define DISPATCH_1D_256_OCT(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+255)/256,1,1} threadsPerThreadgroup:{256,1,1}]
+
+#define DISPATCH_1D_1024_OCT(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+1023)/1024,1,1} threadsPerThreadgroup:{1024,1,1}]
+
+#define DISPATCH_1D_128(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+127)/128,1,1} threadsPerThreadgroup:{128,1,1}]
+
+#define DISPATCH_2D_4_32(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+31)/32,1,1} threadsPerThreadgroup:{4,32,1}]
+
+/* -----------------------------------------------------------------------
+ * rho / density kernels
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_reset_rho(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_rho];
+    [enc setBuffer:s_rho      offset:0 atIndex:0];
+    [enc setBuffer:s_nref     offset:0 atIndex:1];
+    [enc setBytes:&head_idx   length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs   length:sizeof(int) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_multipole_leaf(int head_idx, int num_octs, float scale)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_multipole_leaf];
+    [enc setBuffer:s_unew        offset:0 atIndex:0];  /* output: unew holds monopole+dipoles */
+    [enc setBuffer:s_uold        offset:0 atIndex:1];  /* input:  gas density ivar=1           */
+    [enc setBuffer:s_grid        offset:0 atIndex:2];  /* input:  oct ckey/refined              */
+    [enc setBytes:&head_idx      length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs      length:sizeof(int)   atIndex:4];
+    [enc setBytes:&scale         length:sizeof(float) atIndex:5];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_multipole_upload(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_multipole_upload];
+    [enc setBuffer:s_grid     offset:0 atIndex:0];
+    [enc setBuffer:s_father   offset:0 atIndex:1];
+    [enc setBuffer:s_unew     offset:0 atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int) atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int) atIndex:4];
+    DISPATCH_1D_128(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_multipole_tot(int head_idx, int num_octs, float *tot4)
+{
+    if (num_octs <= 0) { tot4[0]=tot4[1]=tot4[2]=tot4[3]=0.0f; return; }
+
+    /* scalar_buf holds 4 floats; pre-zero before dispatch */
+    memset(s_scalar_buf.contents, 0, 4 * sizeof(float));
+
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_multipole_tot];
+    [enc setBuffer:s_unew       offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx        length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs        length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(tot4, s_scalar_buf.contents, 4 * sizeof(float));
+}
+
+extern "C" void mtl_deposit_rho(int head_idx, int num_octs,
+                                float dx, float vol_loc,
+                                float m_refine, float mass_sph,
+                                float var_cut_refine, int ivar_refine,
+                                int ngridmax)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_deposit_rho];
+    [enc setBuffer:s_grid          offset:0 atIndex:0];
+    [enc setBuffer:s_uold          offset:0 atIndex:1];
+    [enc setBuffer:s_unew          offset:0 atIndex:2];
+    [enc setBuffer:s_rho           offset:0 atIndex:3];
+    [enc setBuffer:s_nref          offset:0 atIndex:4];
+    [enc setBuffer:s_nbor          offset:0 atIndex:5];
+    [enc setBytes:&head_idx        length:sizeof(int)   atIndex:6];
+    [enc setBytes:&num_octs        length:sizeof(int)   atIndex:7];
+    [enc setBytes:&dx              length:sizeof(float) atIndex:8];
+    [enc setBytes:&vol_loc         length:sizeof(float) atIndex:9];
+    [enc setBytes:&m_refine        length:sizeof(float) atIndex:10];
+    [enc setBytes:&mass_sph        length:sizeof(float) atIndex:11];
+    [enc setBytes:&var_cut_refine  length:sizeof(float) atIndex:12];
+    [enc setBytes:&ivar_refine     length:sizeof(int)   atIndex:13];
+    [enc setBytes:&ngridmax        length:sizeof(int)   atIndex:14];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+/* -----------------------------------------------------------------------
+ * phi initialisation / save
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_init_phi(int head_idx, int num_octs, int ngridmax, float tfrac)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_make_initial_phi];
+    [enc setBuffer:s_grid     offset:0 atIndex:0];
+    [enc setBuffer:s_father   offset:0 atIndex:1];
+    [enc setBuffer:s_nbor     offset:0 atIndex:2];
+    [enc setBuffer:s_phi      offset:0 atIndex:3];
+    [enc setBuffer:s_phi_old  offset:0 atIndex:4];
+    [enc setBytes:&tfrac      length:sizeof(float) atIndex:5];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:6];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:7];
+    [enc setBytes:&ngridmax   length:sizeof(int)   atIndex:8];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_save_phi_old_fine(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_save_phi_old];
+    [enc setBuffer:s_phi_old  offset:0 atIndex:0];
+    [enc setBuffer:s_phi      offset:0 atIndex:1];
+    [enc setBytes:&head_idx   length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs   length:sizeof(int) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+/* -----------------------------------------------------------------------
+ * gradient / force
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_gradient_phi_fine(int head_idx, int num_octs, float dx)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gradient_phi];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:1];
+    [enc setBuffer:s_nbor     offset:0 atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&dx         length:sizeof(float) atIndex:5];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_gradient_phi_mg(int head_idx, int num_octs, float dx)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gradient_phi];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:1];
+    [enc setBuffer:s_nbor_mg  offset:0 atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&dx         length:sizeof(float) atIndex:5];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+/* -----------------------------------------------------------------------
+ * Scalar reduction bridge helpers
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_cmp_epot(int head_idx, int num_octs, float *epot_out)
+{
+    *epot_out = 0.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_cmp_epot];
+    [enc setBuffer:s_grid       offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:1];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:2];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:3];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:4];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(epot_out, s_scalar_buf.contents, sizeof(float));
+}
+
+extern "C" void mtl_cmp_rhomax(int head_idx, int num_octs, float *rhomax_out)
+{
+    *rhomax_out = 0.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_cmp_rhomax];
+    [enc setBuffer:s_rho        offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(rhomax_out, s_scalar_buf.contents, sizeof(float));
+}
+
+/* -----------------------------------------------------------------------
+ * Mask operations
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_reset_mask_fine(int head_idx, int num_octs, float mask_val)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_mask_mg];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:0];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:1];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:2];
+    [enc setBytes:&mask_val   length:sizeof(float) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_mask_mg(int head_idx, int num_octs, float mask_val)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_mask_mg];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:0];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:1];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:2];
+    [enc setBytes:&mask_val   length:sizeof(float) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_restrict_mask_fine(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_restrict_mask_mg];
+    [enc setBuffer:s_grid       offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:2];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:3];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:4];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:5];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:6];
+    DISPATCH_1D_128(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_restrict_mask_mg(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_restrict_mask_mg];
+    [enc setBuffer:s_grid_mg    offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:2];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:3];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:4];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:5];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:6];
+    DISPATCH_1D_128(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_volume_to_mask_fine(int head_idx, int num_octs, float *mask_max_out)
+{
+    *mask_max_out = -1.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    *(float *)s_scalar_buf.contents = -1.0f;   /* init to -1 for max reduction */
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_volume_to_mask];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(mask_max_out, s_scalar_buf.contents, sizeof(float));
+}
+
+extern "C" void mtl_volume_to_mask_mg(int head_idx, int num_octs, float *mask_max_out)
+{
+    *mask_max_out = -1.0f;
+    if (num_octs <= 0) return;
+    *(float *)s_scalar_buf.contents = -1.0f;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_volume_to_mask];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(mask_max_out, s_scalar_buf.contents, sizeof(float));
+}
+
+/* -----------------------------------------------------------------------
+ * Residual, RHS, phi reset
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_cmp_residual_fine(int head_idx, int num_octs, int ngridmax,
+                                       float fourpi, float offset_val, float oneoverdx2)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_cmp_residual];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:1];
+    [enc setBuffer:s_nbor     offset:0 atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&ngridmax   length:sizeof(int)   atIndex:5];
+    [enc setBytes:&fourpi     length:sizeof(float) atIndex:6];
+    [enc setBytes:&offset_val length:sizeof(float) atIndex:7];
+    [enc setBytes:&oneoverdx2 length:sizeof(float) atIndex:8];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_cmp_residual_mg(int head_idx, int num_octs, int ngridmax_mg_loc,
+                                     float fourpi, float offset_val, float oneoverdx2)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_cmp_residual];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:1];
+    [enc setBuffer:s_nbor_mg  offset:0 atIndex:2];
+    [enc setBytes:&head_idx       length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs       length:sizeof(int)   atIndex:4];
+    [enc setBytes:&ngridmax_mg_loc length:sizeof(int)  atIndex:5];
+    [enc setBytes:&fourpi         length:sizeof(float) atIndex:6];
+    [enc setBytes:&offset_val     length:sizeof(float) atIndex:7];
+    [enc setBytes:&oneoverdx2     length:sizeof(float) atIndex:8];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_gauss_seidel_fine(int head_idx, int num_octs, int ngridmax,
+                                       float dx2, int safe, int redstep)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gauss_seidel];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:1];
+    [enc setBuffer:s_nbor     offset:0 atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&ngridmax   length:sizeof(int)   atIndex:5];
+    [enc setBytes:&dx2        length:sizeof(float) atIndex:6];
+    [enc setBytes:&safe       length:sizeof(int)   atIndex:7];
+    [enc setBytes:&redstep    length:sizeof(int)   atIndex:8];
+    DISPATCH_2D_4_32(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_gauss_seidel_mg(int head_idx, int num_octs, int ngridmax_mg_loc,
+                                     float dx2, int safe, int redstep)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_gauss_seidel];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:1];
+    [enc setBuffer:s_nbor_mg  offset:0 atIndex:2];
+    [enc setBytes:&head_idx       length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs       length:sizeof(int)   atIndex:4];
+    [enc setBytes:&ngridmax_mg_loc length:sizeof(int)  atIndex:5];
+    [enc setBytes:&dx2            length:sizeof(float) atIndex:6];
+    [enc setBytes:&safe           length:sizeof(int)   atIndex:7];
+    [enc setBytes:&redstep        length:sizeof(int)   atIndex:8];
+    DISPATCH_2D_4_32(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_phi_fine(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_phi_mg];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:1];
+    [enc setBytes:&head_idx   length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs   length:sizeof(int) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_phi_mg(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_phi_mg];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:1];
+    [enc setBytes:&head_idx   length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs   length:sizeof(int) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_phi_val_fine(int head_idx, int num_octs, float phi_val)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_phi_val];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:1];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:2];
+    [enc setBytes:&phi_val    length:sizeof(float) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_phi_val_mg(int head_idx, int num_octs, float phi_val)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_phi_val];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:1];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:2];
+    [enc setBytes:&phi_val    length:sizeof(float) atIndex:3];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_rhs_fine(int head_idx, int num_octs, int ngridmax,
+                                    float fourpi, float offset_val, float oneoverdx2)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_rhs_mg];
+    [enc setBuffer:s_phi      offset:0 atIndex:0];
+    [enc setBuffer:s_rho      offset:0 atIndex:1];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:2];
+    [enc setBuffer:s_nbor     offset:0 atIndex:3];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:5];
+    [enc setBytes:&ngridmax   length:sizeof(int)   atIndex:6];
+    [enc setBytes:&fourpi     length:sizeof(float) atIndex:7];
+    [enc setBytes:&offset_val length:sizeof(float) atIndex:8];
+    [enc setBytes:&oneoverdx2 length:sizeof(float) atIndex:9];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_reset_rhs_mg(int head_idx, int num_octs, int ngridmax_mg_loc,
+                                  float fourpi, float offset_val, float oneoverdx2)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_reset_rhs_mg];
+    [enc setBuffer:s_phi_mg   offset:0 atIndex:0];
+    [enc setBuffer:s_f_mg     offset:0 atIndex:1];   /* rho slot reuses f2 in MG path */
+    [enc setBuffer:s_f_mg     offset:0 atIndex:2];
+    [enc setBuffer:s_nbor_mg  offset:0 atIndex:3];
+    [enc setBytes:&head_idx       length:sizeof(int)   atIndex:4];
+    [enc setBytes:&num_octs       length:sizeof(int)   atIndex:5];
+    [enc setBytes:&ngridmax_mg_loc length:sizeof(int)  atIndex:6];
+    [enc setBytes:&fourpi         length:sizeof(float) atIndex:7];
+    [enc setBytes:&offset_val     length:sizeof(float) atIndex:8];
+    [enc setBytes:&oneoverdx2     length:sizeof(float) atIndex:9];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+/* -----------------------------------------------------------------------
+ * Residual norm
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_residual_norm_fine(int head_idx, int num_octs, float *norm_out)
+{
+    *norm_out = 0.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_residual_norm];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(norm_out, s_scalar_buf.contents, sizeof(float));
+}
+
+extern "C" void mtl_residual_norm_mg(int head_idx, int num_octs, float *norm_out)
+{
+    *norm_out = 0.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_residual_norm];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(norm_out, s_scalar_buf.contents, sizeof(float));
+}
+
+/* -----------------------------------------------------------------------
+ * Restrict residual
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_restrict_residual_fine(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_restrict_residual];
+    [enc setBuffer:s_grid       offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:2];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:3];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:4];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:5];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:6];
+    DISPATCH_1D_128(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_restrict_residual_mg(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_restrict_residual];
+    [enc setBuffer:s_grid_mg    offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:2];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:3];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:4];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:5];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:6];
+    DISPATCH_1D_128(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+
+/* -----------------------------------------------------------------------
+ * Interpolate / correct
+ * ----------------------------------------------------------------------- */
+
+extern "C" void mtl_interpolate_correct_fine(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    /* threadgroup memory: 27*16 ints per array, two arrays */
+    NSUInteger tg_bytes = 2 * 27 * 16 * sizeof(int);
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_interpolate_correct];
+    [enc setBuffer:s_grid       offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_nbor_mg    offset:0 atIndex:2];
+    [enc setBuffer:s_phi        offset:0 atIndex:3];
+    [enc setBuffer:s_phi_mg     offset:0 atIndex:4];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:5];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:6];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:7];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:8];
+    [enc setThreadgroupMemoryLength:tg_bytes / 2 atIndex:0];   /* igrid_nbor */
+    [enc setThreadgroupMemoryLength:tg_bytes / 2 atIndex:1];   /* icell_nbor */
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_interpolate_correct_mg(int head_idx, int head_father, int num_octs)
+{
+    if (num_octs <= 0) return;
+    NSUInteger tg_bytes = 2 * 27 * 16 * sizeof(int);
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_interpolate_correct];
+    [enc setBuffer:s_grid_mg    offset:0 atIndex:0];
+    [enc setBuffer:s_father_mg  offset:0 atIndex:1];
+    [enc setBuffer:s_nbor_mg    offset:0 atIndex:2];
+    [enc setBuffer:s_phi_mg     offset:0 atIndex:3];
+    [enc setBuffer:s_phi_mg     offset:0 atIndex:4];
+    [enc setBuffer:s_f_mg       offset:0 atIndex:5];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:6];
+    [enc setBytes:&head_father  length:sizeof(int) atIndex:7];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:8];
+    [enc setThreadgroupMemoryLength:tg_bytes / 2 atIndex:0];
+    [enc setThreadgroupMemoryLength:tg_bytes / 2 atIndex:1];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+/* -----------------------------------------------------------------------
+ * mtl_build_mg_fine / mtl_build_mg_mg
+ *
+ * Build one MG level (AMR source or MG source):
+ *   1. init_prefix_sum_mg   — mark first oct per parent group
+ *   2. mtl_run_scan         — inclusive scan → new_noct (total distinct parents)
+ *   3. compute_father_swap  — build swap table
+ *   4. make_father_octs     — fill new MG octs
+ *   5. insert_hash_mg       — insert new MG octs into hash table
+ *   6. update_father_array  — link each source oct to its MG parent
+ *   7. update_nbor_array_mg — build MG nbor table from hash
+ *
+ * ifine:       fine AMR level (Fortran 1-based)
+ * ilevel:      coarse MG level = ifine - 1
+ * head_idx:    first source oct (1-based)
+ * num_octs:    number of source octs
+ * head_father: first MG parent slot (1-based index into s_grid_mg / s_father_mg)
+ * new_noct:    (out) number of new MG parent octs created
+ * ----------------------------------------------------------------------- */
+
+/* head_father: offset into s_father_mg for source octs (= CUDA's head_father)
+ * head_mg:     starting index of new MG octs in s_grid_mg (= CUDA's head_mg)
+ * For the fine case both equal 1; for MG-MG they differ. */
+static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
+                             int head_father, int head_mg, int *new_noct_out)
+{
+    /* Step 1: init prefix sum marks */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_init_prefix_sum_mg];
+        [enc setBuffer:grid_src      offset:0 atIndex:0];
+        [enc setBuffer:s_prefix_sum  offset:0 atIndex:1];
+        [enc setBytes:&head_idx      length:sizeof(int) atIndex:2];
+        [enc setBytes:&num_octs      length:sizeof(int) atIndex:3];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+
+    /* Step 2: prefix scan → new_noct */
+    int new_noct = mtl_run_scan(head_idx, num_octs);
+    *new_noct_out = new_noct;
+    if (new_noct <= 0) return;
+
+    /* Step 3: compute father swap table */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_compute_father_swap];
+        [enc setBuffer:s_swap_local  offset:0 atIndex:0];
+        [enc setBuffer:s_prefix_sum  offset:0 atIndex:1];
+        [enc setBytes:&head_idx      length:sizeof(int) atIndex:2];
+        [enc setBytes:&num_octs      length:sizeof(int) atIndex:3];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+
+    /* Step 4: make father octs in MG grid — use head_mg (new octs position in s_grid_mg) */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_make_father_octs];
+        [enc setBuffer:grid_src      offset:0 atIndex:0];
+        [enc setBuffer:s_grid_mg     offset:0 atIndex:1];
+        [enc setBuffer:s_phi_mg      offset:0 atIndex:2];
+        [enc setBuffer:s_f_mg        offset:0 atIndex:3];
+        [enc setBuffer:s_swap_local  offset:0 atIndex:4];
+        [enc setBytes:&head_mg       length:sizeof(int) atIndex:5];
+        [enc setBytes:&new_noct      length:sizeof(int) atIndex:6];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+
+    /* Step 5: insert new MG octs into hash — use head_mg */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_insert_hash_all];   /* reuse AMR insert_hash_all */
+        [enc setBuffer:s_grid_mg        offset:0 atIndex:0];
+        [enc setBuffer:s_hash_key_mg    offset:0 atIndex:1];
+        [enc setBuffer:s_hash_val_mg    offset:0 atIndex:2];
+        [enc setBuffer:s_ckey_max_dev   offset:0 atIndex:3];
+        [enc setBuffer:s_key_off_dev    offset:0 atIndex:4];
+        [enc setBytes:&s_hash_size_mg   length:sizeof(int) atIndex:5];
+        [enc setBytes:&head_mg          length:sizeof(int) atIndex:6];
+        [enc setBytes:&new_noct         length:sizeof(int) atIndex:7];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+
+    /* Step 6: update father_mg for each source oct — use head_father (s_father_mg slot) */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)num_octs + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_update_father_array];
+        [enc setBuffer:s_father_mg      offset:0 atIndex:0];
+        [enc setBuffer:grid_src         offset:0 atIndex:1];
+        [enc setBuffer:s_hash_key_mg    offset:0 atIndex:2];
+        [enc setBuffer:s_hash_val_mg    offset:0 atIndex:3];
+        [enc setBuffer:s_ckey_max_dev   offset:0 atIndex:4];
+        [enc setBuffer:s_key_off_dev    offset:0 atIndex:5];
+        [enc setBytes:&s_hash_size_mg   length:sizeof(int) atIndex:6];
+        [enc setBytes:&head_idx         length:sizeof(int) atIndex:7];
+        [enc setBytes:&head_father      length:sizeof(int) atIndex:8];
+        [enc setBytes:&num_octs         length:sizeof(int) atIndex:9];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+
+    /* Step 7: build MG nbor array for the new MG octs — use head_mg */
+    {
+        NSUInteger tg  = 128;
+        NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
+        id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_update_nbor_array_mg];
+        [enc setBuffer:s_nbor_mg        offset:0 atIndex:0];
+        [enc setBuffer:s_grid_mg        offset:0 atIndex:1];
+        [enc setBuffer:s_hash_key_mg    offset:0 atIndex:2];
+        [enc setBuffer:s_hash_val_mg    offset:0 atIndex:3];
+        [enc setBuffer:s_ckey_max_dev   offset:0 atIndex:4];
+        [enc setBuffer:s_key_off_dev    offset:0 atIndex:5];
+        [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:6];
+        [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:7];
+        [enc setBuffer:s_periodic_dev   offset:0 atIndex:8];
+        [enc setBytes:&s_hash_size_mg   length:sizeof(int) atIndex:9];
+        [enc setBytes:&head_mg          length:sizeof(int) atIndex:10];
+        [enc setBytes:&new_noct         length:sizeof(int) atIndex:11];
+        [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * mtl_clean_mg_hashes — zero the MG hash table to remove stale tombstones.
+ * Called by metal_clean_mg before each new multigrid cycle.
+ * ----------------------------------------------------------------------- */
+extern "C" void mtl_clean_mg_hashes(void)
+{
+    if (s_hash_key_mg) memset(s_hash_key_mg.contents, 0, s_hash_key_mg.length);
+    if (s_hash_val_mg) memset(s_hash_val_mg.contents, 0, s_hash_val_mg.length);
+}
+
+extern "C" void mtl_build_mg_fine(int ifine, int ilevel,
+                                   int head_idx, int num_octs,
+                                   int head_father, int head_mg, int *new_noct)
+{
+    (void)ifine; (void)ilevel;
+    build_mg_common(s_grid, head_idx, num_octs, head_father, head_mg, new_noct);
+}
+
+extern "C" void mtl_build_mg_mg(int ifine, int ilevel,
+                                 int head_idx, int num_octs,
+                                 int head_father, int head_mg, int *new_noct)
+{
+    (void)ifine; (void)ilevel;
+    build_mg_common(s_grid_mg, head_idx, num_octs, head_father, head_mg, new_noct);
 }

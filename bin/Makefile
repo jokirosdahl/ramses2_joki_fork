@@ -227,10 +227,18 @@ ifeq ($(COMPILER),METAL)
    METAL_KPATH  = ../metal/kernels
    CXX          = xcrun clang++
    CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
-   # Metal kernel compiler and metallib linker (Xcode command-line tools)
    METALC       = xcrun -sdk macosx metal
    METALLIB     = xcrun -sdk macosx metallib
    METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
+   ifeq ($(HYDRO),1)
+      METALFLAGS += -DHYDRO
+   endif
+   ifeq ($(GRAV),1)
+      METALFLAGS += -DGRAV
+   endif
+   ifeq ($(MHD),1)
+      METALFLAGS += -DMHD
+   endif
    # Link flags: Metal + Foundation frameworks, C++ runtime for the bridge
    LIBS         = -framework Metal -framework Foundation -lstdc++
    # metallib must sit next to the executable so the bridge can load it
@@ -341,17 +349,23 @@ metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
 # hash.metal provides insert_hash_kernel (compiled separately).
 # refine.metal provides build_nbor_kernel (reads hash non-atomically).
 # hydro.metal provides set_uold/set_unew/cmpdt/hydro_integrator kernels.
-hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h
+# rho.metal provides rho deposit/multipole kernels.
+# mg.metal provides multigrid Poisson solver kernels.
+hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-hash.air: $(METAL_KPATH)/hash.metal $(METAL_PATH)/metal_types.h
+hash.air: $(METAL_KPATH)/hash.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h
+refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h
+flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h
+scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air hash.air refine.air flag.air scan.air
+rho.air: $(METAL_KPATH)/rho.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+mg.air: $(METAL_KPATH)/mg.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ramses_kernels.metallib: hydro.air hash.air refine.air flag.air scan.air rho.air mg.air
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

@@ -30,6 +30,13 @@ subroutine metal_allocate_amr(sim)
      sim%m%key_off(ilevel) = sim%m%key_off(ilevel-1) + sim%m%hkey_max(1, ilevel-1)
   end do
 
+  allocate(sim%m%head_cache(1:sim%r%nlevelmax))
+  allocate(sim%m%tail_cache(1:sim%r%nlevelmax))
+  allocate(sim%m%noct_cache(1:sim%r%nlevelmax))
+  sim%m%head_cache=1
+  sim%m%tail_cache=0
+  sim%m%noct_cache=0
+
   ! Allocate Metal-owned buffers for uold/unew/grid/nbor/hash.
   ! ncachemax is now passed so grid and nbor cover the full
   ! ngridmax+ncachemax range needed for AMR ghost-zone caching.
@@ -351,6 +358,11 @@ subroutine metal_user_flag(sim, ilevel, nflag)
 
   real(c_float) :: gamma, smallr, smallc2
   real(c_float) :: err_grad_d, err_grad_p, floor_d, floor_p
+  real(kind=8)  :: dx, factG
+
+  dx = sim%r%boxlen/2**ilevel
+  factG = 1.0d0
+  if (sim%r%cosmo) factG = 3.0d0 / 8.0d0 / acos(-1.0d0) * sim%g%omega_m * sim%g%aexp
 
   gamma      = real(sim%r%gamma,      c_float)
   smallr     = real(sim%r%smallr,     c_float)
@@ -364,7 +376,12 @@ subroutine metal_user_flag(sim, ilevel, nflag)
        int(sim%m%head(ilevel), c_int), &
        int(sim%m%noct(ilevel), c_int), &
        gamma, smallr, smallc2,          &
-       err_grad_d, err_grad_p, floor_d, floor_p))
+       err_grad_d, err_grad_p, floor_d, floor_p, &
+       real(sim%r%mass_sph, c_float), &
+       real(sim%r%m_refine(ilevel), c_float), &
+       real(sim%r%jeans_refine(ilevel), c_float), &
+       real(factG, c_float), &
+       real(dx, c_float)))
 
 end subroutine metal_user_flag
 
@@ -448,6 +465,7 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   integer(c_int) :: cur_head, nones, new_noct
   integer(c_int) :: total_valid, ifree_cache_now
   integer(c_int) :: cache_noct_lev
+  integer(c_int) :: new_head, new_tail
 
   hash_size_l = int(sim%m%hash_size, c_int)
 
@@ -552,6 +570,20 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
      call mtl_sort_gather_hydro(head_child, n_all)
      call mtl_blit_unew_to_uold(head_child, n_all)
 
+     ! Reorder gravity variables if gravity is active
+     if (sim%r%poisson) then
+        call mtl_sort_gather_force(head_child, n_all, 1_c_int)
+        call mtl_sort_scatter_force(head_child, n_all, 1_c_int)
+        call mtl_sort_gather_force(head_child, n_all, 2_c_int)
+        call mtl_sort_scatter_force(head_child, n_all, 2_c_int)
+        call mtl_sort_gather_force(head_child, n_all, 3_c_int)
+        call mtl_sort_scatter_force(head_child, n_all, 3_c_int)
+        call mtl_sort_gather_phi(head_child, n_all, 0_c_int)
+        call mtl_sort_scatter_phi(head_child, n_all, 0_c_int)
+        call mtl_sort_gather_phi(head_child, n_all, 1_c_int)
+        call mtl_sort_scatter_phi(head_child, n_all, 1_c_int)
+     end if
+
      ! --- Step 8: update hash with new positions ----------------------------
      call mtl_update_hash_range(head_child, n_all, hash_size_l)
 
@@ -577,9 +609,14 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   ! ifree_cache_now is 1-based: first cache slot = ngridmax + ifree_cache_now.
   ifree_cache_now = int(sim%m%ifree_cache, c_int)   ! starts at 1
 
+  sim%m%head_cache = 1
+  sim%m%tail_cache = 0
+  sim%m%noct_cache = 0
+
   do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
      if (sim%m%noct(ilev) <= 0) cycle
 
+     new_head = ifree_cache_now
      do ind = 1_c_int, 27_c_int
         ! nbor_prefix + scan in one command buffer; returns missing-nbor count.
         cache_noct_lev = mtl_nbor_scan( &
@@ -599,6 +636,10 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
         call mtl_advance_ifree_cache(cache_noct_lev)
         ifree_cache_now = ifree_cache_now + cache_noct_lev
      end do
+     new_tail = ifree_cache_now - 1
+     sim%m%head_cache(ilev) = int(new_head)
+     sim%m%tail_cache(ilev) = int(new_tail)
+     sim%m%noct_cache(ilev) = int(new_tail - new_head + 1)
   end do
 
   sim%m%ifree_cache = int(ifree_cache_now)
@@ -643,5 +684,601 @@ subroutine metal_upload(sim, ilevel)
        real(sim%r%smallc**2,    c_float))
 
 end subroutine metal_upload
+
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine metal_allocate_grav(sim)
+  use amr_parameters, only: twotondim, ndim
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer :: ngridmax_mg, ncachemax_mg, hash_size_mg
+
+  ngridmax_mg  = sim%r%ngridmax / 7
+  ncachemax_mg = max(sim%r%ncachemax / 7, 10000)
+  sim%m_mg%ngridmax  = ngridmax_mg
+  sim%m_mg%ncachemax = ncachemax_mg
+  sim%m_mg%hash_size = 2 * (ngridmax_mg + ncachemax_mg)
+  hash_size_mg = sim%m_mg%hash_size
+
+  sim%m_mg%head = 1
+  sim%m_mg%tail = 0
+  sim%m_mg%noct = 0
+
+  call mtl_alloc_grav( &
+       int(sim%r%ngridmax,  c_int), &
+       int(sim%r%ncachemax, c_int), &
+       int(ngridmax_mg,     c_int), &
+       int(ncachemax_mg,    c_int), &
+       int(hash_size_mg,    c_int))
+
+end subroutine metal_allocate_grav
+
+!###########################################################
+!###########################################################
+subroutine metal_reset_rho(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_reset_rho( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int))
+end subroutine metal_reset_rho
+
+!###########################################################
+!###########################################################
+subroutine metal_multipole_leaf(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float) :: scale
+  scale = real(sim%r%boxlen / 2**ilevel, c_float)
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_multipole_leaf( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       scale)
+end subroutine metal_multipole_leaf
+
+!###########################################################
+!###########################################################
+subroutine metal_multipole_upload(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (ilevel >= sim%r%nlevelmax) return
+  if (sim%m%noct(ilevel+1) <= 0) return
+  call mtl_multipole_upload( &
+       int(sim%m%head(ilevel+1), c_int), &
+       int(sim%m%noct(ilevel+1), c_int))
+end subroutine metal_multipole_upload
+
+!###########################################################
+!###########################################################
+subroutine metal_multipole_tot(sim, ilevel, tot4)
+  use amr_parameters, only: ndim
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float), intent(out) :: tot4(ndim+1)
+  if (sim%m%noct(ilevel) <= 0) then
+     tot4 = 0.0_c_float; return
+  end if
+  call mtl_multipole_tot( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       tot4)
+end subroutine metal_multipole_tot
+
+!###########################################################
+!###########################################################
+subroutine metal_deposit_rho(sim, ilevel)
+  use amr_parameters, only: ndim
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float) :: dx_f, vol_f, mref_f, msph_f, vcut_f
+  real(kind=8) :: dx
+  if (sim%m%noct(ilevel) <= 0) return
+  dx     = sim%r%boxlen / 2**ilevel
+  dx_f   = real(dx,                      c_float)
+  vol_f  = real(dx**ndim,                c_float)
+  mref_f = real(sim%r%m_refine(ilevel),  c_float)
+  msph_f = real(sim%r%mass_sph,          c_float)
+  vcut_f = real(sim%r%var_cut_refine,    c_float)
+  call mtl_deposit_rho( &
+       int(sim%m%head(ilevel),      c_int), &
+       int(sim%m%noct(ilevel),      c_int), &
+       dx_f, vol_f, mref_f, msph_f, vcut_f, &
+       int(sim%r%ivar_refine,       c_int), &
+       int(sim%m%ngridmax,          c_int))
+end subroutine metal_deposit_rho
+
+!###########################################################
+!###########################################################
+subroutine metal_cic_multipole2(sim, ilevel)
+  use amr_parameters, only: ndim
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float) :: dx_f, vol_f, mref_f, msph_f, vcut_f
+  real(c_float) :: tot4(ndim+1)
+  real(kind=8) :: dx
+  if (sim%m%noct(ilevel) <= 0) return
+  dx     = sim%r%boxlen / 2**ilevel
+  dx_f   = real(dx,                      c_float)
+  vol_f  = real(dx**ndim,                c_float)
+  mref_f = real(sim%r%m_refine(ilevel),  c_float)
+  msph_f = real(sim%r%mass_sph,          c_float)
+  vcut_f = real(sim%r%var_cut_refine,    c_float)
+  call mtl_deposit_rho( &
+       int(sim%m%head(ilevel),      c_int), &
+       int(sim%m%noct(ilevel),      c_int), &
+       dx_f, vol_f, mref_f, msph_f, vcut_f, &
+       int(sim%r%ivar_refine,       c_int), &
+       int(sim%m%ngridmax,          c_int))
+  if (ilevel == sim%r%levelmin) then
+     call mtl_multipole_tot( &
+          int(sim%m%head(ilevel), c_int), &
+          int(sim%m%noct(ilevel), c_int), &
+          tot4)
+     sim%g%multipole%q = sim%g%multipole%q + real(tot4, kind=8)
+  end if
+end subroutine metal_cic_multipole2
+
+!###########################################################
+!###########################################################
+subroutine metal_upload_rho(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+#ifdef GRAV
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_upload_rho( &
+       c_loc(sim%m%rho(1, sim%m%head(ilevel))), &
+       int(sim%m%head(ilevel), c_int),           &
+       int(sim%m%noct(ilevel), c_int))
+#endif
+end subroutine metal_upload_rho
+
+!###########################################################
+!###########################################################
+subroutine metal_download_phi(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+#ifdef GRAV
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_download_phi( &
+       c_loc(sim%m%phi(1, sim%m%head(ilevel))), &
+       int(sim%m%head(ilevel), c_int),           &
+       int(sim%m%noct(ilevel), c_int))
+#endif
+end subroutine metal_download_phi
+
+!###########################################################
+!###########################################################
+subroutine metal_download_f(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+#ifdef GRAV
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_download_f( &
+       c_loc(sim%m%f(1, 1, sim%m%head(ilevel))), &
+       int(sim%m%head(ilevel), c_int),             &
+       int(sim%m%noct(ilevel), c_int))
+#endif
+end subroutine metal_download_f
+
+!###########################################################
+!###########################################################
+subroutine metal_init_phi(sim, ilevel, icount)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, icount
+  real(kind=8) :: tfrac
+  integer :: head_cache, noct_cache
+  if (sim%m%noct(ilevel) <= 0) return
+  ! Reset phi and f to zero for inner domain octs (initial guess for CG)
+  call mtl_reset_phi_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int))
+  if (ilevel > sim%r%levelmin) then
+     if (sim%g%dtold(ilevel-1) > 0.0d0) then
+        tfrac = sim%g%dtnew(ilevel) / sim%g%dtold(ilevel-1) * (icount - 1)
+     else
+        tfrac = 0.0d0
+     end if
+     ! Interpolate phi from coarser level for inner domain octs
+     call mtl_init_phi( &
+          int(sim%m%head(ilevel), c_int), &
+          int(sim%m%noct(ilevel), c_int), &
+          int(sim%m%ngridmax,     c_int), &
+          real(tfrac, c_float))
+     ! Interpolate phi from coarser level for cache (ghost) octs
+     ! Note: we preserve f in ghost cells, so no reset here
+     noct_cache = sim%m%noct_cache(ilevel)
+     if (noct_cache > 0) then
+        head_cache = sim%m%ngridmax + sim%m%head_cache(ilevel)
+        call mtl_init_phi( &
+             int(head_cache, c_int), &
+             int(noct_cache, c_int), &
+             int(sim%m%ngridmax, c_int), &
+             real(tfrac, c_float))
+     end if
+  end if
+end subroutine metal_init_phi
+
+!###########################################################
+!###########################################################
+subroutine metal_save_phi_old(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_save_phi_old_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int))
+end subroutine metal_save_phi_old
+
+!###########################################################
+!###########################################################
+subroutine metal_gradient_phi(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float) :: dx
+  dx = real(sim%r%boxlen / 2**ilevel, c_float)
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_gradient_phi_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       dx)
+end subroutine metal_gradient_phi
+
+!###########################################################
+!###########################################################
+subroutine metal_cmp_epot(sim, ilevel, epot)
+  use amr_parameters, only: ndim
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(out) :: epot
+  real(c_float) :: epot_f
+  real(kind=8) :: dx, fourpi, fact
+  epot = 0.0d0
+  if (sim%m%noct(ilevel) <= 0) return
+  dx     = sim%r%boxlen / 2**ilevel
+  fourpi = 4.0d0 * acos(-1.0d0)
+  if (sim%r%cosmo) fourpi = 1.5d0 * sim%g%omega_m * sim%g%aexp
+  fact = -dx**ndim / fourpi / 2.0d0
+  call mtl_cmp_epot( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       epot_f)
+  epot = fact * real(epot_f, kind=8)
+end subroutine metal_cmp_epot
+
+!###########################################################
+!###########################################################
+subroutine metal_cmp_rhomax(sim, ilevel, rhomax)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(out) :: rhomax
+  real(c_float) :: rhomax_f
+  rhomax = 0.0d0
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_cmp_rhomax( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       rhomax_f)
+  rhomax = real(rhomax_f, kind=8)
+end subroutine metal_cmp_rhomax
+
+!###########################################################
+!###########################################################
+subroutine metal_make_mask(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_reset_mask_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       1.0_c_float)
+end subroutine metal_make_mask
+
+!###########################################################
+!###########################################################
+subroutine metal_make_rhs(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(c_float) :: fourpi_f, offset_f, oneoverdx2_f
+  real(kind=8) :: fourpi, dx, oneoverdx2
+  fourpi = 4.0d0 * acos(-1.0d0)
+  if (sim%r%cosmo) fourpi = 1.5d0 * sim%g%omega_m * sim%g%aexp
+  dx         = sim%r%boxlen / 2**ilevel
+  oneoverdx2 = 1.0d0 / (dx * dx)
+  fourpi_f     = real(fourpi,         c_float)
+  offset_f     = real(sim%g%rho_tot,  c_float)
+  if (any(.not. sim%r%periodic(1:3))) offset_f = 0.0_c_float
+  oneoverdx2_f = real(oneoverdx2,     c_float)
+  if (sim%m%noct(ilevel) <= 0) return
+  call mtl_reset_rhs_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       int(sim%m%ngridmax,     c_int), &
+       fourpi_f, offset_f, oneoverdx2_f)
+end subroutine metal_make_rhs
+
+!###########################################################
+!###########################################################
+subroutine metal_clean_mg(sim)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  call mtl_clean_mg_hashes()
+  sim%m_mg%head = 1
+  sim%m_mg%tail = 0
+  sim%m_mg%noct = 0
+end subroutine metal_clean_mg
+
+!###########################################################
+!###########################################################
+subroutine metal_build_mg(sim, ilevel, ifine)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  integer(c_int) :: head_idx, num_octs, head_father, new_noct
+
+  if (ifine == ilevel) then
+     head_idx    = int(sim%m%head(ilevel),    c_int)
+     num_octs    = int(sim%m%noct(ilevel),    c_int)
+     head_father = 1_c_int
+  else
+     head_idx    = int(sim%m_mg%head(ifine),  c_int)
+     num_octs    = int(sim%m_mg%noct(ifine),  c_int)
+     head_father = int(sim%m%noct(ilevel) + sim%m_mg%head(ifine), c_int)
+  end if
+  if (num_octs == 0) return
+
+  sim%m_mg%head(ifine-1) = sim%m_mg%tail(ifine) + 1
+
+  if (ifine == ilevel) then
+     call mtl_build_mg_fine(int(ifine,c_int), int(ilevel,c_int), &
+          head_idx, num_octs, head_father, &
+          int(sim%m_mg%head(ifine-1), c_int), new_noct)
+  else
+     call mtl_build_mg_mg(int(ifine,c_int), int(ilevel,c_int), &
+          head_idx, num_octs, head_father, &
+          int(sim%m_mg%head(ifine-1), c_int), new_noct)
+  end if
+
+  sim%m_mg%tail(ifine-1) = sim%m_mg%head(ifine-1) + new_noct - 1
+  sim%m_mg%noct(ifine-1) = new_noct
+
+
+end subroutine metal_build_mg
+
+!###########################################################
+!###########################################################
+subroutine metal_restrict_mask(sim, ilevel, ifine, allmasked)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  logical, intent(out) :: allmasked
+  integer(c_int) :: head_idx, num_octs, head_father
+  real(c_float) :: mask_max_f
+
+  allmasked = .true.
+
+  ! Zero volume fraction at coarse MG level
+  call mtl_reset_mask_mg( &
+       int(sim%m_mg%head(ifine-1), c_int), &
+       int(sim%m_mg%noct(ifine-1), c_int), &
+       0.0_c_float)
+
+  ! Restrict from fine to coarse
+  if (ifine == ilevel) then
+     head_idx    = int(sim%m%head(ilevel),    c_int)
+     num_octs    = int(sim%m%noct(ilevel),    c_int)
+     head_father = 1_c_int
+     if (num_octs > 0) call mtl_restrict_mask_fine(head_idx, head_father, num_octs)
+  else
+     head_idx    = int(sim%m_mg%head(ifine),  c_int)
+     num_octs    = int(sim%m_mg%noct(ifine),  c_int)
+     head_father = int(sim%m%noct(ilevel) + sim%m_mg%head(ifine), c_int)
+     if (num_octs > 0) call mtl_restrict_mask_mg(head_idx, head_father, num_octs)
+  end if
+
+  ! Convert volume fraction → mask, get max
+  if (sim%m_mg%noct(ifine-1) > 0) then
+     call mtl_volume_to_mask_mg( &
+          int(sim%m_mg%head(ifine-1), c_int), &
+          int(sim%m_mg%noct(ifine-1), c_int), &
+          mask_max_f)
+     allmasked = (real(mask_max_f, kind=8) <= 0.0d0)
+  end if
+
+end subroutine metal_restrict_mask
+
+!###########################################################
+!###########################################################
+subroutine metal_cmp_residual(sim, ilevel, ifine)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  integer(c_int) :: head_idx, num_octs, ngridmax_loc
+  real(c_float) :: fourpi_f, offset_f, oneoverdx2_f
+  real(kind=8) :: fourpi, dx, oneoverdx2
+
+  fourpi = 4.0d0 * acos(-1.0d0)
+  if (sim%r%cosmo) fourpi = 1.5d0 * sim%g%omega_m * sim%g%aexp
+  dx         = sim%r%boxlen / 2**ifine
+  oneoverdx2 = 1.0d0 / (dx*dx)
+  fourpi_f     = real(fourpi,         c_float)
+  offset_f     = real(sim%g%rho_tot,  c_float)
+  if (any(.not. sim%r%periodic(1:3))) offset_f = 0.0_c_float
+  oneoverdx2_f = real(oneoverdx2,     c_float)
+
+  if (ifine == ilevel) then
+     head_idx     = int(sim%m%head(ilevel),    c_int)
+     num_octs     = int(sim%m%noct(ilevel),    c_int)
+     ngridmax_loc = int(sim%m%ngridmax,        c_int)
+     if (num_octs <= 0) return
+     call mtl_cmp_residual_fine(head_idx, num_octs, ngridmax_loc, &
+          fourpi_f, offset_f, oneoverdx2_f)
+  else
+     head_idx     = int(sim%m_mg%head(ifine),  c_int)
+     num_octs     = int(sim%m_mg%noct(ifine),  c_int)
+     ngridmax_loc = int(sim%m_mg%ngridmax,     c_int)
+     if (num_octs <= 0) return
+     call mtl_cmp_residual_mg(head_idx, num_octs, ngridmax_loc, &
+          fourpi_f, offset_f, oneoverdx2_f)
+  end if
+
+end subroutine metal_cmp_residual
+
+!###########################################################
+!###########################################################
+subroutine metal_gauss_seidel(sim, ilevel, ifine, safe, redstep)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  logical, intent(in) :: safe, redstep
+  integer(c_int) :: head_idx, num_octs, ngridmax_loc, safe_i, redstep_i
+  real(c_float) :: dx2_f
+
+  safe_i    = merge(1_c_int, 0_c_int, safe)
+  redstep_i = merge(1_c_int, 0_c_int, redstep)
+  dx2_f     = real((sim%r%boxlen / 2**ifine)**2, c_float)
+
+  if (ifine == ilevel) then
+     head_idx     = int(sim%m%head(ilevel),    c_int)
+     num_octs     = int(sim%m%noct(ilevel),    c_int)
+     ngridmax_loc = int(sim%m%ngridmax,        c_int)
+     if (num_octs <= 0) return
+     call mtl_gauss_seidel_fine(head_idx, num_octs, ngridmax_loc, &
+          dx2_f, safe_i, redstep_i)
+  else
+     head_idx     = int(sim%m_mg%head(ifine),  c_int)
+     num_octs     = int(sim%m_mg%noct(ifine),  c_int)
+     ngridmax_loc = int(sim%m_mg%ngridmax,     c_int)
+     if (num_octs <= 0) return
+     call mtl_gauss_seidel_mg(head_idx, num_octs, ngridmax_loc, &
+          dx2_f, safe_i, redstep_i)
+  end if
+
+end subroutine metal_gauss_seidel
+
+!###########################################################
+!###########################################################
+subroutine metal_reset_corr(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (sim%m_mg%noct(ilevel) <= 0) return
+  call mtl_reset_phi_val_mg( &
+       int(sim%m_mg%head(ilevel), c_int), &
+       int(sim%m_mg%noct(ilevel), c_int), &
+       0.0_c_float)
+end subroutine metal_reset_corr
+
+!###########################################################
+!###########################################################
+subroutine metal_restrict_residual(sim, ilevel, ifine)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  integer(c_int) :: head_idx, num_octs, head_father
+
+  if (ifine == ilevel) then
+     head_idx    = int(sim%m%head(ilevel),    c_int)
+     num_octs    = int(sim%m%noct(ilevel),    c_int)
+     head_father = 1_c_int
+     if (num_octs <= 0) return
+     call mtl_restrict_residual_fine(head_idx, head_father, num_octs)
+  else
+     head_idx    = int(sim%m_mg%head(ifine),  c_int)
+     num_octs    = int(sim%m_mg%noct(ifine),  c_int)
+     head_father = int(sim%m%noct(ilevel) + sim%m_mg%head(ifine), c_int)
+     if (num_octs <= 0) return
+     call mtl_restrict_residual_mg(head_idx, head_father, num_octs)
+  end if
+
+end subroutine metal_restrict_residual
+
+!###########################################################
+!###########################################################
+subroutine metal_interpolate_correct(sim, ilevel, ifine)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel, ifine
+  integer(c_int) :: head_idx, num_octs, head_father
+
+  if (ifine == ilevel) then
+     head_idx    = int(sim%m%head(ilevel),    c_int)
+     num_octs    = int(sim%m%noct(ilevel),    c_int)
+     head_father = 1_c_int
+     if (num_octs <= 0) return
+     call mtl_interpolate_correct_fine(head_idx, head_father, num_octs)
+  else
+     head_idx    = int(sim%m_mg%head(ifine),  c_int)
+     num_octs    = int(sim%m_mg%noct(ifine),  c_int)
+     head_father = int(sim%m%noct(ilevel) + sim%m_mg%head(ifine), c_int)
+     if (num_octs <= 0) return
+     call mtl_interpolate_correct_mg(head_idx, head_father, num_octs)
+  end if
+
+end subroutine metal_interpolate_correct
+
+!###########################################################
+!###########################################################
+subroutine metal_residual_norm2(sim, ilevel, norm)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(out) :: norm
+  real(c_float) :: norm_f
+  real(kind=8) :: dx2
+  norm = 0.0d0
+  if (sim%m%noct(ilevel) <= 0) return
+  dx2 = (sim%r%boxlen / 2**ilevel)**2
+  call mtl_residual_norm_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       norm_f)
+  norm = dx2 * real(norm_f, kind=8)
+end subroutine metal_residual_norm2
 
 end module metal_runner
