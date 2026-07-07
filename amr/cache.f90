@@ -1,9 +1,10 @@
 module cache
-  use amr_parameters, only: ndim, twotondim
+  use amr_parameters, only: ndim, twotondim, nhilbert
   use amr_commons, only: mesh_t
   use clfind_commons, only: clump_t
   use cache_commons
   use hash
+  use hilbert
   use mdl_module
 #ifndef WITHOUTMPI
   use mpi
@@ -60,10 +61,16 @@ subroutine close_cache(mdl)
   integer::info,icache,igrid,icpu,ibuf,iskip,ipeak
   integer::send_flush_id,send_flush_id_clump,nflush
   integer::dummy_int,close_tag=7,close_id
+  integer::i,ilevel,child,flush_guard,flush_clump_guard
+  integer::local_peak_id
+  integer(kind=8)::global_peak_id
+  integer(kind=8),dimension(1:ndim)::ix
+  integer(kind=8),dimension(1:nhilbert)::hk
   integer(kind=8),dimension(0:ndim)::hash_child
 #ifndef WITHOUTMPI
   integer,dimension(MPI_STATUS_SIZE)::reply_status,request_status,flush_status
   integer,dimension(MPI_STATUS_SIZE)::reply_status_clump,request_status_clump,flush_status_clump
+  logical::flush_cancelled,flush_clump_cancelled
 #endif
 
   associate(m=>mdl%m,c=>mdl%c)
@@ -170,11 +177,83 @@ subroutine close_cache(mdl)
   if(mdl%cache_opened)then
 
      call MPI_CANCEL(mdl%request_id,info)
-     call MPI_CANCEL(mdl%flush_id,info)
+     call MPI_WAIT(mdl%request_id,request_status,info)
+
+     flush_guard=0
+     do
+        call MPI_CANCEL(mdl%flush_id,info)
+        call MPI_WAIT(mdl%flush_id,flush_status,info)
+        call MPI_TEST_CANCELLED(flush_status,flush_cancelled,info)
+        if(flush_cancelled)exit
+
+        ! Cancellation failed: a flush message was matched and received.
+        ! Process it before reposting a receive and trying to close again.
+        if(mdl%combiner_rule.eq.COMBINER_EXIST)then
+           iskip=1
+           nflush=mdl%recv_flush_array(iskip)
+           iskip=iskip+1
+
+           do i=1,nflush
+              ilevel=mdl%recv_flush_array(iskip)
+              hash_child(0)=ilevel
+              hash_child(1:ndim)=mdl%recv_flush_array(iskip+1:iskip+ndim)
+              iskip=iskip+ndim+1
+              child=hash_getp(m%grid_dict,hash_child)
+              if(child>0)then
+                 call unpack_flush%proc(m,child,mdl%size_msg_array, &
+                      mdl%recv_flush_array(iskip:iskip+mdl%size_msg_array-1),hash_child)
+              endif
+              iskip=iskip+mdl%size_msg_array
+           end do
+        endif
+
+        if(mdl%combiner_rule.eq.COMBINER_CREATE)then
+           iskip=1
+           nflush=mdl%recv_flush_array(iskip)
+           iskip=iskip+1
+
+           do i=1,nflush
+              ilevel=mdl%recv_flush_array(iskip)
+              hash_child(0)=ilevel
+              hash_child(1:ndim)=mdl%recv_flush_array(iskip+1:iskip+ndim)
+              iskip=iskip+ndim+1
+
+              if(hash_getp(m%grid_dict,hash_child)<=0)then
+                 ix(1:ndim)=hash_child(1:ndim)
+                 hk(1:nhilbert)=hilbert_key(ix,ilevel-1)
+
+                 child=m%ifree
+                 m%ifree=m%ifree+1
+                 if(m%ifree.GT.m%ngridmax)then
+                    write(*,*)'No more free memory'
+                    write(*,*)'Increase ngridmax'
+                    call mdl_abort(mdl)
+                 endif
+                 m%grid(child)%hkey(1:nhilbert)=hk(1:nhilbert)
+                 m%grid(child)%superoct=1
+                 m%flag1(1:twotondim,child)=0
+                 m%flag2(1:twotondim,child)=0
+                 call hash_setp(m%grid_dict,hash_child,child)
+
+                 call unpack_flush%proc(m,child,mdl%size_msg_array, &
+                      mdl%recv_flush_array(iskip:iskip+mdl%size_msg_array-1),hash_child)
+              endif
+
+              iskip=iskip+mdl%size_msg_array
+           end do
+        endif
+
+        call MPI_IRECV(mdl%recv_flush_array,mdl%size_flush_array,MPI_INTEGER, &
+             MPI_ANY_SOURCE,flush_tag,MPI_COMM_WORLD,mdl%flush_id,info)
+
+        flush_guard=flush_guard+1
+        if(flush_guard>100000)then
+           write(*,'(A,I0)')'CACHE_CLOSE_FLUSH_DRAIN_GUARD rank=',mdl_self(mdl)
+           call mdl_abort(mdl)
+        endif
+     end do
 
      ! Test to free memory in corresponding MPI buffer
-     call MPI_WAIT(mdl%request_id,request_status,info)
-     call MPI_WAIT(mdl%flush_id,flush_status,info)
      do icpu=1,mdl_threads(mdl)
         call MPI_WAIT(mdl%reply_id(icpu),reply_status,info)
      end do
@@ -192,11 +271,39 @@ subroutine close_cache(mdl)
   if(mdl%cache_opened_clump)then
 
      call MPI_CANCEL(mdl%request_id_clump,info)
-     call MPI_CANCEL(mdl%flush_id_clump,info)
+     call MPI_WAIT(mdl%request_id_clump,request_status_clump,info)
+
+     flush_clump_guard=0
+     do
+        call MPI_CANCEL(mdl%flush_id_clump,info)
+        call MPI_WAIT(mdl%flush_id_clump,flush_status_clump,info)
+        call MPI_TEST_CANCELLED(flush_status_clump,flush_clump_cancelled,info)
+        if(flush_clump_cancelled)exit
+
+        ! Cancellation failed: a clump flush was received and must be applied.
+        iskip=1
+        nflush=mdl%recv_flush_array_clump(iskip)
+        iskip=iskip+1
+        do i=1,nflush
+           global_peak_id=transfer(mdl%recv_flush_array_clump(iskip:iskip+1),global_peak_id)
+           iskip=iskip+2
+           local_peak_id=int(global_peak_id-c%npeak_cum(mdl_self(mdl)-1),kind=4)
+           call unpack_flush_clump%proc(c,local_peak_id,mdl%size_msg_array_clump, &
+                mdl%recv_flush_array_clump(iskip:iskip+mdl%size_msg_array_clump-1))
+           iskip=iskip+mdl%size_msg_array_clump
+        end do
+
+        call MPI_IRECV(mdl%recv_flush_array_clump,mdl%size_flush_array_clump,MPI_INTEGER, &
+             MPI_ANY_SOURCE,flush_tag_clump,MPI_COMM_WORLD,mdl%flush_id_clump,info)
+
+        flush_clump_guard=flush_clump_guard+1
+        if(flush_clump_guard>100000)then
+           write(*,'(A,I0)')'CACHE_CLOSE_CLUMP_FLUSH_DRAIN_GUARD rank=',mdl_self(mdl)
+           call mdl_abort(mdl)
+        endif
+     end do
 
      ! Test to free memory in corresponding MPI buffer
-     call MPI_WAIT(mdl%request_id_clump,request_status_clump,info)
-     call MPI_WAIT(mdl%flush_id_clump,flush_status_clump,info)
      do icpu=1,mdl_threads(mdl)
         call MPI_WAIT(mdl%reply_id_clump(icpu),reply_status_clump,info)
      end do
