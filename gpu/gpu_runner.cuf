@@ -437,7 +437,7 @@ contains
 #ifdef MHD
     integer :: istat
     integer(kind=4) :: shmem_bytes
-    type(mhd_smem_t) :: smem_probe   ! sizing probe only (storage_size); never read
+    type(mhd_smem_t) :: smem_probe
 #endif
 
     if(sim%r%verbose.and.sim%g%myid==1)write(*,'("   Entering gpu_godunov for level ",I2)')ilevel
@@ -475,9 +475,6 @@ contains
     if(nsubgrid == 1)threads_per_block = 64
     if(nsubgrid == 2)threads_per_block = 256
 #ifdef MHD
-    ! nsubgrid>1 MHD: the resident working set exceeds the 48 KB static-shared cap,
-    ! so the integrator keeps it all in dynamic shared (mhd_smem_t). Opt into the
-    ! >48 KB carveout and pass the byte size as the 3rd chevron argument.
     shmem_bytes = storage_size(smem_probe) / 8
     istat = cudaFuncSetAttribute(hydro_integrator_kernel, &
          & cudaFuncAttributeMaxDynamicSharedMemorySize, shmem_bytes)

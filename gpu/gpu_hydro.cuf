@@ -165,16 +165,6 @@ module hydro_device
      real(kind=dp), dimension(0:2*nsubgrid, 0:2*nsubgrid, 0:2*nsubgrid-1, 1:4) :: Bz
   end type subgrid_3x3x2edge_corner
 
-  !> @brief
-  !> Aggregate of every resident shared buffer the MHD integrator needs, so the
-  !> whole working set fits in ONE dynamic-shared allocation. At nsubgrid>1 the
-  !> MHD working set (~152 KB FP64 at nsubgrid=2) exceeds the 48 KB static-shared
-  !> hardware cap, which is only reachable as dynamic shared (opt-in carveout).
-  !> hydro_integrator_kernel declares `type(mhd_smem_t), shared :: smem(*)` and
-  !> exposes the members under their original names via `associate`, so the kernel
-  !> body and every device-routine call site are unchanged. gpu_godunov opts into
-  !> the >48 KB carveout (cudaFuncSetAttribute) and passes storage_size(mhd_smem_t)/8
-  !> as the 3rd chevron argument. See nsubgrid_mhd_fix.md (Phase I) / nsubgrid_paper_mhd.md.
   type, public :: mhd_smem_t
      type(subgrid_6x6x6cell_primitive)  :: local_subgrid
 #if NVAR>5+NENER
@@ -3581,12 +3571,6 @@ contains
     real(kind=dp), intent(in), value :: etamag
 
 #ifdef MHD
-    ! nsubgrid>1 MHD: the entire resident working set (~152 KB FP64 at nsubgrid=2)
-    ! exceeds the 48 KB static-shared hardware cap, so it lives in ONE dynamic
-    ! shared allocation overlaid by mhd_smem_t and exposed under the original
-    ! names via the associate below (kernel body + every call site unchanged).
-    ! gpu_godunov opts into the >48 KB carveout (cudaFuncSetAttribute) and passes
-    ! storage_size(mhd_smem_t)/8 as the 3rd chevron arg. See nsubgrid_mhd_fix.md (Phase I).
     type(mhd_smem_t), shared :: smem(*)
 #else
     type(subgrid_3x2x2cell_primitive), shared :: left_interfaces_x, right_interfaces_x
@@ -3614,8 +3598,6 @@ contains
     if (block_idx >= num_subgrids) return
 
 #ifdef MHD
-    ! Expose the dynamic-shared MHD working set under the original buffer names,
-    ! so the body below and every device-routine call are byte-for-byte unchanged.
     associate(local_subgrid => smem(1)%local_subgrid, &
 #if NVAR>5+NENER
             & scalar_subgrid => smem(1)%scalar_subgrid, &
