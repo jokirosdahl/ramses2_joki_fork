@@ -315,7 +315,6 @@ subroutine input_part_grafic(r,g,p,npart_tot)
      end do
   end do
 
-  ! If mass file present, read dark matter particle masses
   if(read_mass)then
      if(g%myid==1)write(*,*)'Reading '//TRIM(filename_m)
      open(10,file=filename_m,form='unformatted')
@@ -326,7 +325,6 @@ subroutine input_part_grafic(r,g,p,npart_tot)
      end do
      ipart=1
      ipart_grafic=i3_min*plane_size
-     ! Loop over planes
      do i3=i3_min,i3_max
         read(10)((init_plane_m(i1,i2),i1=1,g%n1(r%levelmin)),i2=1,g%n2(r%levelmin))
         do i2=1,g%n2(r%levelmin)
@@ -340,7 +338,6 @@ subroutine input_part_grafic(r,g,p,npart_tot)
            end do
         end do
      end do
-     ! End loop over planes
      close(10)
      deallocate(init_plane_m)
   else

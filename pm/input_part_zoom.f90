@@ -268,7 +268,6 @@ subroutine input_part_zoom(r,g,p,m)
      end do
      ! End loop over dimensions
 
-     ! If mass file present, read dark matter particle masses
      if(read_mass)then
         if(g%myid==1)write(*,*)'Reading '//TRIM(filename_m)
         open(10,file=filename_m,form='unformatted')
@@ -295,15 +294,12 @@ subroutine input_part_zoom(r,g,p,m)
               i1=int(xx1)+1
               i2=int(xx2)+1
               i3=int(xx3)+1
-              ! Add a particle if we have a leaf cell
               if(.not. m%grid(igrid)%refined(ind))then
                  ipart=ipart+1
                  p%mp(ipart)=0.5d0**(3*ilevel)*init_array_m(i1,i2,i3)
               endif
            end do
-           ! End loop over cells
         end do
-        ! End loop over grids
      else
         if(g%myid==1)write(*,*)'Missing '//TRIM(filename_m)
      endif

@@ -5,10 +5,6 @@ module gpu_manager
   use gpu_runner
   use ramses_commons, only: ramses_t
 contains
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 recursive subroutine r_set_grid_device(pst)
   use mdl_module
   use ramses_commons, only: pst_t
@@ -26,10 +22,8 @@ recursive subroutine r_set_grid_device(pst)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
 
-     ! Copy grid from host to device
      call nvtxStartRange("Copy entire mesh from host to device", color=5)!red
      grid = pst%s%m%grid
-     ! flag1 is only allocated/used for adaptive mesh refinement
      if(pst%s%r%nlevelmax > pst%s%r%levelmin) flag1 = pst%s%m%flag1
 #ifdef HYDRO
      uold = pst%s%m%uold
@@ -40,7 +34,6 @@ recursive subroutine r_set_grid_device(pst)
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
 
-     ! Particle H→D (allocated in init_part).
      if (pst%s%r%part .and. allocated(pst%s%p%xp) .and. allocated(xp)) then
         call nvtxStartRange("Copy part from host to device", color=5)!red
         xp     = pst%s%p%xp
@@ -53,7 +46,6 @@ recursive subroutine r_set_grid_device(pst)
         call nvtxEndRange()
      endif
 
-     ! Star particle H→D
      if (pst%s%r%star .and. allocated(pst%s%star%xp) .and. allocated(star_xp)) then
         call nvtxStartRange("Copy star from host to device", color=5)!red
         star_xp     = pst%s%star%xp
@@ -68,7 +60,6 @@ recursive subroutine r_set_grid_device(pst)
         call nvtxEndRange()
      endif
 
-     ! Insert entire grid in the device hash table
      head_idx = 1
      num_octs = pst%s%m%ifree - 1
      num_threads = 128
@@ -80,7 +71,6 @@ recursive subroutine r_set_grid_device(pst)
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
 
-     ! Compute nbor grids array for coarse level only
      head_idx = 1
      num_subgrids = pst%s%m%noct(pst%s%r%levelmin) / nsubgridtondim
      num_threads = 128
@@ -98,10 +88,6 @@ recursive subroutine r_set_grid_device(pst)
   endif
 
 end subroutine r_set_grid_device
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 recursive subroutine r_transfer_grid_host(pst)
   use mdl_module
   use ramses_commons, only: pst_t
@@ -117,7 +103,6 @@ recursive subroutine r_transfer_grid_host(pst)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
 
-     ! Copy grid from device to host
      call nvtxStartRange("Copy entire mesh from device to host", color=5)!red
      if(pst%s%r%nlevelmax > pst%s%r%levelmin) pst%s%m%grid = grid
 #ifdef HYDRO
@@ -140,10 +125,6 @@ recursive subroutine r_transfer_grid_host(pst)
   endif
 
 end subroutine r_transfer_grid_host
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_to_host_part(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -176,9 +157,6 @@ subroutine gpu_to_host_part(pst)
   endif
 
 end subroutine gpu_to_host_part
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_turb_init_fields(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -194,9 +172,6 @@ subroutine gpu_turb_init_fields(pst)
   call nvtxEndRange()
 
 end subroutine gpu_turb_init_fields
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_turb_next_field(pst)
   use ramses_commons, only: pst_t
   implicit none
@@ -211,9 +186,6 @@ subroutine gpu_turb_next_field(pst)
   call nvtxEndRange()
 
 end subroutine gpu_turb_next_field
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_update_turb(pst)
   use ramses_commons, only: pst_t
   use turb_commons, only: turb_next_field
@@ -221,7 +193,6 @@ subroutine gpu_update_turb(pst)
   type(pst_t)::pst
   real(kind=8) :: last_tfrac, next_tfrac
 
-  ! Advance the host field(s) and mirror each new one to the device.
   do
      if (pst%s%g%t >= pst%s%turb%turb_next_time) then
         call turb_next_field(pst%s%r, pst%s%turb)
@@ -231,19 +202,13 @@ subroutine gpu_update_turb(pst)
      end if
   end do
 
-  ! Device time-interpolation.
   call gpu_turb_interp(pst%s)
 
-  ! Keep the host afield_now in sync for host-side diagnostics.
   last_tfrac = (pst%s%g%t - pst%s%turb%turb_last_time)/pst%s%turb%turb_dt
   next_tfrac = 1d0 - last_tfrac
   pst%s%turb%afield_now = next_tfrac*pst%s%turb%afield_last + last_tfrac*pst%s%turb%afield_next
 
 end subroutine gpu_update_turb
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_allocate_amr(sim)
   use amr_parameters, ONLY: ndim, twotondim
 #ifdef HYDRO
@@ -268,13 +233,11 @@ subroutine gpu_allocate_amr(sim)
   nborarrsize = (sim%m%ngridmax + nsubgridtondim - 1) / nsubgridtondim
   allocate(nbor(1:subgridsize,1:nborarrsize))
   nbor=0
-  ! Allocate hash table space
   sim%m%hash_size=2*(sim%m%ngridmax+sim%m%ncachemax)
   allocate(hash_key(1:sim%m%hash_size))
   allocate(hash_val(1:sim%m%hash_size))
   hash_key=0
   hash_val=0
-  ! Work buffers for GPU scan/sort/refine
   allocate(swap_local(1:sim%m%ngridmax+sim%m%ncachemax))
   allocate(swap_global(1:sim%m%ngridmax+sim%m%ncachemax))
   allocate(prefix_sum(1:sim%m%ngridmax+sim%m%ncachemax))
@@ -327,15 +290,12 @@ subroutine gpu_allocate_amr(sim)
   sim%m%tail_cache=0
   sim%m%noct_cache=0
   sim%m%ifree_cache=1
-  ! Compute Cartesian key offset for GPU hash table
   allocate(sim%m%key_off(1:sim%r%nlevelmax+1))
   sim%m%key_off(1)=1
   do ilevel=2,sim%r%nlevelmax+1
      sim%m%key_off(ilevel)=sim%m%key_off(ilevel-1)+sim%m%hkey_max(1,ilevel-1)
   end do
-  ! Transfer debug parameter to host global
   gpu_debug = sim%r%debug
-  ! Allocate and transfer bounding box to device
   allocate(ckey_max(1:sim%r%nlevelmax+1))
   allocate(key_off(1:sim%r%nlevelmax+1))
   allocate(box_ckey_min(1:3,1:sim%r%nlevelmax+1))
@@ -357,10 +317,6 @@ subroutine gpu_allocate_amr(sim)
   d_skip = sim%m%skip
 
 end subroutine gpu_allocate_amr
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_allocate_mg(sim)
   use amr_parameters, ONLY: ndim, twotondim, threetondim
   implicit none
@@ -372,7 +328,6 @@ subroutine gpu_allocate_mg(sim)
   allocate(nbor_mg(1:threetondim,1:sim%m_mg%ngridmax))
   father_mg=0
   nbor_mg=0
-  ! Allocate hash table space
   sim%m_mg%hash_size=2*(sim%m_mg%ngridmax+sim%m_mg%ncachemax)
   allocate(hash_key_mg(1:sim%m_mg%hash_size))
   allocate(hash_val_mg(1:sim%m_mg%hash_size))
@@ -383,10 +338,6 @@ subroutine gpu_allocate_mg(sim)
 #endif
 
 end subroutine gpu_allocate_mg
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_allocate_part(sim)
   use amr_parameters, ONLY: ndim, twotondim
   use part_device, only: ensure_scan_capacity_part
@@ -403,23 +354,16 @@ subroutine gpu_allocate_part(sim)
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   allocate(phip(1:sim%r%npartmax))
 #endif
-  ! gpu_cic_part source map.
   allocate(xp_swap(1:sim%r%npartmax))
   allocate(isp_swap(1:sim%r%npartmax))
   allocate(idp_swap(1:sim%r%npartmax))
-  ! CUB workspace
 #if defined(CUB_SORT_PART)
   allocate(hkeyp(1:sim%r%npartmax))
 #endif
-  ! Prefix sum arrays
   scan_size = max(sim%r%npartmax, (sim%m%ngridmax + sim%m%ncachemax) * twotondim)
   call ensure_scan_capacity_part(scan_size, sim%r%part_dep_algo)
 
 end subroutine gpu_allocate_part
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 subroutine gpu_allocate_star(sim)
   use amr_parameters, ONLY: ndim, twotondim
   use part_device, only: ensure_scan_capacity_part
@@ -438,21 +382,14 @@ subroutine gpu_allocate_star(sim)
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   allocate(star_phip(1:sim%r%nstarmax))
 #endif
-  ! gpu_cic_part source map.
   if (.not. allocated(xp_swap)) allocate(xp_swap(1:sim%r%nstarmax))
   if (.not. allocated(isp_swap)) allocate(isp_swap(1:sim%r%nstarmax))
   if (.not. allocated(idp_swap)) allocate(idp_swap(1:sim%r%nstarmax))
-  ! CUB workspace
 #if defined(CUB_SORT_PART)
   if (.not. allocated(hkeyp)) allocate(hkeyp(1:sim%r%nstarmax))
 #endif
-  ! Prefix sum arrays
   scan_size = max(sim%r%nstarmax, (sim%m%ngridmax + sim%m%ncachemax) * twotondim)
   call ensure_scan_capacity_part(scan_size, sim%r%star_dep_algo)
 
 end subroutine gpu_allocate_star
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
 end module gpu_manager

@@ -82,7 +82,6 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   real(kind=8),dimension(1:nvector)::nH,T2,delta_T2,ekk,err,emag
   real(kind=8),dimension(1:nvector)::T2min,Zsolar,boost
   real(kind=8)::factor1, factor2, factor3
-  !  logical,dimension(1:nvector)::cooling_on=.true.
 #ifdef RTZ
   real(kind=8),dimension(1:n_elements, 1:n_elements, 1:nvector):: xion
 #else

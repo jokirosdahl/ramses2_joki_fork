@@ -1,4 +1,3 @@
-!> GPU thermal feedback CUDA kernels.
 module feedback_device
   use amr_parameters, only: ndim, twotondim, dp, i8b
   use hydro_parameters, only: nvar
@@ -12,7 +11,6 @@ contains
 
   include 'gpu_hash.cuf'
 
-  !> Select recently formed stars for feedback
   attributes(global) subroutine select_feedback_stars_kernel(star_tp, prefix_sum, head_idx, num_stars, texp, t_SN, dteff)
     implicit none
     real(kind=dp), device :: star_tp(*)
@@ -37,7 +35,6 @@ contains
 
   end subroutine select_feedback_stars_kernel
 
-  !> Compute swap table for feedback stars
   attributes(global) subroutine compute_feedback_swap_table(isp_swap, prefix_sum, head_idx, num_stars)
     implicit none
     integer(kind=4), device :: isp_swap(*)
@@ -66,7 +63,6 @@ contains
 
   end subroutine compute_feedback_swap_table
 
-  !> Perform the thermal feedback updates on the gas cells
   attributes(global) subroutine thermal_feedback_kernel(grid, uold, unew, &
        & star_xp, star_vp, star_mp, star_zp, &
        & isp_swap, num_selected, &
@@ -112,14 +108,12 @@ contains
     tid = (blockIdx%x - 1) * blockDim%x + threadIdx%x - 1
     if (tid >= num_selected) return
 
-    ! Get the original index of the selected star particle
     ipart = isp_swap(1 + tid)
 
     inv_dx_loc  = 1.0_dp / dx_loc
     inv_2dx_loc = 0.5_dp * inv_dx_loc
     inv_4dx_loc = 0.25_dp * inv_dx_loc
 
-    ! First try ilevel
     do idim = 1, ndim
        xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
        ix(idim) = floor(xs * inv_2dx_loc)
@@ -144,7 +138,6 @@ contains
        end do
     else
 
-       ! If necessary try ilevel - 1
        do idim = 1, ndim
           xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
           ix(idim) = floor(xs * inv_4dx_loc)
@@ -170,11 +163,9 @@ contains
        endif
     endif
 
-    ! If cell not found, or in ghost zone, or not a leaf cell, we skip
     if (igrid <= 0 .or. igrid > ngridmax) return
     if (grid(igrid)%refined(icell)) return
 
-    ! Compute supernova properties
     mejecta = eta_SNII * star_mp(ipart)
     dloss = mejecta / vol_cell
     ethermal = dloss * e_SN
@@ -183,7 +174,6 @@ contains
     zloss = yield_SNII + (1.0d0 - yield_SNII) * star_zp(ipart)
     dzloss = dloss * zloss
 
-    ! Update unew using atomic additions
     info = atomicadd(unew(icell, 1, igrid), dloss)
     info = atomicadd(unew(icell, 2, igrid), dloss * star_vp(ipart))
     info = atomicadd(unew(icell, 3, igrid), dloss * star_vp(ipart + leading))
@@ -194,22 +184,18 @@ contains
        info = atomicadd(unew(icell, imetal, igrid), dzloss)
     endif
 
-    ! If dual energy scheme is activated, update entropy
     if (entropy .and. dual_energy >= 0.0d0) then
        dold = uold(icell, 1, igrid)
        s_new = ethermal / dold**(gamma - 1.0d0) * (gamma - 1.0d0)
        info = atomicadd(unew(icell, ientropy, igrid), s_new)
     endif
 
-    ! Update particle mass
     star_mp(ipart) = star_mp(ipart) - mejecta
 
-    ! Accumulate total ejecta mass
     info = atomicadd(msn_loc_d, real(mejecta, kind=8))
 
   end subroutine thermal_feedback_kernel
 
-  !> Helper device subroutine to query a grid and cell by integer coordinates
   attributes(device) subroutine get_cell_by_key(hash_key_d, hash_val_d, hash_size_d, ckey_max_d, key_off_d, &
        & level, ckey_nbor, igrid, icell)
     implicit none
@@ -245,7 +231,6 @@ contains
     endif
   end subroutine get_cell_by_key
 
-  !> Perform the mechanical feedback updates on the gas cells
   attributes(global) subroutine mechanical_feedback_kernel(grid, uold, unew, &
        & star_xp, star_vp, star_mp, star_zp, &
        & isp_swap, num_selected, &
@@ -283,7 +268,6 @@ contains
     real(kind=8), device :: msn_loc_d
     real(kind=8), intent(in), value :: smallr
 
-    ! Neighbor coordinate offsets
     real(kind=dp), parameter, dimension(3, 48) :: xSNnei_const = reshape((/ &
       -0.25_dp, -0.75_dp, -0.75_dp, &
       0.25_dp, -0.75_dp, -0.75_dp, &
@@ -335,7 +319,6 @@ contains
       0.25_dp, 0.75_dp, 0.75_dp &
     /), (/3, 48/))
 
-    ! Neighbor unit directions
     real(kind=dp), parameter, dimension(3, 48) :: vSNnei_const = reshape((/ &
       -2.29415733870561744e-01_dp, -6.88247201611685178e-01_dp, -6.88247201611685178e-01_dp, &
       2.29415733870561744e-01_dp, -6.88247201611685178e-01_dp, -6.88247201611685178e-01_dp, &
@@ -387,7 +370,6 @@ contains
       2.29415733870561744e-01_dp, 6.88247201611685178e-01_dp, 6.88247201611685178e-01_dp &
     /), (/3, 48/))
 
-    ! Mechanical feedback constants
     real(kind=dp), parameter :: A_SN = 3.0e5_dp
     real(kind=dp), parameter :: expN_SN = -2.0_dp / 17.0_dp
     real(kind=dp), parameter :: expE_SN = 16.0_dp / 17.0_dp
@@ -415,9 +397,7 @@ contains
     lane = mod(tid, 48)
 
     if (tid_star < num_selected) then
-       ! Get the original index of the selected star particle
        ipart = isp_swap(1 + tid_star)
-       ! Compute supernova ejecta mass before any thread modifies star_mp
        mejecta = eta_SNII * star_mp(ipart)
     endif
     call syncthreads()
@@ -428,7 +408,6 @@ contains
     inv_2dx_loc = 0.5_dp * inv_dx_loc
     inv_4dx_loc = 0.25_dp * inv_dx_loc
 
-    ! Try ilevel first
     do idim = 1, 3
        xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
        ix(idim) = floor(xs * inv_2dx_loc)
@@ -452,7 +431,6 @@ contains
           icell = icell + ii(idim) * 2**(idim-1)
        end do
     else
-       ! Try ilevel - 1
        do idim = 1, 3
           xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
           ix(idim) = floor(xs * inv_4dx_loc)
@@ -478,7 +456,6 @@ contains
        endif
     endif
 
-    ! If cell not found, or in ghost zone, or not a leaf cell, we skip
     if (igrid <= 0 .or. igrid > ngridmax) return
     if (grid(igrid)%refined(icell)) return
 
@@ -488,12 +465,10 @@ contains
        vol_cell = vol_loc * 8.0_dp
     endif
 
-    ! Parent cell center coordinates
     do idim = 1, 3
        xcen(idim) = 2.0_dp * ix(idim) + ii(idim) + 0.5_dp
     end do
 
-    ! Compute supernova properties
     up = star_vp(ipart)
     vp = star_vp(ipart + leading)
     wp = star_vp(ipart + 2*leading)
@@ -503,7 +478,6 @@ contains
     dzloss = dloss * zloss
     num_sn = mejecta / M_SNII
 
-    ! Central cell properties
     d = max(uold(icell, 1, igrid), real(smallr, kind=dp))
     u = uold(icell, 2, igrid) / d
     v = uold(icell, 3, igrid) / d
@@ -522,7 +496,6 @@ contains
        q(ivar) = uold(icell, ivar, igrid) / d
     end do
 
-    ! Only lane 0 updates the central cell and particle mass
     if (lane == 0) then
        info = atomicadd(unew(icell, 1, igrid), dloss - dloss * f_LOAD - d * f_LOAD_CEN)
        info = atomicadd(unew(icell, 2, igrid), dloss * up - dloss * up * f_LOAD - d * u * f_LOAD_CEN)
@@ -539,14 +512,11 @@ contains
           info = atomicadd(unew(icell, ivar, igrid), (dloss - dloss * f_LOAD - d * f_LOAD_CEN) * q(ivar))
        end do
 
-       ! Update particle mass
        star_mp(ipart) = star_mp(ipart) - mejecta
 
-       ! Accumulate total ejecta mass
        info = atomicadd(msn_loc_d, real(mejecta, kind=8))
     endif
 
-    ! Each lane processes one of the 48 neighboring cells
     x_off = xSNnei_const(1, lane + 1)
     y_off = xSNnei_const(2, lane + 1)
     z_off = xSNnei_const(3, lane + 1)
@@ -555,7 +525,6 @@ contains
     xnei(2) = xcen(2) + y_off
     xnei(3) = xcen(3) + z_off
 
-    ! Periodic boundary conditions
     do idim = 1, 3
        if (periodic_d(idim)) then
           xnei_min = real(box_ckey_min_d(idim, cell_level + 1), kind=dp)
@@ -590,11 +559,9 @@ contains
        call get_cell_by_key(hash_key_d, hash_val_d, hash_size_d, ckey_max_d, key_off_d, level_nbor, ckey_nbor, igridn, icelln)
     endif
 
-    ! If missing, in ghost zone, or not a leaf cell, skip
     if (igridn <= 0 .or. igridn > ngridmax) return
     if (grid(igridn)%refined(icelln)) return
 
-    ! Cell volume ratio relative to parent cell level
     if (level_nbor == cell_level) then
        vol_nei = 1.0_dp
     else if (level_nbor == cell_level - 1) then
@@ -609,18 +576,15 @@ contains
        Z_nei = uold(icelln, imetal, igridn) / d_nei
     endif
 
-    ! Compute actual mass ratio
     dm_ejecta = dloss * f_LOAD / 48.0_dp
     dm_load = dm_ejecta + d * f_LOAD_CEN / 48.0_dp
     f_w_cell = (dm_load + d_nei / 8.0_dp) / dm_ejecta - 1.0_dp
 
-    ! Compute critical mass ratio
     nH_nei = d_nei * scale_nH
     Zdepen = (max(0.01_dp, Z_nei / 0.02_dp))**(expZ_SN * 2.0_dp)
     f_w_crit = (A_SN / 1.0e4_dp)**2.0_dp / (f_ESN * M_SNII) * num_sn**((expE_SN - 1.0_dp) * 2.0_dp) * nH_nei**(expN_SN * 2.0_dp) * Zdepen - 1.0_dp
     f_w_crit = max(0.0_dp, f_w_crit)
 
-    ! Compute SN terminal velocity
     vload_rad = sqrt(2.0_dp * f_ESN * e_SN * (1.0_dp + f_w_crit)) / f_CANCEL / (1.0_dp + f_w_cell) / f_LOAD
 
     if (f_w_cell >= f_w_crit) then
@@ -631,11 +595,9 @@ contains
     endif
     if (vload > vload_rad) vload = vload_rad
 
-    ! Compute radial momentum and kinetic energy
     p_solid = (1.0_dp + f_w_cell) * dm_ejecta * vload
     ek_solid = p_solid * (vload * f_LOAD) * 0.5_dp
 
-    ! Deposit contributions to neighbor cell using atomicadd
     info = atomicadd(unew(icelln, 1, igridn), (dloss * f_LOAD + d * f_LOAD_CEN) / 48.0_dp / vol_nei)
     info = atomicadd(unew(icelln, 2, igridn), (dloss * up * f_LOAD + d * u * f_LOAD_CEN) / 48.0_dp / vol_nei)
     info = atomicadd(unew(icelln, 3, igridn), (dloss * vp * f_LOAD + d * v * f_LOAD_CEN) / 48.0_dp / vol_nei)
