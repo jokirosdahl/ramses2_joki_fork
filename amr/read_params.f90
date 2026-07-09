@@ -209,6 +209,8 @@ subroutine m_read_params(pst)
   logical::multiple=.false.
   character(LEN=20)::filetype='ascii'
   character(LEN=80),dimension(1:MAXLEVEL)::initfile=' '
+  real(kind=8)::ic_scale_l=1.0d0
+  real(kind=8)::ic_scale_v=1.0d0
   real(kind=8)::ic_scale_m=1.0d0
 
   ! Initial conditions hydro variables
@@ -594,7 +596,7 @@ subroutine m_read_params(pst)
   namelist/init_params/filetype,initfile,multiple,nregion,region_type &
        & ,x_center,y_center,z_center,aexp_ini,omega_b,omega_m,omega_l,h0 &
        & ,length_x,length_y,length_z,exp_region,boxlen_ini &
-       & ,ic_scale_m &
+       & ,ic_scale_l,ic_scale_v,ic_scale_m &
 #if NENER>0
        & ,prad_region &
 #endif
