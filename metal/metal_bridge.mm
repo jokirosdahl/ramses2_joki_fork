@@ -59,7 +59,6 @@ static id<MTLComputePipelineState> s_pso_set_unew = nil;
 static id<MTLComputePipelineState> s_pso_set_uold = nil;
 static id<MTLComputePipelineState> s_pso_cmpdt    = nil;
 static id<MTLComputePipelineState> s_pso_godunov      = nil;
-static id<MTLComputePipelineState> s_pso_insert_hash  = nil;
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
 static id<MTLComputePipelineState> s_pso_scan_fixup        = nil;
@@ -207,7 +206,6 @@ extern "C" void mtl_init(void)
     s_pso_set_uold     = make_pso(@"set_uold_kernel");
     s_pso_cmpdt        = make_pso(@"cmpdt_kernel");
     s_pso_godunov      = make_pso(@"hydro_integrator_kernel");
-    s_pso_insert_hash  = make_pso(@"insert_hash_kernel");
     s_pso_build_nbor   = make_pso(@"build_nbor_kernel");
     s_pso_scan_block        = make_pso(@"scan_block_kernel");
     s_pso_scan_fixup        = make_pso(@"scan_fixup_kernel");
@@ -400,44 +398,6 @@ extern "C" void mtl_device_sync(void)
     [cmd waitUntilCompleted];
 }
 
-/* -----------------------------------------------------------------------
- * mtl_insert_hash — clear hash table and insert all oct Hilbert keys.
- * Mirrors the insert_hash_kernel<<<>>> call in r_set_grid_device
- * (gpu_manager.cuf).  The hash table is a reusable device structure;
- * keeping this separate from mtl_build_nbor allows it to be called
- * independently (e.g. after refinement) without rebuilding nbor.
- *
- * hash_key is zeroed first (empty-slot sentinel = 0); memset is safe
- * because MTLResourceStorageModeShared is CPU-accessible.
- * Thread layout: 128 threads/threadgroup — mirrors CUDA num_threads=128.
- * ----------------------------------------------------------------------- */
-extern "C" void mtl_insert_hash(int head_idx, int num_octs,
-                                 int hash_size,
-                                 int ckey_max_l, long key_off_l)
-{
-    memset(s_hash_key.contents, 0, s_hash_key.length);
-    memset(s_hash_val.contents, 0, s_hash_val.length);
-
-    NSUInteger tg128  = 128;
-    MTLSize tg_size   = {tg128, 1, 1};
-    MTLSize grid_size = {((NSUInteger)num_octs + tg128 - 1) / tg128, 1, 1};
-
-    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
-    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-    [enc setComputePipelineState:s_pso_insert_hash];
-    [enc setBuffer:s_grid     offset:0 atIndex:0];
-    [enc setBuffer:s_hash_key offset:0 atIndex:1];
-    [enc setBuffer:s_hash_val offset:0 atIndex:2];
-    [enc setBytes:&hash_size  length:sizeof(int)  atIndex:3];
-    [enc setBytes:&ckey_max_l length:sizeof(int)  atIndex:4];
-    [enc setBytes:&key_off_l  length:sizeof(long) atIndex:5];
-    [enc setBytes:&head_idx   length:sizeof(int)  atIndex:6];
-    [enc setBytes:&num_octs   length:sizeof(int)  atIndex:7];
-    [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
-    [enc endEncoding];
-    [cmd commit];
-    [cmd waitUntilCompleted];
-}
 
 /* -----------------------------------------------------------------------
  * mtl_build_nbor — build the device nbor array from the already-populated
@@ -2242,6 +2202,13 @@ extern "C" void mtl_download_f(void *f_host, int head_idx, int num_octs)
     memcpy(f_host, (char *)s_f_grav.contents + off, nb);
 }
 
+extern "C" void mtl_download_f_mg(void *f_host, int head_idx, int num_octs)
+{
+    size_t off = (size_t)(head_idx - 1) * 24 * sizeof(float);
+    size_t nb  = (size_t)num_octs * 24 * sizeof(float);
+    memcpy(f_host, (char *)s_f_mg.contents + off, nb);
+}
+
 /* -----------------------------------------------------------------------
  * mtl_run_scan — inclusive prefix scan on s_prefix_sum[head_idx-1 .. head_idx+num_octs-2].
  * Returns the inclusive total (last element after scan).
@@ -2981,6 +2948,12 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
     int new_noct = mtl_run_scan(head_idx, num_octs);
     *new_noct_out = new_noct;
     if (new_noct <= 0) return;
+
+    if (head_mg + new_noct - 1 > s_ngridmax_mg) {
+        fprintf(stderr, "No more grid memory, increase ngridmax for MG\n");
+        fprintf(stderr, "New multigrid octs: %d, head_mg: %d, ngridmax_mg: %d\n", new_noct, head_mg, s_ngridmax_mg);
+        exit(1);
+    }
 
     /* Step 3: compute father swap table */
     {

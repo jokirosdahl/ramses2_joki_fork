@@ -879,6 +879,20 @@ subroutine metal_download_f(sim, ilevel)
 #endif
 end subroutine metal_download_f
 
+subroutine metal_download_f_mg(sim, ifine)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ifine
+#ifdef GRAV
+  if (sim%m_mg%noct(ifine) <= 0) return
+  call mtl_download_f_mg( &
+       c_loc(sim%m_mg%f(1, 1, sim%m_mg%head(ifine))), &
+       int(sim%m_mg%head(ifine), c_int),             &
+       int(sim%m_mg%noct(ifine), c_int))
+#endif
+end subroutine metal_download_f_mg
+
 !###########################################################
 !###########################################################
 subroutine metal_init_phi(sim, ilevel, icount)

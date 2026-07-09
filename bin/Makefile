@@ -353,8 +353,6 @@ metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
 # mg.metal provides multigrid Poisson solver kernels.
 hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-hash.air: $(METAL_KPATH)/hash.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
-	$(METALC) $(METALFLAGS) -c $< -o $@
 refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
@@ -365,7 +363,7 @@ rho.air: $(METAL_KPATH)/rho.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/met
 	$(METALC) $(METALFLAGS) -c $< -o $@
 mg.air: $(METAL_KPATH)/mg.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air hash.air refine.air flag.air scan.air rho.air mg.air
+ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

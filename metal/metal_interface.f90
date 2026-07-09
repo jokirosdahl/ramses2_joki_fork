@@ -104,17 +104,7 @@ module metal_interface
       real(c_float), intent(out) :: mass, ekin, eint, emag, dt
     end subroutine mtl_cmpdt
 
-    ! Clear hash table and insert all oct Hilbert keys.
-    ! Mirrors insert_hash_kernel<<<>>> in r_set_grid_device (gpu_manager.cuf).
-    subroutine mtl_insert_hash(head_idx, num_octs, hash_size, &
-        ckey_max_l, key_off_l) &
-        bind(C, name="mtl_insert_hash")
-      import c_int, c_long
-      integer(c_int), value :: head_idx, num_octs
-      integer(c_int), value :: hash_size
-      integer(c_int), value :: ckey_max_l
-      integer(c_long), value :: key_off_l
-    end subroutine mtl_insert_hash
+
 
     ! Build nbor array from the already-populated hash table.
     ! Mirrors the 27-launch update_nbor_array loop in r_set_grid_device
@@ -544,6 +534,13 @@ module metal_interface
       type(c_ptr), value :: f_host
       integer(c_int), value :: head_idx, num_octs
     end subroutine mtl_download_f
+
+    ! Download f_mg array (MG force/gradient) from device to host.
+    subroutine mtl_download_f_mg(f_host, head_idx, num_octs) bind(C, name="mtl_download_f_mg")
+      import c_ptr, c_int
+      type(c_ptr), value :: f_host
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_download_f_mg
 
     ! Reset rho to zero (reset_rho_kernel, 2D {8,16}).
     subroutine mtl_reset_rho(head_idx, num_octs) bind(C, name="mtl_reset_rho")
