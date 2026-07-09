@@ -1340,6 +1340,9 @@ extern "C" void mtl_refine_cells(int head_idx, int num_octs)
     [enc setBuffer:s_ifree_dev offset:0 atIndex:3];
     [enc setBytes:&head_idx length:sizeof(int) atIndex:4];
     [enc setBytes:&num_octs length:sizeof(int) atIndex:5];
+    [enc setBuffer:s_f_grav    offset:0 atIndex:6];
+    [enc setBuffer:s_phi       offset:0 atIndex:7];
+    [enc setBuffer:s_phi_old   offset:0 atIndex:8];
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding];
     [cmd commit];

@@ -466,23 +466,23 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   integer(c_int) :: total_valid, ifree_cache_now
   integer(c_int) :: cache_noct_lev
   integer(c_int) :: new_head, new_tail
+  integer(c_int) :: head_cache, head_idx, num_octs
 
   hash_size_l = int(sim%m%hash_size, c_int)
 
-  ! --- Step 1: wipe old cache hash entries -----------------------------------
-  ! Cache octs live in grid(ngridmax+1 .. ngridmax+ifree_cache-1).
-  ! ifree_cache is 1-based: first cache slot is ngridmax+1.
-  ! We wipe the range [ngridmax+1 .. ngridmax+noct_cache_total] where
-  ! noct_cache_total = ifree_cache - 1.
-  if (sim%m%ifree_cache > 1) then
+  ! --- Step 1: wipe old cache hash entries for levels >= ilevel+1 -------------
+  head_cache = int(sim%m%head_cache(ilevel+1), c_int)
+  head_idx   = head_cache + int(sim%m%ngridmax, c_int)
+  num_octs   = int(sim%m%ifree_cache - head_cache, c_int)
+  if (num_octs > 0) then
      call mtl_free_hash_range( &
-          int(sim%m%ngridmax + 1, c_int), &
-          int(sim%m%ifree_cache - 1, c_int), &
+          int(head_idx, c_int), &
+          int(num_octs, c_int), &
           hash_size_l)
   end if
 
-  ! Reset cache pointer to start of cache region.
-  sim%m%ifree_cache = 1
+  ! Reset cache pointer to head of cache region for level ilevel+1.
+  sim%m%ifree_cache = int(head_cache)
 
   ! --- Step 2: refine_kernel -------------------------------------------------
   old_ifree = int(sim%m%ifree, c_int)
@@ -606,12 +606,8 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   ! --- Step 10: per-level cache rebuild -------------------------------------
   ! For each level above ilevel, walk all 27 neighbour directions.
   ! For each direction, find subgrids missing that nbor, create cache octs.
-  ! ifree_cache_now is 1-based: first cache slot = ngridmax + ifree_cache_now.
-  ifree_cache_now = int(sim%m%ifree_cache, c_int)   ! starts at 1
-
-  sim%m%head_cache = 1
-  sim%m%tail_cache = 0
-  sim%m%noct_cache = 0
+  ! ifree_cache_now is 1-based: starts at the tail of level ilevel's cache + 1.
+  ifree_cache_now = int(sim%m%tail_cache(ilevel) + 1, c_int)
 
   do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
      if (sim%m%noct(ilev) <= 0) cycle

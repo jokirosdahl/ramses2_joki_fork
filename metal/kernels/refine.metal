@@ -303,6 +303,9 @@ kernel void refine_kernel(
     device atomic_int  *ifree_dev [[buffer(3)]],
     constant int       &head_idx [[buffer(4)]],
     constant int       &num_octs [[buffer(5)]],
+    device float       *f_grav   [[buffer(6)]],
+    device float       *phi      [[buffer(7)]],
+    device float       *phi_old  [[buffer(8)]],
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= num_octs * 8) return;
@@ -343,6 +346,19 @@ kernel void refine_kernel(
         float val = uold[cell_0 + 8 * ivar_0 + 8 * (NVAR) * oct_abs_0];
         for (int c = 0; c < 8; c++)
             uold[c + 8 * ivar_0 + 8 * (NVAR) * child_abs_0] = val;
+    }
+
+    /* Straight injection for gravity variables if active */
+    if (f_grav && phi && phi_old) {
+        int parent_abs_0 = oct_abs_0;
+        for (int c = 0; c < 8; c++) {
+            f_grav[(child_abs_0) * 24 + 0 * 8 + c] = f_grav[(parent_abs_0) * 24 + 0 * 8 + cell_0];
+            f_grav[(child_abs_0) * 24 + 1 * 8 + c] = f_grav[(parent_abs_0) * 24 + 1 * 8 + cell_0];
+            f_grav[(child_abs_0) * 24 + 2 * 8 + c] = f_grav[(parent_abs_0) * 24 + 2 * 8 + cell_0];
+
+            phi[(child_abs_0) * 8 + c] = phi[(parent_abs_0) * 8 + cell_0];
+            phi_old[(child_abs_0) * 8 + c] = phi_old[(parent_abs_0) * 8 + cell_0];
+        }
     }
 
     /* Mark parent cell as refined. */
