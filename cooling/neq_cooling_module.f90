@@ -879,7 +879,7 @@ SUBROUTINE cmp_equilibrium_abundances(r, tables, &
   real(kind=8)::mu,Zsolar
   real(kind=8),dimension(1:7)::nSpec
   !-------------------------------------------------------------------------
-  real(kind=8)::mu_old, err_mu, mu_left, mu_right, T, nTot
+  real(kind=8)::mu_mid, err_mu, mu_left, mu_right, T, nTot
   integer::niter
   !-------------------------------------------------------------------------
   ! Iteration to find mu                     ! n_E     = n_spec(1) ! e
@@ -888,19 +888,17 @@ SUBROUTINE cmp_equilibrium_abundances(r, tables, &
   mu_left=0.5                                ! n_HII   = n_spec(4) ! H+
   mu_right=2.3                               ! n_HEI   = n_spec(5) ! He
   niter=0                                    ! n_HEII  = n_spec(6) ! He+
-  do while (err_mu > 1d-4 .and. niter <= 50) ! n_HEIII = n_spec(7) ! He++
-     mu_old=0.5*(mu_left+mu_right)
-     T = T2*mu_old
+                                             ! n_HEIII = n_spec(7) ! He++
+  do while (err_mu > 1d-4 .and. niter <= 50)
+     mu_mid=0.5*(mu_left+mu_right)
+     T = T2*mu_mid
      call cmp_chem_eq(r, tables, T, nH, phI_rates, nSpec, nTot, mu, Zsolar)
-     err_mu = (mu-mu_old)/mu_old
-     if(err_mu>0.)then
-        mu_left =0.5*(mu_left+mu_right)
-        mu_right=mu_right
+     if(mu - mu_mid > 0.)then
+        mu_left = mu_mid
      else
-        mu_left =mu_left
-        mu_right=0.5*(mu_left+mu_right)
+        mu_right= mu_mid
      end if
-     err_mu=ABS(err_mu)
+     err_mu = ABS(mu_right-mu_left)/mu_mid
      niter=niter+1
   end do
   if (niter > 50) then
@@ -938,11 +936,12 @@ SUBROUTINE cmp_chem_eq(r, tables, TK, nH, t_rad_spec, nSpec, nTot, mu, Zsol)
   real(kind=8)::b_H2HI=0, b_H2H2=0,  b_H3B,   b_HI=0,    b_HEI=0, b_HEII=0!Col
   real(kind=8)::C_HII=0,  C_H2=0,    D_H2=0,  f_HII=0,   f_H2=0  ! Cre & destr
   real(kind=8)::D_HEI=0,  C_HEIII=0, f_HeI=0, f_HeIII=0, f_dust=0! Cre & destr
-  real(kind=8)::err_nE, err_nH2, n_H2_old
+  real(kind=8)::err_nE, err_nH2, n_H2_old, n_H2_new, beta_H2
   !-------------------------------------------------------------------------
   associate(ixHI=>r%ixHi, ixHII=>r%ixHII, ixHeII=>r%ixHeII, ixHeIII=>r%ixHeIII)
 
-  g_HI   = t_rad_spec(ixHII)                  !      Photoionization [s-1]
+  beta_H2 = 0.1                            ! Stabilising H2 damping factor
+  g_HI   = t_rad_spec(ixHII)               !         Photoionization [s-1]
   if(r%isH2) then
      g_H2   = t_rad_spec(ixHI)                !    Photodissociation [s-1]
      aZ_H2  = inp_coolrates_table(tables,tables%tbl_AlphaZ_H2, TK,.false.)  ! Dust form [cm3 s-1]
@@ -988,7 +987,8 @@ SUBROUTINE cmp_chem_eq(r, tables, TK, nH, t_rad_spec, nSpec, nTot, mu, Zsol)
         D_H2   = b_H2HI * n_HI + b_H2H2 * n_H2 + g_H2    ! H2 destr. (s-1)
         if(r%cosmic_rays) D_H2 = D_H2 + cosray_H2
         f_H2   = C_H2 / max(D_H2,1d-50)             ! Cre/Destr [unitless]
-        n_H2   = nH / (2d0 + 1d0/f_H2 + f_HII/f_H2)
+        n_H2_new = nH / (2d0 + 1d0/f_H2 + f_HII/f_H2)
+        n_H2     = (1d0-beta_H2) * n_H2 + beta_H2 * n_H2_new
      endif ! if(isH2)
      n_HI  = nH / (1d0 + f_HII + 2d0*f_H2)
      n_HII = nH / (1d0 + 1d0/f_HII + 2d0*f_H2/f_HII)
