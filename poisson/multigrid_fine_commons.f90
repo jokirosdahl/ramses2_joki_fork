@@ -775,8 +775,8 @@ recursive subroutine r_make_bc_rhs(pst,input,input_size)
 #else
      call make_bc_rhs(pst%s,input%ilevel,input%icount)
 #endif
-     call print_debug_stats(pst%s%m%f, 2, pst%s%m%head(input%ilevel), pst%s%m%tail(input%ilevel), &
-                            "[RHS-DEBUG]", input%ilevel)
+!!$     call print_debug_stats(pst%s%m%f, 2, pst%s%m%head(input%ilevel), pst%s%m%tail(input%ilevel), &
+!!$                            "[RHS-DEBUG]", input%ilevel)
   endif
 
 end subroutine r_make_bc_rhs

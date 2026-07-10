@@ -2947,16 +2947,16 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
     /* Step 2: prefix scan → new_noct */
     int new_noct = mtl_run_scan(head_idx, num_octs);
     *new_noct_out = new_noct;
-    if (new_noct <= 0) return;
+    if (new_noct > 0) {
 
-    if (head_mg + new_noct - 1 > s_ngridmax_mg) {
+      if (head_mg + new_noct - 1 > s_ngridmax_mg) {
         fprintf(stderr, "No more grid memory, increase ngridmax for MG\n");
         fprintf(stderr, "New multigrid octs: %d, head_mg: %d, ngridmax_mg: %d\n", new_noct, head_mg, s_ngridmax_mg);
         exit(1);
-    }
+      }
 
-    /* Step 3: compute father swap table */
-    {
+      /* Step 3: compute father swap table */
+      {
         NSUInteger tg  = 128;
         NSUInteger nblk = ((NSUInteger)num_octs + tg - 1) / tg;
         id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
@@ -2968,10 +2968,10 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc setBytes:&num_octs      length:sizeof(int) atIndex:3];
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
-    }
-
-    /* Step 4: make father octs in MG grid — use head_mg (new octs position in s_grid_mg) */
-    {
+      }
+      
+      /* Step 4: make father octs in MG grid — use head_mg (new octs position in s_grid_mg) */
+      {
         NSUInteger tg  = 128;
         NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
         id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
@@ -2986,10 +2986,10 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc setBytes:&new_noct      length:sizeof(int) atIndex:6];
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
-    }
-
-    /* Step 5: insert new MG octs into hash — use head_mg */
-    {
+      }
+      
+      /* Step 5: insert new MG octs into hash — use head_mg */
+      {
         NSUInteger tg  = 128;
         NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
         id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
@@ -3005,6 +3005,7 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc setBytes:&new_noct         length:sizeof(int) atIndex:7];
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+      }
     }
 
     /* Step 6: update father_mg for each source oct — use head_father (s_father_mg slot) */
@@ -3029,7 +3030,8 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
     }
 
     /* Step 7: build MG nbor array for the new MG octs — use head_mg */
-    {
+    if (new_noct > 0) {
+      {
         NSUInteger tg  = 128;
         NSUInteger nblk = ((NSUInteger)new_noct + tg - 1) / tg;
         id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
@@ -3049,6 +3051,7 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc setBytes:&new_noct         length:sizeof(int) atIndex:11];
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+      }
     }
 }
 

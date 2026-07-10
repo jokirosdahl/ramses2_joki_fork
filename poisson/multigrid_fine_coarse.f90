@@ -68,8 +68,8 @@ recursive subroutine r_restrict_mask(pst,input,input_size,masked,output_size)
         call restrict_mask(pst%s,pst%s%m_mg,input%ifine,allmasked)
      endif
 #endif
-     call print_debug_stats(pst%s%m_mg%f, 3, pst%s%m_mg%head(input%ifine-1), pst%s%m_mg%tail(input%ifine-1), &
-                            "[MASK-DEBUG]", input%ifine - 1)
+!!$     call print_debug_stats(pst%s%m_mg%f, 3, pst%s%m_mg%head(input%ifine-1), pst%s%m_mg%tail(input%ifine-1), &
+!!$                            "[MASK-DEBUG]", input%ifine - 1)
      if(allmasked)then
         masked=1
      else

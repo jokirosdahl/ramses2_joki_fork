@@ -2209,8 +2209,6 @@ contains
        num_octs = sim%m_mg%noct(ifine)
        head_father = sim%m%noct(ilevel) + sim%m_mg%head(ifine)
     endif
-
-
     if (num_octs == 0) return
 
     num_threads = 128
