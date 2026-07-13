@@ -6,8 +6,7 @@ module multigrid_fine_coarse
 #endif
 #ifdef _METAL
   use metal_runner, only: metal_restrict_mask, metal_cmp_residual, metal_gauss_seidel, &
-       & metal_restrict_residual, metal_interpolate_correct, metal_reset_corr, metal_residual_norm2, &
-       & metal_download_f, metal_download_f_mg
+       & metal_restrict_residual, metal_interpolate_correct, metal_reset_corr, metal_residual_norm2
 #endif
 
   type :: level_count_t
@@ -60,7 +59,6 @@ recursive subroutine r_restrict_mask(pst,input,input_size,masked,output_size)
      call gpu_restrict_mask(pst%s, input%ilevel, input%ifine, allmasked)
 #elif defined(_METAL)
      call metal_restrict_mask(pst%s, input%ilevel, input%ifine, allmasked)
-     call metal_download_f_mg(pst%s, input%ifine - 1)
 #else
      if(input%ifine==input%ilevel)then
         call restrict_mask(pst%s,pst%s%m,input%ifine,allmasked)
@@ -68,8 +66,6 @@ recursive subroutine r_restrict_mask(pst,input,input_size,masked,output_size)
         call restrict_mask(pst%s,pst%s%m_mg,input%ifine,allmasked)
      endif
 #endif
-!!$     call print_debug_stats(pst%s%m_mg%f, 3, pst%s%m_mg%head(input%ifine-1), pst%s%m_mg%tail(input%ifine-1), &
-!!$                            "[MASK-DEBUG]", input%ifine - 1)
      if(allmasked)then
         masked=1
      else
@@ -1434,49 +1430,6 @@ subroutine cmp_residual_norm2(r,m,ilevel, norm2)
   norm2 = dx2*norm2
 
 end subroutine cmp_residual_norm2
-
-subroutine print_debug_stats(f, idim, head, tail, label, level)
-   use amr_parameters, only: twotondim, dp
-   implicit none
-   real(kind=dp), dimension(1:twotondim, 1:3, *), intent(in) :: f
-   integer, intent(in) :: idim, head, tail, level
-   character(len=*), intent(in) :: label
-
-   integer :: igrid, ind, count, i
-   real(kind=dp) :: val_min, val_max, val_sum, val_avg
-   real(kind=dp), dimension(10) :: first_vals
-
-   if (tail < head) return
-
-   val_min = f(1, idim, head)
-   val_max = f(1, idim, head)
-   val_sum = 0.0_dp
-   count = 0
-   first_vals(:) = 0.0_dp
-
-   do igrid = head, tail
-      do ind = 1, twotondim
-         count = count + 1
-         val_sum = val_sum + f(ind, idim, igrid)
-         if (f(ind, idim, igrid) < val_min) val_min = f(ind, idim, igrid)
-         if (f(ind, idim, igrid) > val_max) val_max = f(ind, idim, igrid)
-         if (count <= 10) then
-            first_vals(count) = f(ind, idim, igrid)
-         endif
-      end do
-   end do
-
-   if (count > 0) then
-      val_avg = val_sum / count
-   else
-      val_avg = 0.0_dp
-   endif
-
-   print '(A, " Lev=", I2, " Head=", I8, " Tail=", I8, " Min=", 1pE12.5, " Max=", 1pE12.5, " Avg=", 1pE12.5)', &
-         label, level, head, tail, val_min, val_max, val_avg
-   print '(A, " First 10:", 10(1pE12.5, " "))', label, (first_vals(i), i=1, min(count, 10))
-
-end subroutine print_debug_stats
 
 #endif
 

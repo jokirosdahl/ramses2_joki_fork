@@ -2278,27 +2278,6 @@ extern "C" void mtl_upload_rho(void *rho_host, int head_idx, int num_octs)
     memcpy((char *)s_rho.contents + off, rho_host, nb);
 }
 
-extern "C" void mtl_download_phi(void *phi_host, int head_idx, int num_octs)
-{
-    size_t off = (size_t)(head_idx - 1) * 8 * sizeof(float);
-    size_t nb  = (size_t)num_octs * 8 * sizeof(float);
-    memcpy(phi_host, (char *)s_phi.contents + off, nb);
-}
-
-extern "C" void mtl_download_f(void *f_host, int head_idx, int num_octs)
-{
-    size_t off = (size_t)(head_idx - 1) * 24 * sizeof(float);
-    size_t nb  = (size_t)num_octs * 24 * sizeof(float);
-    memcpy(f_host, (char *)s_f_grav.contents + off, nb);
-}
-
-extern "C" void mtl_download_f_mg(void *f_host, int head_idx, int num_octs)
-{
-    size_t off = (size_t)(head_idx - 1) * 24 * sizeof(float);
-    size_t nb  = (size_t)num_octs * 24 * sizeof(float);
-    memcpy(f_host, (char *)s_f_mg.contents + off, nb);
-}
-
 /* -----------------------------------------------------------------------
  * mtl_run_scan — inclusive prefix scan on s_prefix_sum[head_idx-1 .. head_idx+num_octs-2].
  * Returns the inclusive total (last element after scan).

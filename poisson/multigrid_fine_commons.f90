@@ -3,14 +3,14 @@ module multigrid_fine_commons
 #ifdef GRAV
   use multigrid_fine_coarse, only: r_cmp_residual_mg, r_cmp_residual_norm2, r_gauss_seidel_mg,&
         r_interpolate_and_correct, r_reset_correction, r_restrict_mask, r_restrict_residual, r_set_scan_flag,&
-        double_level_t, level_count_t, gs_step_t, print_debug_stats
+        double_level_t, level_count_t, gs_step_t
 #endif
 
 #ifdef _CUDA
   use gpu_runner, only: gpu_make_mask, gpu_make_rhs, gpu_build_mg, gpu_clean_mg
 #endif
 #ifdef _METAL
-  use metal_runner, only: metal_make_mask, metal_make_rhs, metal_build_mg, metal_clean_mg, metal_download_f
+  use metal_runner, only: metal_make_mask, metal_make_rhs, metal_build_mg, metal_clean_mg
 #endif
 
 contains
@@ -771,12 +771,9 @@ recursive subroutine r_make_bc_rhs(pst,input,input_size)
      call gpu_make_rhs(pst%s,input%ilevel)
 #elif defined(_METAL)
      call metal_make_rhs(pst%s,input%ilevel)
-     call metal_download_f(pst%s,input%ilevel)
 #else
      call make_bc_rhs(pst%s,input%ilevel,input%icount)
 #endif
-!!$     call print_debug_stats(pst%s%m%f, 2, pst%s%m%head(input%ilevel), pst%s%m%tail(input%ilevel), &
-!!$                            "[RHS-DEBUG]", input%ilevel)
   endif
 
 end subroutine r_make_bc_rhs

@@ -849,52 +849,6 @@ end subroutine metal_upload_rho
 
 !###########################################################
 !###########################################################
-subroutine metal_download_phi(sim, ilevel)
-  use ramses_commons, only: ramses_t
-  implicit none
-  type(ramses_t), intent(inout) :: sim
-  integer, intent(in) :: ilevel
-#ifdef GRAV
-  if (sim%m%noct(ilevel) <= 0) return
-  call mtl_download_phi( &
-       c_loc(sim%m%phi(1, sim%m%head(ilevel))), &
-       int(sim%m%head(ilevel), c_int),           &
-       int(sim%m%noct(ilevel), c_int))
-#endif
-end subroutine metal_download_phi
-
-!###########################################################
-!###########################################################
-subroutine metal_download_f(sim, ilevel)
-  use ramses_commons, only: ramses_t
-  implicit none
-  type(ramses_t), intent(inout) :: sim
-  integer, intent(in) :: ilevel
-#ifdef GRAV
-  if (sim%m%noct(ilevel) <= 0) return
-  call mtl_download_f( &
-       c_loc(sim%m%f(1, 1, sim%m%head(ilevel))), &
-       int(sim%m%head(ilevel), c_int),             &
-       int(sim%m%noct(ilevel), c_int))
-#endif
-end subroutine metal_download_f
-
-subroutine metal_download_f_mg(sim, ifine)
-  use ramses_commons, only: ramses_t
-  implicit none
-  type(ramses_t), intent(inout) :: sim
-  integer, intent(in) :: ifine
-#ifdef GRAV
-  if (sim%m_mg%noct(ifine) <= 0) return
-  call mtl_download_f_mg( &
-       c_loc(sim%m_mg%f(1, 1, sim%m_mg%head(ifine))), &
-       int(sim%m_mg%head(ifine), c_int),             &
-       int(sim%m_mg%noct(ifine), c_int))
-#endif
-end subroutine metal_download_f_mg
-
-!###########################################################
-!###########################################################
 subroutine metal_init_phi(sim, ilevel, icount)
   use ramses_commons, only: ramses_t
   implicit none

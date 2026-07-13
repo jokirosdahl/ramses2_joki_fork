@@ -521,27 +521,6 @@ module metal_interface
       integer(c_int), value :: head_idx, num_octs
     end subroutine mtl_upload_rho
 
-    ! Download phi array from device to host.
-    subroutine mtl_download_phi(phi_host, head_idx, num_octs) bind(C, name="mtl_download_phi")
-      import c_ptr, c_int
-      type(c_ptr), value :: phi_host
-      integer(c_int), value :: head_idx, num_octs
-    end subroutine mtl_download_phi
-
-    ! Download f array (force/gradient) from device to host.
-    subroutine mtl_download_f(f_host, head_idx, num_octs) bind(C, name="mtl_download_f")
-      import c_ptr, c_int
-      type(c_ptr), value :: f_host
-      integer(c_int), value :: head_idx, num_octs
-    end subroutine mtl_download_f
-
-    ! Download f_mg array (MG force/gradient) from device to host.
-    subroutine mtl_download_f_mg(f_host, head_idx, num_octs) bind(C, name="mtl_download_f_mg")
-      import c_ptr, c_int
-      type(c_ptr), value :: f_host
-      integer(c_int), value :: head_idx, num_octs
-    end subroutine mtl_download_f_mg
-
     ! Reset rho to zero (reset_rho_kernel, 2D {8,16}).
     subroutine mtl_reset_rho(head_idx, num_octs) bind(C, name="mtl_reset_rho")
       import c_int
