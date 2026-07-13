@@ -50,6 +50,7 @@ subroutine input_hydro_condinit(r,g,m,ilevel)
   real(kind=8),dimension(1:nvector,1:nvar)::qq
 #endif
   real(kind=8)::dx
+#define HOMOGENEOUS_B_FIELD 8
 
   if(m%noct(ilevel)==0)return
 
