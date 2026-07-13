@@ -1291,4 +1291,138 @@ subroutine metal_residual_norm2(sim, ilevel, norm)
   norm = dx2 * real(norm_f, kind=8)
 end subroutine metal_residual_norm2
 
+!###########################################################
+!###########################################################
+subroutine metal_upload_cooling_table(c)
+  use cooling_module, only: cooling_t
+  implicit none
+  type(cooling_t), intent(in), target :: c
+  integer(c_int) :: n1, n2
+
+  n1 = int(c%table%n1, c_int)
+  n2 = int(c%table%n2, c_int)
+
+  call mtl_upload_cooling_table(n1, n2, &
+       c_loc(c%table%nH(1)), c_loc(c%table%T2(1)), &
+       c_loc(c%table%cool(1,1)), c_loc(c%table%heat(1,1)), &
+       c_loc(c%table%cool_com(1,1)), c_loc(c%table%heat_com(1,1)), &
+       c_loc(c%table%metal(1,1)), c_loc(c%table%cool_prime(1,1)), &
+       c_loc(c%table%heat_prime(1,1)), c_loc(c%table%cool_com_prime(1,1)), &
+       c_loc(c%table%heat_com_prime(1,1)), c_loc(c%table%metal_prime(1,1)))
+
+end subroutine metal_upload_cooling_table
+
+!###########################################################
+!###########################################################
+subroutine metal_cooling(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  use constants, only: rhoc, mH
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+
+  integer(c_int) :: head_idx, num_octs
+  real(c_float) :: gamma, smallr, smallc2
+  real(kind=8) :: dtcool, scale_T2, scale_nH, scale_l, scale_d, scale_t, scale_v
+  real(kind=8) :: nH_eos, nCOM
+  integer(c_int) :: cooling, metal, imetal, self_shielding, eos_type, isothermal
+
+  gamma = real(sim%r%gamma, c_float)
+  smallr = real(sim%r%smallr, c_float)
+  smallc2 = real(sim%r%smallc**2, c_float)
+
+  call units(sim%r,sim%g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+
+  ! Reference density for EOS floor
+  nH_eos = sim%r%eos_nH
+  if (sim%r%cosmo) then
+     nCOM = 200.0d0*sim%g%omega_b*rhoc*(sim%g%h0/100)**2/sim%g%aexp**3*sim%cool%X/mH
+     nH_eos = max(nCOM, nH_eos)
+  end if
+
+  dtcool = sim%g%dtnew(ilevel) * scale_t
+
+  head_idx = int(sim%m%head(ilevel), c_int)
+  num_octs = int(sim%m%noct(ilevel), c_int)
+
+  if (num_octs <= 0) return
+
+  cooling = 0_c_int
+  if (sim%r%cooling) cooling = 1_c_int
+
+  metal = 0_c_int
+  if (sim%r%metal) metal = 1_c_int
+
+  self_shielding = 0_c_int
+  if (sim%r%self_shielding) self_shielding = 1_c_int
+
+  isothermal = 0_c_int
+  if (sim%r%isothermal) isothermal = 1_c_int
+
+  imetal = int(sim%r%imetal, c_int)
+  eos_type = int(sim%r%eos_type, c_int)
+
+  call mtl_cooling(head_idx, num_octs, gamma, smallr, smallc2, &
+       dtcool, eos_type, sim%r%eos_T2, nH_eos, sim%r%eos_index, &
+       scale_T2, scale_nH, cooling, metal, imetal, sim%r%z_ave, &
+       self_shielding, sim%cool%X, sim%r%T2max, isothermal)
+
+end subroutine metal_cooling
+
+subroutine metal_sync_hydro(sim, ilevel, dt)
+  use ramses_commons, only: ramses_t
+  use iso_c_binding
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer,        intent(in)    :: ilevel
+  real(kind=8),   intent(in)    :: dt
+
+  integer(c_int) :: head_idx, num_octs
+  real(c_float)  :: gamma, smallr, smallc2
+  real(c_float)  :: constant_gravity(3)
+
+  if (sim%m%noct(ilevel) <= 0) return
+
+  gamma = real(sim%r%gamma, c_float)
+  smallr = real(sim%r%smallr, c_float)
+  smallc2 = real(sim%r%smallc**2, c_float)
+  constant_gravity = real(sim%r%constant_gravity, c_float)
+
+  head_idx = int(sim%m%head(ilevel), c_int)
+  num_octs = int(sim%m%noct(ilevel), c_int)
+
+  call mtl_sync_hydro( &
+       head_idx, num_octs, &
+       gamma, smallr, smallc2, &
+       real(dt, c_float), constant_gravity)
+end subroutine metal_sync_hydro
+
+subroutine metal_grav_hydro(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  use iso_c_binding
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer,        intent(in)    :: ilevel
+
+  integer(c_int) :: head_idx, num_octs
+  real(c_float)  :: gamma, smallr, smallc2, dt
+  real(c_float)  :: constant_gravity(3)
+
+  if (sim%m%noct(ilevel) <= 0) return
+
+  dt = real(0.5d0 * sim%g%dtnew(ilevel), c_float)
+  gamma = real(sim%r%gamma, c_float)
+  smallr = real(sim%r%smallr, c_float)
+  smallc2 = real(sim%r%smallc**2, c_float)
+  constant_gravity = real(sim%r%constant_gravity, c_float)
+
+  head_idx = int(sim%m%head(ilevel), c_int)
+  num_octs = int(sim%m%noct(ilevel), c_int)
+
+  call mtl_grav_hydro( &
+       head_idx, num_octs, &
+       gamma, smallr, smallc2, &
+       dt, constant_gravity)
+end subroutine metal_grav_hydro
+
 end module metal_runner

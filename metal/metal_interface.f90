@@ -580,7 +580,6 @@ module metal_interface
       real(c_float),  value :: dx, vol_loc, m_refine, mass_sph, var_cut_refine
       integer(c_int), value :: ivar_refine, ngridmax
     end subroutine mtl_deposit_rho
-
     ! Initialise phi from time-extrapolated coarser-level interpolation.
     subroutine mtl_init_phi(head_idx, num_octs, ngridmax, tfrac) &
         bind(C, name="mtl_init_phi")
@@ -808,6 +807,51 @@ module metal_interface
       integer(c_int), value :: head_idx, num_octs, ngridmax
       real(c_float),  value :: fourpi, offset, oneoverdx2
     end subroutine mtl_reset_rhs_mg
+
+    subroutine mtl_upload_cooling_table(n1, n2, nH_tbl, T2_tbl, &
+        cool, heat, cool_com, heat_com, metal, cool_prime, &
+        heat_prime, cool_com_prime, heat_com_prime, metal_prime) &
+        bind(C, name="mtl_upload_cooling_table")
+      import c_int, c_ptr
+      integer(c_int), value :: n1, n2
+      type(c_ptr), value :: nH_tbl, T2_tbl
+      type(c_ptr), value :: cool, heat, cool_com, heat_com, metal
+      type(c_ptr), value :: cool_prime, heat_prime, cool_com_prime
+      type(c_ptr), value :: heat_com_prime, metal_prime
+    end subroutine mtl_upload_cooling_table
+
+    subroutine mtl_cooling(head_idx, num_octs, gamma, smallr, smallc2, &
+        dtcool, eos_type, eos_T2, eos_nH, eos_index, scale_T2, scale_nH, &
+        cooling, metal, imetal, z_ave, self_shielding, X_frac, T2max, isothermal) &
+        bind(C, name="mtl_cooling")
+      import c_int, c_double, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float), value :: gamma, smallr, smallc2
+      real(c_double), value :: dtcool
+      integer(c_int), value :: eos_type
+      real(c_double), value :: eos_T2, eos_nH, eos_index, scale_T2, scale_nH
+      integer(c_int), value :: cooling, metal, imetal
+      real(c_double), value :: z_ave
+      integer(c_int), value :: self_shielding
+      real(c_double), value :: X_frac, T2max
+      integer(c_int), value :: isothermal
+    end subroutine mtl_cooling
+
+    subroutine mtl_sync_hydro(head_idx, num_octs, gamma, smallr, smallc2, dt, constant_gravity) &
+        bind(C, name="mtl_sync_hydro")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: gamma, smallr, smallc2, dt
+      real(c_float),  intent(in) :: constant_gravity(3)
+    end subroutine mtl_sync_hydro
+
+    subroutine mtl_grav_hydro(head_idx, num_octs, gamma, smallr, smallc2, dt, constant_gravity) &
+        bind(C, name="mtl_grav_hydro")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs
+      real(c_float),  value :: gamma, smallr, smallc2, dt
+      real(c_float),  intent(in) :: constant_gravity(3)
+    end subroutine mtl_grav_hydro
 
   end interface
 

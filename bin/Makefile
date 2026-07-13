@@ -363,7 +363,9 @@ rho.air: $(METAL_KPATH)/rho.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/met
 	$(METALC) $(METALFLAGS) -c $< -o $@
 mg.air: $(METAL_KPATH)/mg.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air
+cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

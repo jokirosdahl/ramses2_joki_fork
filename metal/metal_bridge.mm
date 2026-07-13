@@ -18,6 +18,24 @@ extern "C" long getmem_mac(void)
 #include "metal_types.h"
 
 /* -----------------------------------------------------------------------
+ * Dispatch helpers — thread layout macros.
+ * ----------------------------------------------------------------------- */
+#define DISPATCH_2D_8_16(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+15)/16,1,1} threadsPerThreadgroup:{8,16,1}]
+
+#define DISPATCH_1D_256_OCT(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+255)/256,1,1} threadsPerThreadgroup:{256,1,1}]
+
+#define DISPATCH_1D_1024_OCT(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+1023)/1024,1,1} threadsPerThreadgroup:{1024,1,1}]
+
+#define DISPATCH_1D_128(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+127)/128,1,1} threadsPerThreadgroup:{128,1,1}]
+
+#define DISPATCH_2D_4_32(enc_, n_) \
+    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+31)/32,1,1} threadsPerThreadgroup:{4,32,1}]
+
+/* -----------------------------------------------------------------------
  * File-scope Metal objects retained for the program lifetime.
  * Mirrors the module-level device arrays in gpu_manager.cuf.
  * ----------------------------------------------------------------------- */
@@ -58,6 +76,8 @@ static id<MTLBuffer>               s_count_buf        = nil;  /* 1×int, persist
 static id<MTLComputePipelineState> s_pso_set_unew = nil;
 static id<MTLComputePipelineState> s_pso_set_uold = nil;
 static id<MTLComputePipelineState> s_pso_cmpdt    = nil;
+static id<MTLComputePipelineState> s_pso_sync_hydro = nil;
+static id<MTLComputePipelineState> s_pso_grav_hydro = nil;
 static id<MTLComputePipelineState> s_pso_godunov      = nil;
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
@@ -128,6 +148,26 @@ static id<MTLComputePipelineState> s_pso_cmp_epot               = nil;
 static id<MTLComputePipelineState> s_pso_cmp_rhomax             = nil;
 static id<MTLComputePipelineState> s_pso_gradient_phi           = nil;
 static id<MTLComputePipelineState> s_pso_update_nbor_array_mg   = nil;
+
+/* Cooling PSOs and buffers */
+static id<MTLComputePipelineState> s_pso_cooling = nil;
+static id<MTLBuffer> s_nH_tbl_d = nil;
+static id<MTLBuffer> s_T2_tbl_d = nil;
+static id<MTLBuffer> s_cool_d = nil;
+static id<MTLBuffer> s_heat_d = nil;
+static id<MTLBuffer> s_cool_com_d = nil;
+static id<MTLBuffer> s_heat_com_d = nil;
+static id<MTLBuffer> s_metal_d = nil;
+static id<MTLBuffer> s_cool_prime_d = nil;
+static id<MTLBuffer> s_heat_prime_d = nil;
+static id<MTLBuffer> s_cool_com_prime_d = nil;
+static id<MTLBuffer> s_heat_com_prime_d = nil;
+static id<MTLBuffer> s_metal_prime_d = nil;
+static BOOL s_table_uploaded = NO;
+static int s_table_n1 = 0;
+static int s_table_n2 = 0;
+static float s_table_dlog_nH = 0.0f;
+static float s_table_dlog_T2 = 0.0f;
 
 /* Gravity AMR buffers */
 static id<MTLBuffer> s_rho          = nil;   /* rho(8, ngridmax+ncachemax) float */
@@ -205,6 +245,8 @@ extern "C" void mtl_init(void)
     s_pso_set_unew     = make_pso(@"set_unew_kernel");
     s_pso_set_uold     = make_pso(@"set_uold_kernel");
     s_pso_cmpdt        = make_pso(@"cmpdt_kernel");
+    s_pso_sync_hydro   = make_pso(@"sync_hydro_kernel");
+    s_pso_grav_hydro   = make_pso(@"grav_hydro_kernel");
     s_pso_godunov      = make_pso(@"hydro_integrator_kernel");
     s_pso_build_nbor   = make_pso(@"build_nbor_kernel");
     s_pso_scan_block        = make_pso(@"scan_block_kernel");
@@ -274,6 +316,7 @@ extern "C" void mtl_init(void)
     s_pso_cmp_rhomax             = make_pso(@"cmp_rhomax_kernel");
     s_pso_gradient_phi           = make_pso(@"gradient_phi_kernel");
     s_pso_update_nbor_array_mg   = make_pso(@"update_nbor_array_mg_kernel");
+    s_pso_cooling                = make_pso(@"cooling_kernel");
 
     fprintf(stdout, " Launching METAL.\n");
     s_sort_fence = [s_device newFence];
@@ -529,6 +572,7 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
     [enc setBytes:&smallc2        length:sizeof(float)     atIndex:8];
     [enc setBytes:&courant_factor length:sizeof(float)     atIndex:9];
     [enc setBytes:cg              length:3 * sizeof(float) atIndex:10];
+    [enc setBuffer:s_f_grav       offset:0                 atIndex:11];
 
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
@@ -583,10 +627,56 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
     [enc setBytes:&riemann      length:sizeof(int)       atIndex:16];
     [enc setBytes:cg            length:3 * sizeof(float) atIndex:17];
     [enc setBuffer:s_father     offset:0               atIndex:18];
+    [enc setBuffer:s_f_grav     offset:0               atIndex:19];
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
     [cmd commit];
     [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_sync_hydro(int head_idx, int num_octs,
+                               float gamma, float smallr, float smallc2,
+                               float dt, float *constant_gravity)
+{
+    if (num_octs <= 0) return;
+    float cg[3] = {constant_gravity[0], constant_gravity[1], constant_gravity[2]};
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_sync_hydro];
+    [enc setBuffer:s_uold     offset:0 atIndex:0];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:1];
+    [enc setBytes:cg          length:3 * sizeof(float) atIndex:2];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:3];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&gamma      length:sizeof(float) atIndex:5];
+    [enc setBytes:&smallr     length:sizeof(float) atIndex:6];
+    [enc setBytes:&smallc2    length:sizeof(float) atIndex:7];
+    [enc setBytes:&dt         length:sizeof(float) atIndex:8];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_grav_hydro(int head_idx, int num_octs,
+                               float gamma, float smallr, float smallc2,
+                               float dt, float *constant_gravity)
+{
+    if (num_octs <= 0) return;
+    float cg[3] = {constant_gravity[0], constant_gravity[1], constant_gravity[2]};
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_grav_hydro];
+    [enc setBuffer:s_uold     offset:0 atIndex:0];
+    [enc setBuffer:s_unew     offset:0 atIndex:1];
+    [enc setBuffer:s_f_grav   offset:0 atIndex:2];
+    [enc setBytes:cg          length:3 * sizeof(float) atIndex:3];
+    [enc setBytes:&head_idx   length:sizeof(int)   atIndex:4];
+    [enc setBytes:&num_octs   length:sizeof(int)   atIndex:5];
+    [enc setBytes:&gamma      length:sizeof(float) atIndex:6];
+    [enc setBytes:&smallr     length:sizeof(float) atIndex:7];
+    [enc setBytes:&smallc2    length:sizeof(float) atIndex:8];
+    [enc setBytes:&dt         length:sizeof(float) atIndex:9];
+    DISPATCH_2D_8_16(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
 
 /* -----------------------------------------------------------------------
@@ -2262,28 +2352,7 @@ extern "C" int mtl_run_scan(int head_idx, int num_octs)
     return ((int *)s_prefix_sum.contents)[offset + n - 1];
 }
 
-/* -----------------------------------------------------------------------
- * Dispatch helpers — gravity kernel launchers.
- * Thread layout macros:
- *   DISPATCH_2D_8_16(pso, n):   {8,16} threads/tg, ceil(n/16) TGs
- *   DISPATCH_1D_256(pso, n):    256 threads/tg, ceil(n/32) TGs  (8 octs/TG × 32 octs)
- *   DISPATCH_1D_128(pso, n):    128 threads/tg, ceil(n/128) TGs
- *   DISPATCH_2D_4_32(pso, n):   {4,32} threads/tg, ceil(n/32) TGs
- * ----------------------------------------------------------------------- */
-#define DISPATCH_2D_8_16(enc_, n_) \
-    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+15)/16,1,1} threadsPerThreadgroup:{8,16,1}]
-
-#define DISPATCH_1D_256_OCT(enc_, n_) \
-    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+255)/256,1,1} threadsPerThreadgroup:{256,1,1}]
-
-#define DISPATCH_1D_1024_OCT(enc_, n_) \
-    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)*8+1023)/1024,1,1} threadsPerThreadgroup:{1024,1,1}]
-
-#define DISPATCH_1D_128(enc_, n_) \
-    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+127)/128,1,1} threadsPerThreadgroup:{128,1,1}]
-
-#define DISPATCH_2D_4_32(enc_, n_) \
-    [enc_ dispatchThreadgroups:{((NSUInteger)(n_)+31)/32,1,1} threadsPerThreadgroup:{4,32,1}]
+/* ----------------------------------------------------------------------- */
 
 /* -----------------------------------------------------------------------
  * rho / density kernels
@@ -2382,13 +2451,10 @@ extern "C" void mtl_deposit_rho(int head_idx, int num_octs,
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
 
-/* -----------------------------------------------------------------------
- * phi initialisation / save
- * ----------------------------------------------------------------------- */
-
 extern "C" void mtl_init_phi(int head_idx, int num_octs, int ngridmax, float tfrac)
 {
     if (num_octs <= 0) return;
+
     id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:s_pso_make_initial_phi];
@@ -3080,3 +3146,151 @@ extern "C" void mtl_build_mg_mg(int ifine, int ilevel,
     (void)ifine; (void)ilevel;
     build_mg_common(s_grid_mg, head_idx, num_octs, head_father, head_mg, new_noct);
 }
+
+struct CoolingParams {
+    int table_n1;
+    int table_n2;
+    int head_idx;
+    int num_octs;
+    float dlog_nH;
+    float dlog_T2;
+    float X_frac;
+    float dt;
+    float scale_T2;
+    float scale_nH;
+    float z_ave;
+    float T2max;
+    float gamma;
+    float smallr;
+    float smallc2;
+    int eos_type;
+    float eos_T2;
+    float eos_nH;
+    float eos_index;
+    int imetal;
+    int cooling;
+    int metal;
+    int self_shielding;
+    int isothermal;
+};
+
+static void upload_array(__strong id<MTLBuffer>& buf, const double* src, NSUInteger size_bytes, NSUInteger count) {
+    if (buf && buf.length != size_bytes) {
+        buf = nil;
+    }
+    if (!buf) {
+        buf = [s_device newBufferWithLength:size_bytes options:MTLResourceStorageModeShared];
+    }
+    float* dst = (float*)buf.contents;
+    for (NSUInteger i = 0; i < count; i++) {
+        dst[i] = (float)src[i];
+    }
+}
+
+extern "C" void mtl_upload_cooling_table(
+    int n1, int n2,
+    const double* nH_tbl, const double* T2_tbl,
+    const double* cool, const double* heat,
+    const double* cool_com, const double* heat_com,
+    const double* metal, const double* cool_prime,
+    const double* heat_prime, const double* cool_com_prime,
+    const double* heat_com_prime, const double* metal_prime
+) {
+    s_table_n1 = n1;
+    s_table_n2 = n2;
+    s_table_dlog_nH = (float)(n1 - 1) / (float)(nH_tbl[n1 - 1] - nH_tbl[0]);
+    s_table_dlog_T2 = (float)(n2 - 1) / (float)(T2_tbl[n2 - 1] - T2_tbl[0]);
+
+    NSUInteger axis1_bytes = n1 * sizeof(float);
+    NSUInteger axis2_bytes = n2 * sizeof(float);
+    NSUInteger table_bytes = (NSUInteger)n1 * n2 * sizeof(float);
+
+    upload_array(s_nH_tbl_d, nH_tbl, axis1_bytes, n1);
+    upload_array(s_T2_tbl_d, T2_tbl, axis2_bytes, n2);
+    
+    NSUInteger total_cells = (NSUInteger)n1 * n2;
+    upload_array(s_cool_d, cool, table_bytes, total_cells);
+    upload_array(s_heat_d, heat, table_bytes, total_cells);
+    upload_array(s_cool_com_d, cool_com, table_bytes, total_cells);
+    upload_array(s_heat_com_d, heat_com, table_bytes, total_cells);
+    upload_array(s_metal_d, metal, table_bytes, total_cells);
+    upload_array(s_cool_prime_d, cool_prime, table_bytes, total_cells);
+    upload_array(s_heat_prime_d, heat_prime, table_bytes, total_cells);
+    upload_array(s_cool_com_prime_d, cool_com_prime, table_bytes, total_cells);
+    upload_array(s_heat_com_prime_d, heat_com_prime, table_bytes, total_cells);
+    upload_array(s_metal_prime_d, metal_prime, table_bytes, total_cells);
+
+    s_table_uploaded = YES;
+}
+
+extern "C" void mtl_cooling(
+    int head_idx, int num_octs,
+    float gamma, float smallr, float smallc2,
+    double dtcool, int eos_type, double eos_T2,
+    double eos_nH, double eos_index, double scale_T2, double scale_nH,
+    int cooling, int metal, int imetal, double z_ave,
+    int self_shielding, double X_frac, double T2max, int isothermal
+) {
+    if (num_octs <= 0) return;
+
+    id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_cooling];
+
+    CoolingParams params;
+    params.table_n1 = s_table_n1;
+    params.table_n2 = s_table_n2;
+    params.head_idx = head_idx - 1; // head_idx is 1-based, offset in grid is 0-based
+    params.num_octs = num_octs;
+    params.dlog_nH = s_table_dlog_nH;
+    params.dlog_T2 = s_table_dlog_T2;
+    params.X_frac = (float)X_frac;
+    params.dt = (float)dtcool;
+    params.scale_T2 = (float)scale_T2;
+    params.scale_nH = (float)scale_nH;
+    params.z_ave = (float)z_ave;
+    params.T2max = (float)T2max;
+    params.gamma = gamma;
+    params.smallr = smallr;
+    params.smallc2 = smallc2;
+    params.eos_type = eos_type;
+    params.eos_T2 = (float)eos_T2;
+    params.eos_nH = (float)eos_nH;
+    params.eos_index = (float)eos_index;
+    params.imetal = imetal;
+    params.cooling = cooling;
+    params.metal = metal;
+    params.self_shielding = self_shielding;
+    params.isothermal = isothermal;
+
+    [enc setBuffer:s_uold offset:0 atIndex:0];
+    [enc setBuffer:nil offset:0 atIndex:1];
+    [enc setBuffer:s_grid offset:0 atIndex:2];
+    [enc setBytes:&params length:sizeof(CoolingParams) atIndex:3];
+
+    if (cooling && s_table_uploaded) {
+        [enc setBuffer:s_nH_tbl_d offset:0 atIndex:4];
+        [enc setBuffer:s_T2_tbl_d offset:0 atIndex:5];
+        [enc setBuffer:s_cool_d offset:0 atIndex:6];
+        [enc setBuffer:s_heat_d offset:0 atIndex:7];
+        [enc setBuffer:s_cool_com_d offset:0 atIndex:8];
+        [enc setBuffer:s_heat_com_d offset:0 atIndex:9];
+        [enc setBuffer:s_metal_d offset:0 atIndex:10];
+        [enc setBuffer:s_cool_prime_d offset:0 atIndex:11];
+        [enc setBuffer:s_heat_prime_d offset:0 atIndex:12];
+        [enc setBuffer:s_cool_com_prime_d offset:0 atIndex:13];
+        [enc setBuffer:s_heat_com_prime_d offset:0 atIndex:14];
+        [enc setBuffer:s_metal_prime_d offset:0 atIndex:15];
+    }
+
+    NSUInteger tgWidth = 8;
+    NSUInteger tgHeight = 16;
+    MTLSize threadgroupsPerGrid = MTLSizeMake(1, (num_octs + tgHeight - 1) / tgHeight, 1);
+    MTLSize threadsPerThreadgroup = MTLSizeMake(tgWidth, tgHeight, 1);
+
+    [enc dispatchThreadgroups:threadgroupsPerGrid threadsPerThreadgroup:threadsPerThreadgroup];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+

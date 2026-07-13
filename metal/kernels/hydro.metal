@@ -208,6 +208,7 @@ void subgrid_conserved_2_primitive(
     device const float  *uold,
     device const int    *nbor,
     constant float      *constant_gravity, /* [3] */
+    device const float  *f,
     int head_idx, int block_idx, int thread_idx,
     float gamma, float smallr, float smallc2, float dt,
     uint threads_per_tg,
@@ -247,10 +248,16 @@ void subgrid_conserved_2_primitive(
         /* Convert to primitives */
         primitive_t pv = conserved_2_primitive(cv, gamma, smallr, smallc2);
 
-        /* Gravity predictor (constant_gravity, GRAV=0 path) */
+        /* Gravity predictor step */
+#ifdef GRAV
+        pv.velocity_x += f[(source_idx - 1)*3*8 + 0*8 + (cell_idx - 1)] * 0.5f * dt;
+        pv.velocity_y += f[(source_idx - 1)*3*8 + 1*8 + (cell_idx - 1)] * 0.5f * dt;
+        pv.velocity_z += f[(source_idx - 1)*3*8 + 2*8 + (cell_idx - 1)] * 0.5f * dt;
+#else
         pv.velocity_x += constant_gravity[0] * 0.5f * dt;
         pv.velocity_y += constant_gravity[1] * 0.5f * dt;
         pv.velocity_z += constant_gravity[2] * 0.5f * dt;
+#endif
 
         /* Write to threadgroup stencil */
         local_subgrid.density   [i][j][k] = pv.density;
@@ -929,6 +936,7 @@ kernel void cmpdt_kernel(
     constant float      &smallc2          [[buffer(8)]],
     constant float      &courant_factor   [[buffer(9)]],
     constant float      *constant_gravity [[buffer(10)]],
+    device const float  *f                [[buffer(11)]],
     uint tid    [[thread_position_in_threadgroup]],
     uint bid    [[threadgroup_position_in_grid]],
     uint lane   [[thread_index_in_simdgroup]],
@@ -960,7 +968,14 @@ kernel void cmpdt_kernel(
             emag_loc = 0.0f;
             float cs   = sqrt(gamma * pv.pressure / pv.density);
             float ctot = abs(pv.velocity_x) + abs(pv.velocity_y) + abs(pv.velocity_z) + 3.0f*cs;
-            float grav = abs(constant_gravity[0]) + abs(constant_gravity[1]) + abs(constant_gravity[2]);
+            float grav;
+#ifdef GRAV
+            grav = abs(f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)]) + 
+                   abs(f[(oct_idx - 1)*3*8 + 1*8 + (cell_idx - 1)]) + 
+                   abs(f[(oct_idx - 1)*3*8 + 2*8 + (cell_idx - 1)]);
+#else
+            grav = abs(constant_gravity[0]) + abs(constant_gravity[1]) + abs(constant_gravity[2]);
+#endif
             grav = grav * dx / (ctot*ctot);
             grav = max(grav, 0.0001f);
             dt_loc = dx / ctot * (sqrt(1.0f + 2.0f*courant_factor*grav) - 1.0f) / grav;
@@ -1036,6 +1051,7 @@ kernel void hydro_integrator_kernel(
     constant int        &riemann        [[buffer(16)]],
     constant float      *constant_gravity [[buffer(17)]],
     device const int    *father           [[buffer(18)]],
+    device const float  *f                [[buffer(19)]],
     uint block_idx      [[threadgroup_position_in_grid]],
     uint thread_idx     [[thread_position_in_threadgroup]],
     uint threads_per_tg [[threads_per_threadgroup]])
@@ -1054,7 +1070,7 @@ kernel void hydro_integrator_kernel(
      * Convert from conserved to primitive variables
      * ========================================================================= */
     subgrid_conserved_2_primitive(
-        grid, uold, nbor, constant_gravity,
+        grid, uold, nbor, constant_gravity, f,
         head_idx, int(block_idx), int(thread_idx),
         gamma, smallr, smallc2, dt, threads_per_tg, local_subgrid);
 
@@ -1157,4 +1173,90 @@ kernel void upload_kernel(
         float ekin = 0.5f * (mx*mx + my*my + mz*mz) / dens;
         u_set(uold, father_idx, 5, cell_idx, eint_sum * inv8 + ekin);
     }
+}
+
+kernel void sync_hydro_kernel(
+    device float       *uold             [[buffer(0)]],
+    device const float *f                [[buffer(1)]],
+    constant float     *constant_gravity [[buffer(2)]],
+    constant int       &head_idx         [[buffer(3)]],
+    constant int       &num_octs         [[buffer(4)]],
+    constant float     &gamma            [[buffer(5)]],
+    constant float     &smallr           [[buffer(6)]],
+    constant float     &smallc2          [[buffer(7)]],
+    constant float     &dt               [[buffer(8)]],
+    uint2               thread_idx       [[thread_position_in_threadgroup]],
+    uint2               group_idx        [[threadgroup_position_in_grid]],
+    uint2               group_dim        [[threads_per_threadgroup]])
+{
+    int oct_idx = group_idx.x * group_dim.y + thread_idx.y;
+    if (oct_idx >= num_octs) return;
+    oct_idx = head_idx + oct_idx;  /* 1-based */
+    int cell_idx = thread_idx.x + 1; /* 1-based */
+
+    float rho = max(u_get(uold, oct_idx, 1, cell_idx), smallr);
+    float mx  = u_get(uold, oct_idx, 2, cell_idx);
+    float my  = u_get(uold, oct_idx, 3, cell_idx);
+    float mz  = u_get(uold, oct_idx, 4, cell_idx);
+    float ener = u_get(uold, oct_idx, 5, cell_idx) - 0.5f * (mx*mx + my*my + mz*mz) / rho;
+
+#ifdef GRAV
+    mx += rho * f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)] * dt;
+    my += rho * f[(oct_idx - 1)*3*8 + 1*8 + (cell_idx - 1)] * dt;
+    mz += rho * f[(oct_idx - 1)*3*8 + 2*8 + (cell_idx - 1)] * dt;
+#else
+    mx += rho * constant_gravity[0] * dt;
+    my += rho * constant_gravity[1] * dt;
+    mz += rho * constant_gravity[2] * dt;
+#endif
+
+    ener += 0.5f * (mx*mx + my*my + mz*mz) / rho;
+    u_set(uold, oct_idx, 2, cell_idx, mx);
+    u_set(uold, oct_idx, 3, cell_idx, my);
+    u_set(uold, oct_idx, 4, cell_idx, mz);
+    u_set(uold, oct_idx, 5, cell_idx, ener);
+}
+
+kernel void grav_hydro_kernel(
+    device const float *uold             [[buffer(0)]],
+    device float       *unew             [[buffer(1)]],
+    device const float *f                [[buffer(2)]],
+    constant float     *constant_gravity [[buffer(3)]],
+    constant int       &head_idx         [[buffer(4)]],
+    constant int       &num_octs         [[buffer(5)]],
+    constant float     &gamma            [[buffer(6)]],
+    constant float     &smallr           [[buffer(7)]],
+    constant float     &smallc2          [[buffer(8)]],
+    constant float     &dt               [[buffer(9)]],
+    uint2               thread_idx       [[thread_position_in_threadgroup]],
+    uint2               group_idx        [[threadgroup_position_in_grid]],
+    uint2               group_dim        [[threads_per_threadgroup]])
+{
+    int oct_idx = group_idx.x * group_dim.y + thread_idx.y;
+    if (oct_idx >= num_octs) return;
+    oct_idx = head_idx + oct_idx;  /* 1-based */
+    int cell_idx = thread_idx.x + 1; /* 1-based */
+
+    float d = max(u_get(unew, oct_idx, 1, cell_idx), smallr);
+    float mx = u_get(unew, oct_idx, 2, cell_idx);
+    float my = u_get(unew, oct_idx, 3, cell_idx);
+    float mz = u_get(unew, oct_idx, 4, cell_idx);
+    float e_prim = u_get(unew, oct_idx, 5, cell_idx) - 0.5f * (mx*mx + my*my + mz*mz) / d;
+    float d_old = max(u_get(uold, oct_idx, 1, cell_idx), smallr);
+    float fact = d_old / d * dt;
+
+#ifdef GRAV
+    mx += d * f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)] * fact;
+    my += d * f[(oct_idx - 1)*3*8 + 1*8 + (cell_idx - 1)] * fact;
+    mz += d * f[(oct_idx - 1)*3*8 + 2*8 + (cell_idx - 1)] * fact;
+#else
+    mx += d * constant_gravity[0] * fact;
+    my += d * constant_gravity[1] * fact;
+    mz += d * constant_gravity[2] * fact;
+#endif
+
+    u_set(unew, oct_idx, 2, cell_idx, mx);
+    u_set(unew, oct_idx, 3, cell_idx, my);
+    u_set(unew, oct_idx, 4, cell_idx, mz);
+    u_set(unew, oct_idx, 5, cell_idx, e_prim + 0.5f * (mx*mx + my*my + mz*mz) / d);
 }

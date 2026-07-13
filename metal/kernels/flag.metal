@@ -436,14 +436,13 @@ kernel void poisson_flag_kernel(
     constant float      &jeans_refine [[buffer(11)]],
     constant float      &factG        [[buffer(12)]],
     constant float      &dx_loc       [[buffer(13)]],
-    uint2 tptg [[threads_per_threadgroup]],
-    uint2 tgpi [[threadgroup_position_in_grid]],
-    uint2 tpg  [[thread_position_in_threadgroup]])
+    uint tid [[thread_position_in_threadgroup]],
+    uint bid [[threadgroup_position_in_grid]])
 {
-    int oct_offset = (int)(tgpi.x * tptg.y + tpg.y);
-    if (oct_offset >= num_octs) return;
-    int oct_0  = (head_idx - 1) + oct_offset;
-    int cell_0 = (int)tpg.x;
+    uint cell_0  = tid % 8u;
+    uint oct_offset = bid * (uint)FLAG_TG_OCTS + tid / 8u;
+    if (int(oct_offset) >= num_octs) return;
+    int oct_0  = (head_idx - 1) + int(oct_offset);
 
 #ifndef GRAV
     float vol_loc = dx_loc * dx_loc * dx_loc;
@@ -467,7 +466,7 @@ kernel void poisson_flag_kernel(
 #ifdef HYDRO
     if (jeans_refine >= 0.0f) {
         /* Convert to primitive variables */
-        int base = cell_0 + 8 * (NVAR) * oct_0;
+        int base = (int)cell_0 + 8 * (NVAR) * oct_0;
         float density    = max(uold[base], smallr);
         float momentum_x = uold[base + 8];
         float momentum_y = uold[base + 16];
@@ -475,7 +474,7 @@ kernel void poisson_flag_kernel(
         float energy     = uold[base + 32];
         float emag       = 0.0f;
 #ifdef MHD
-        int b_base = cell_0 + 8 * 6 * oct_0;
+        int b_base = (int)cell_0 + 8 * 6 * oct_0;
         for (int idim = 0; idim < 3; idim++) {
             float b_val = bold[b_base + 8 * idim] + bold[b_base + 8 * (idim + 3)];
             emag += 0.125f * b_val * b_val;
