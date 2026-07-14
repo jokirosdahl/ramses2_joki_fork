@@ -602,8 +602,20 @@ if(COMPILER STREQUAL "METAL")
         -DNDIM=${NDIM} -DNVAR=${NVAR}
         -I${CMAKE_SOURCE_DIR}/metal
         -I${CMAKE_SOURCE_DIR}/metal/kernels)
+    if(HYDRO)
+        list(APPEND _metalflags -DHYDRO)
+    endif()
+    if(GRAV)
+        list(APPEND _metalflags -DGRAV)
+    endif()
+    if(MHD)
+        list(APPEND _metalflags -DMHD)
+    endif()
+    if(DEBUG)
+        list(APPEND _metalflags -gline-tables-only -frecord-sources)
+    endif()
 
-    foreach(_kernel hydro hash refine flag scan rho mg cooling)
+    foreach(_kernel hydro refine flag scan rho mg cooling part)
         add_custom_command(
             OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
             COMMAND ${_metalc} ${_metalflags}
@@ -621,22 +633,22 @@ if(COMPILER STREQUAL "METAL")
         OUTPUT  ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
         COMMAND ${_metallib}
                 ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/hash.air
                 ${CMAKE_BINARY_DIR}/refine.air
                 ${CMAKE_BINARY_DIR}/flag.air
                 ${CMAKE_BINARY_DIR}/scan.air
                 ${CMAKE_BINARY_DIR}/rho.air
                 ${CMAKE_BINARY_DIR}/mg.air
                 ${CMAKE_BINARY_DIR}/cooling.air
+                ${CMAKE_BINARY_DIR}/part.air
                 -o ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
         DEPENDS ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/hash.air
                 ${CMAKE_BINARY_DIR}/refine.air
                 ${CMAKE_BINARY_DIR}/flag.air
                 ${CMAKE_BINARY_DIR}/scan.air
                 ${CMAKE_BINARY_DIR}/rho.air
                 ${CMAKE_BINARY_DIR}/mg.air
                 ${CMAKE_BINARY_DIR}/cooling.air
+                ${CMAKE_BINARY_DIR}/part.air
         COMMENT "Linking ramses_kernels.metallib"
         VERBATIM
     )
