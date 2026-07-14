@@ -319,20 +319,10 @@ kernel void newdt_part_kernel(
 /* =========================================================================
  * Kernel 3: bucket_part_kernel
  * ========================================================================= */
-struct metal_oct_t {
-    int   nbor[27];
-    int   son[8];
-    float cpu_f[24];
-    float cpu_phi[8];
-    float cpu_rho[8];
-    int   refined[8];
-    long  hkey;
-};
-
 kernel void bucket_part_kernel(
     device const float* xp                [[buffer(0)]],
     device int* bucket_part_d             [[buffer(1)]],
-    device const metal_oct_t* grid        [[buffer(2)]],
+    device const oct_t* grid              [[buffer(2)]],
     device const long* hash_key_d         [[buffer(3)]],
     device const int* hash_val_d          [[buffer(4)]],
     device const int* ckey_max_d          [[buffer(5)]],

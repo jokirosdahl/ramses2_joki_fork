@@ -912,7 +912,7 @@ static void scan_phase(id<MTLComputePipelineState> pso,
  *   n ≤ 256^3 = 16,777,216      : 3-level (ps0, ps1)
  *   n ≤ INT_MAX                  : 4-level (ps0, ps1, ps2)
  * ----------------------------------------------------------------------- */
-static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n)
+static void mtl_prefix_scan_buffer_impl(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n, bool wait)
 {
     if (n <= 0) return;
 
@@ -924,7 +924,7 @@ static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLB
 #define CMD_WAIT(body) do { \
     id<MTLCommandBuffer> _c = [s_queue commandBuffer]; \
     body; \
-    [_c commit]; [_c waitUntilCompleted]; \
+    [_c commit]; if (wait) [_c waitUntilCompleted]; \
 } while(0)
 
     if (n <= BS * BS) {
@@ -968,6 +968,65 @@ static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLB
 
 done:;
 #undef CMD_WAIT
+}
+
+static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n)
+{
+    mtl_prefix_scan_buffer_impl(buf, ps1, ps2, ps3, ps4, offset, n, true);
+}
+
+static void mtl_prefix_scan_buffer_async(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n)
+{
+    mtl_prefix_scan_buffer_impl(buf, ps1, ps2, ps3, ps4, offset, n, false);
+}
+
+static void mtl_prefix_scan_buffer_cb(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n, id<MTLCommandBuffer> cmd)
+{
+    if (n <= 0) return;
+
+    const int BS  = 256;
+    int nb0 = (n   + BS - 1) / BS;
+    int nb1 = (nb0 + BS - 1) / BS;
+    int nb2 = (nb1 + BS - 1) / BS;
+
+    if (n <= BS * BS) {
+        /* ---- 2-level: n ≤ 65,536 ---------------------------------------- */
+        scan_phase(s_pso_scan_block, buf, ps1, offset, n, cmd);
+        if (nb0 == 1) return;
+        /* single-block scan of ps0; total → ps1[0] (unused dummy) */
+        scan_phase(s_pso_scan_block, ps1, ps2, 0, nb0, cmd);
+        scan_phase(s_pso_scan_fixup, buf, ps1, offset, n, cmd);
+
+    } else if (n <= BS * BS * BS) {
+        /* ---- 3-level: n ≤ 16,777,216 ------------------------------------- */
+        scan_phase(s_pso_scan_block, buf, ps1, offset, n, cmd);
+        /* scan ps0 with nb1 blocks; block totals → ps1 */
+        scan_phase(s_pso_scan_block, ps1, ps2, 0, nb0, cmd);
+        if (nb1 > 1) {
+            /* single-block scan of ps1; total → ps2[0] (unused dummy) */
+            scan_phase(s_pso_scan_block, ps2, ps3, 0, nb1, cmd);
+            /* fixup ps0 using ps1 */
+            scan_phase(s_pso_scan_fixup, ps1, ps2, 0, nb0, cmd);
+        }
+        scan_phase(s_pso_scan_fixup, buf, ps1, offset, n, cmd);
+
+    } else {
+        /* ---- 4-level: n ≤ INT_MAX ---------------------------------------- */
+        scan_phase(s_pso_scan_block, buf, ps1, offset, n, cmd);
+        /* scan ps0 with nb1 blocks; block totals → ps1 */
+        scan_phase(s_pso_scan_block, ps1, ps2, 0, nb0, cmd);
+        /* scan ps1 with nb2 blocks; block totals → ps2 */
+        scan_phase(s_pso_scan_block, ps2, ps3, 0, nb1, cmd);
+        if (nb2 > 1) {
+            /* single-block scan of ps2; total → ps3[0] (unused dummy) */
+            scan_phase(s_pso_scan_block, ps3, ps4, 0, nb2, cmd);
+            /* fixup ps1 using ps2 */
+            scan_phase(s_pso_scan_fixup, ps2, ps3, 0, nb1, cmd);
+        }
+        /* fixup ps0 using ps1 */
+        scan_phase(s_pso_scan_fixup, ps1, ps2, 0, nb0, cmd);
+        scan_phase(s_pso_scan_fixup, buf, ps1, offset, n, cmd);
+    }
 }
 
 extern "C" void mtl_prefix_scan(int offset, int n)
@@ -3786,71 +3845,82 @@ extern "C" void mtl_sort_part(int head_idx, int num_parts, int level, float shif
     NSUInteger tg = 128;
     NSUInteger nb = (num_parts + tg - 1) / tg;
 
-    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
-    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
 
     // Initialize s_sortp to identity permutation
-    [enc setComputePipelineState:s_pso_init_swap_table];
-    [enc setBuffer:s_sortp           offset:0 atIndex:0];
-    [enc setBytes:&head_idx          length:sizeof(int) atIndex:1];
-    [enc setBytes:&num_parts         length:sizeof(int) atIndex:2];
-    [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
-    [enc endEncoding];
+    {
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_init_swap_table];
+        [enc setBuffer:s_sortp           offset:0 atIndex:0];
+        [enc setBytes:&head_idx          length:sizeof(int) atIndex:1];
+        [enc setBytes:&num_parts         length:sizeof(int) atIndex:2];
+        [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding];
+    }
 
-    enc = [cmd computeCommandEncoder];
-    [enc setComputePipelineState:s_pso_hkey_part];
-    [enc setBuffer:s_xp              offset:0 atIndex:0];
-    [enc setBuffer:s_idp_swap        // idp_swap used to hold 64-bit long keys
-                                     offset:0 atIndex:1];
-    [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:2];
-    [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:3];
-    [enc setBytes:skip               length:3 * sizeof(float) atIndex:4];
-    [enc setBytes:&dx_inv            length:sizeof(float) atIndex:5];
-    [enc setBytes:&head_idx          length:sizeof(int) atIndex:6];
-    [enc setBytes:&num_parts         length:sizeof(int) atIndex:7];
-    long leading = s_npartmax;
-    [enc setBytes:&leading           length:sizeof(long) atIndex:8];
-    [enc setBytes:&level             length:sizeof(int) atIndex:9];
-    [enc setBytes:&shift             length:sizeof(float) atIndex:10];
-    [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
-    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    {
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:s_pso_hkey_part];
+        [enc setBuffer:s_xp              offset:0 atIndex:0];
+        [enc setBuffer:s_idp_swap        // idp_swap used to hold 64-bit long keys
+                                         offset:0 atIndex:1];
+        [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:2];
+        [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:3];
+        [enc setBytes:skip               length:3 * sizeof(float) atIndex:4];
+        [enc setBytes:&dx_inv            length:sizeof(float) atIndex:5];
+        [enc setBytes:&head_idx          length:sizeof(int) atIndex:6];
+        [enc setBytes:&num_parts         length:sizeof(int) atIndex:7];
+        long leading = s_npartmax;
+        [enc setBytes:&leading           length:sizeof(long) atIndex:8];
+        [enc setBytes:&level             length:sizeof(int) atIndex:9];
+        [enc setBytes:&shift             length:sizeof(float) atIndex:10];
+        [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
+        [enc endEncoding];
+    }
 
     // Radix sort via bit loop
     for (int ibit = 0; ibit < 3 * level; ibit++) {
-        cmd = [s_queue commandBuffer];
-        enc = [cmd computeCommandEncoder];
-        [enc setComputePipelineState:s_pso_prefix_part_bit];
-        [enc setBuffer:s_idp_swap        offset:0 atIndex:0];
-        [enc setBuffer:s_sortp           offset:0 atIndex:1];
-        [enc setBuffer:s_prefix_sum_part offset:0 atIndex:2];
-        [enc setBytes:&head_idx          length:sizeof(int) atIndex:3];
-        [enc setBytes:&num_parts         length:sizeof(int) atIndex:4];
-        [enc setBytes:&ibit              length:sizeof(int) atIndex:5];
-        [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
-        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+        {
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            [enc setComputePipelineState:s_pso_prefix_part_bit];
+            [enc setBuffer:s_idp_swap        offset:0 atIndex:0];
+            [enc setBuffer:s_sortp           offset:0 atIndex:1];
+            [enc setBuffer:s_prefix_sum_part offset:0 atIndex:2];
+            [enc setBytes:&head_idx          length:sizeof(int) atIndex:3];
+            [enc setBytes:&num_parts         length:sizeof(int) atIndex:4];
+            [enc setBytes:&ibit              length:sizeof(int) atIndex:5];
+            [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
+            [enc endEncoding];
+        }
 
-        mtl_prefix_scan_buffer(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2, s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts);
+        mtl_prefix_scan_buffer_cb(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2, s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts, cmd);
 
-        cmd = [s_queue commandBuffer];
-        enc = [cmd computeCommandEncoder];
-        [enc setComputePipelineState:s_pso_local_swap];
-        [enc setBuffer:s_isp_swap        offset:0 atIndex:0];
-        [enc setBuffer:s_sortp           offset:0 atIndex:1];
-        [enc setBuffer:s_prefix_sum_part offset:0 atIndex:2];
-        [enc setBytes:&head_idx          length:sizeof(int) atIndex:3];
-        [enc setBytes:&num_parts         length:sizeof(int) atIndex:4];
-        [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
-        [enc endEncoding];
+        {
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            [enc setComputePipelineState:s_pso_local_swap];
+            [enc setBuffer:s_isp_swap        offset:0 atIndex:0];
+            [enc setBuffer:s_sortp           offset:0 atIndex:1];
+            [enc setBuffer:s_prefix_sum_part offset:0 atIndex:2];
+            [enc setBytes:&head_idx          length:sizeof(int) atIndex:3];
+            [enc setBytes:&num_parts         length:sizeof(int) atIndex:4];
+            [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
+            [enc endEncoding];
+        }
 
-        enc = [cmd computeCommandEncoder];
-        [enc setComputePipelineState:s_pso_global_swap];
-        [enc setBuffer:s_sortp           offset:0 atIndex:0];
-        [enc setBuffer:s_isp_swap        offset:0 atIndex:1];
-        [enc setBytes:&head_idx          length:sizeof(int) atIndex:2];
-        [enc setBytes:&num_parts         length:sizeof(int) atIndex:3];
-        [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
-        [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+        {
+            id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+            [enc setComputePipelineState:s_pso_global_swap];
+            [enc setBuffer:s_sortp           offset:0 atIndex:0];
+            [enc setBuffer:s_isp_swap        offset:0 atIndex:1];
+            [enc setBytes:&head_idx          length:sizeof(int) atIndex:2];
+            [enc setBytes:&num_parts         length:sizeof(int) atIndex:3];
+            [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
+            [enc endEncoding];
+        }
     }
+
+    [cmd commit];
+    [cmd waitUntilCompleted];
 }
 
 extern "C" void mtl_cic_part_medium(

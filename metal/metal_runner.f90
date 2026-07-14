@@ -1547,10 +1547,9 @@ subroutine metal_split_part(sim, ilevel)
   n_coarse = num_parts - n_fine
   sim%p%tailp(ilevel) = sim%p%headp(ilevel) + n_coarse - 1
   do ilev = ilevel + 1, sim%r%nlevelmax
-     sim%p%headp(ilev) = sim%p%tailp(ilev - 1) + 1
-     sim%p%tailp(ilev) = sim%p%tailp(ilev - 1)
+     sim%p%headp(ilev) = sim%p%tailp(ilevel) + 1
+     sim%p%tailp(ilev) = sim%p%npart
   end do
-  sim%p%tailp(sim%r%nlevelmax) = sim%p%headp(ilevel) + num_parts - 1
 end subroutine metal_split_part
 
 !###########################################################
