@@ -151,8 +151,10 @@ static id<MTLComputePipelineState> s_pso_cmp_rhomax             = nil;
 static id<MTLComputePipelineState> s_pso_gradient_phi           = nil;
 static id<MTLComputePipelineState> s_pso_update_nbor_array_mg   = nil;
 
-/* Cooling PSOs and buffers */
+/* PSOs for cooling */
 static id<MTLComputePipelineState> s_pso_cooling = nil;
+
+/* Cooling buffers */
 static id<MTLBuffer> s_nH_tbl_d = nil;
 static id<MTLBuffer> s_T2_tbl_d = nil;
 static id<MTLBuffer> s_cool_d = nil;
@@ -214,7 +216,7 @@ static id<MTLComputePipelineState> s_pso_scatter_i8_1d        = nil;
 static id<MTLComputePipelineState> s_pso_gather_i4_1d         = nil;
 static id<MTLComputePipelineState> s_pso_scatter_i4_1d        = nil;
 static id<MTLComputePipelineState> s_pso_cic_part_medium      = nil;
-static id<MTLComputePipelineState> s_pso_multipole_q_part      = nil;
+static id<MTLComputePipelineState> s_pso_multipole_q_part     = nil;
 
 /* Particle buffers */
 static id<MTLBuffer> s_xp          = nil;
@@ -398,7 +400,6 @@ extern "C" void mtl_init(void)
 
 /* -----------------------------------------------------------------------
  * mtl_alloc_amr — allocate Metal-owned buffers for uold, unew, grid.
- * Mirrors gpu_allocate_amr in gpu_manager.cuf.
  * MTLResourceStorageModeShared: buffer lives in CPU/GPU shared DRAM.
  * Data is copied from the Fortran arrays in mtl_set_grid_device.
  * ----------------------------------------------------------------------- */
@@ -457,7 +458,6 @@ extern "C" void mtl_set_grid_device(void *uold_ptr, void *unew_ptr,
 
 /* -----------------------------------------------------------------------
  * mtl_upload_flag1 — copy host flag1(8,ngridmax) to device s_flag1.
- * Mirrors the CUDA path: `flag1 = pst%s%m%flag1` in gpu_manager.cuf.
  * Called from r_set_grid_device when nlevelmax > levelmin so that
  * derefine_kernel reads the correct refinement flags, not stale zeros.
  * ----------------------------------------------------------------------- */
@@ -471,7 +471,6 @@ extern "C" void mtl_upload_flag1(void *flag1_host, int ngridmax)
 
 /* -----------------------------------------------------------------------
  * mtl_transfer_grid_host — copy Metal uold buffer back to host (D->H).
- * Mirrors the cudaMemcpy calls in r_transfer_grid_host (gpu_manager.cuf).
  * Called before each output dump so m%uold reflects the GPU result.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_transfer_grid_host(void *uold_ptr,
@@ -500,7 +499,6 @@ extern "C" void mtl_transfer_grid_struct_host(void *grid_ptr, int ngridmax)
 
 /* -----------------------------------------------------------------------
  * mtl_device_sync — block until all previously submitted Metal work completes.
- * Mirrors cudaDeviceSynchronize() in the CUDA path.
  * An empty command buffer committed to the queue is sufficient: Metal
  * serialises command buffers in submission order, so waiting on this empty
  * one guarantees all prior dispatches have finished.
@@ -516,8 +514,6 @@ extern "C" void mtl_device_sync(void)
 /* -----------------------------------------------------------------------
  * mtl_build_nbor — build the device nbor array from the already-populated
  * hash table by dispatching build_nbor_kernel.
- * Mirrors the 27-launch update_nbor_array loop in r_set_grid_device
- * (gpu_manager.cuf); a single dispatch replaces those 27 launches.
  * Thread layout: 128 threads/threadgroup.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_build_nbor(int head_idx, int num_subgrids,
@@ -597,7 +593,6 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
 
 /* -----------------------------------------------------------------------
  * mtl_cmpdt — dispatch cmpdt_kernel and read back results.
- * Mirrors gpu_cmpdt in gpu_runner.cuf.
  *
  * data_buf layout: atomic_uint[5] reinterpreted as float[5] on readback.
  *   [0..3] fp32 accumulated via CAS atomic_add_float
@@ -660,7 +655,6 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 
 /* -----------------------------------------------------------------------
  * mtl_godunov — dispatch hydro_integrator_kernel (MUSCL-Hancock).
- * Mirrors gpu_godunov in gpu_runner.cuf.
  * Thread layout mirrors CUDA nsubgrid=1: 64 threads/threadgroup,
  * 1 threadgroup per oct (subgrid).
  * ----------------------------------------------------------------------- */
@@ -752,7 +746,6 @@ extern "C" void mtl_grav_hydro(int head_idx, int num_octs,
 
 /* -----------------------------------------------------------------------
  * mtl_upload — dispatch upload_kernel (restriction: fine → coarse level).
- * Mirrors gpu_upload in gpu_runner.cuf.
  * One thread per fine oct (128 threads/threadgroup).
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_upload(int head_idx, int num_octs,
@@ -785,7 +778,6 @@ extern "C" void mtl_upload(int head_idx, int num_octs,
 /* -----------------------------------------------------------------------
  * mtl_alloc_refine — allocate device buffers for AMR refinement, sorting,
  * ghost-zone cache, and per-level Hilbert parameters.
- * Mirrors gpu_allocate_amr flag/sort arrays in gpu_manager.cuf.
  * All buffers are MTLResourceStorageModeShared (unified memory) and zeroed.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_alloc_refine(int ngridmax, int ncachemax, int nlevelmax)
@@ -901,7 +893,7 @@ static void scan_phase(id<MTLComputePipelineState> pso,
 /* -----------------------------------------------------------------------
  * mtl_prefix_scan — inclusive prefix scan of s_prefix_sum[offset..offset+n-1].
  *
- * Mirrors gpu_scan in gpu_runner.cuf exactly: three separate scratch buffers
+ * Three separate scratch buffers
  * (s_partial_sums / _2 / _3) hold block totals at successive levels so that
  * no scan pass ever aliases its data buffer with its partial-sums output.
  * s_partial_sums_4 is a 1-element dummy sink for the deepest single-block
@@ -910,9 +902,11 @@ static void scan_phase(id<MTLComputePipelineState> pso,
  * Three cases, identical to the CUDA port:
  *   n ≤ 256^2 = 65,536          : 2-level (ps0 only)
  *   n ≤ 256^3 = 16,777,216      : 3-level (ps0, ps1)
- *   n ≤ INT_MAX                  : 4-level (ps0, ps1, ps2)
+ *   n ≤ INT_MAX                 : 4-level (ps0, ps1, ps2)
  * ----------------------------------------------------------------------- */
-static void mtl_prefix_scan_buffer_impl(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n, bool wait)
+static void mtl_prefix_scan_buffer_impl(id<MTLBuffer> buf, id<MTLBuffer> ps1,
+					id<MTLBuffer> ps2, id<MTLBuffer> ps3,
+					id<MTLBuffer> ps4, int offset, int n, bool wait)
 {
     if (n <= 0) return;
 
@@ -970,17 +964,30 @@ done:;
 #undef CMD_WAIT
 }
 
-static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n)
+static void mtl_prefix_scan_buffer(id<MTLBuffer> buf, id<MTLBuffer> ps1,
+				   id<MTLBuffer> ps2, id<MTLBuffer> ps3,
+				   id<MTLBuffer> ps4, int offset, int n)
 {
     mtl_prefix_scan_buffer_impl(buf, ps1, ps2, ps3, ps4, offset, n, true);
 }
 
-static void mtl_prefix_scan_buffer_async(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n)
+static void mtl_prefix_scan_buffer_async(id<MTLBuffer> buf,
+					 id<MTLBuffer> ps1,
+					 id<MTLBuffer> ps2,
+					 id<MTLBuffer> ps3,
+					 id<MTLBuffer> ps4,
+					 int offset, int n)
 {
     mtl_prefix_scan_buffer_impl(buf, ps1, ps2, ps3, ps4, offset, n, false);
 }
 
-static void mtl_prefix_scan_buffer_cb(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<MTLBuffer> ps2, id<MTLBuffer> ps3, id<MTLBuffer> ps4, int offset, int n, id<MTLCommandBuffer> cmd)
+static void mtl_prefix_scan_buffer_cb(id<MTLBuffer> buf,
+				      id<MTLBuffer> ps1,
+				      id<MTLBuffer> ps2,
+				      id<MTLBuffer> ps3,
+				      id<MTLBuffer> ps4,
+				      int offset, int n,
+				      id<MTLCommandBuffer> cmd)
 {
     if (n <= 0) return;
 
@@ -1031,7 +1038,8 @@ static void mtl_prefix_scan_buffer_cb(id<MTLBuffer> buf, id<MTLBuffer> ps1, id<M
 
 extern "C" void mtl_prefix_scan(int offset, int n)
 {
-    mtl_prefix_scan_buffer(s_prefix_sum, s_partial_sums, s_partial_sums_2, s_partial_sums_3, s_partial_sums_4, offset, n);
+    mtl_prefix_scan_buffer(s_prefix_sum, s_partial_sums, s_partial_sums_2,
+			   s_partial_sums_3, s_partial_sums_4, offset, n);
 }
 
 /* -----------------------------------------------------------------------
@@ -2350,7 +2358,6 @@ extern "C" void mtl_insert_hash_cache_r(int hash_size, int ngridmax,
 
 /* =======================================================================
  * Gravity / Poisson bridge functions
- * Mirrors gpu_manager.cuf + gpu_runner.cuf gravity routines for Metal.
  * ======================================================================= */
 
 /* -----------------------------------------------------------------------
@@ -3579,7 +3586,8 @@ extern "C" void mtl_multipole_q_part(int head_idx, int num_parts, long leading, 
     memcpy(q_out, s_multipole_q_part_buf.contents, 4 * sizeof(float));
 }
 
-extern "C" void mtl_kick_drift_part(int action_part, int ilevel, int head_idx, int num_parts, float skip1, float skip2, float skip3, float dx_loc,
+extern "C" void mtl_kick_drift_part(int action_part, int ilevel, int head_idx, int num_parts,
+				    float skip1, float skip2, float skip3, float dx_loc,
                                     float *box_size, int *periodic, float *dtnew, float *dtold)
 {
     if (num_parts <= 0) return;
@@ -3650,7 +3658,9 @@ extern "C" void mtl_newdt_part(int head_idx, int num_parts, float *vmax_out, flo
     *ekin_out = res[1];
 }
 
-extern "C" void mtl_split_part(int head_idx, int num_parts, int ilevel, float skip1, float skip2, float skip3, float dx_loc, int *n_fine_out)
+extern "C" void mtl_split_part(int head_idx, int num_parts, int ilevel,
+			       float skip1, float skip2, float skip3, float dx_loc,
+			       int *n_fine_out)
 {
     if (num_parts <= 0) {
         *n_fine_out = 0;
@@ -3695,7 +3705,8 @@ extern "C" void mtl_split_part(int head_idx, int num_parts, int ilevel, float sk
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 
     // Compute prefix sum using the generic helper
-    mtl_prefix_scan_buffer(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2, s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts);
+    mtl_prefix_scan_buffer(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2,
+			   s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts);
 
     int n_fine = ((int *)s_prefix_sum_part.contents)[(head_idx - 1) + num_parts - 1];
     *n_fine_out = n_fine;
@@ -3893,7 +3904,8 @@ extern "C" void mtl_sort_part(int head_idx, int num_parts, int level, float shif
             [enc endEncoding];
         }
 
-        mtl_prefix_scan_buffer_cb(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2, s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts, cmd);
+        mtl_prefix_scan_buffer_cb(s_prefix_sum_part, s_partial_sums_part, s_partial_sums_part2,
+				  s_partial_sums_part3, s_partial_sums_part4, head_idx - 1, num_parts, cmd);
 
         {
             id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
