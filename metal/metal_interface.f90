@@ -32,7 +32,7 @@ module metal_interface
         box_ckey_min, box_ckey_max, periodic, nlevelmax) &
         bind(C, name="mtl_upload_level_params")
       import c_ptr, c_int
-      type(c_ptr), value     :: ckey_max      ! integer(c_int)(1:nlevelmax+1)
+      type(c_ptr), value     :: ckey_max       ! integer(c_int)(1:nlevelmax+1)
       type(c_ptr), value     :: key_off        ! integer(c_long)(1:nlevelmax+1)
       type(c_ptr), value     :: box_ckey_min   ! integer(c_int)(1:ndim,1:nlevelmax+1)
       type(c_ptr), value     :: box_ckey_max   ! integer(c_int)(1:ndim,1:nlevelmax+1)
@@ -103,8 +103,6 @@ module metal_interface
       real(c_float), intent(in) :: constant_gravity(3)
       real(c_float), intent(out) :: mass, ekin, eint, emag, dt
     end subroutine mtl_cmpdt
-
-
 
     ! Build nbor array from the already-populated hash table.
     ! Mirrors the 27-launch update_nbor_array loop in r_set_grid_device
