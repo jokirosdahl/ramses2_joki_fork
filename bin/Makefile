@@ -206,11 +206,11 @@ ifeq ($(COMPILER),NVHPC)
    endif
 endif
 #############################################################################
-# Metal compiler (Apple Silicon, HYDRO=1 GRAV=0 MHD=0, always NPRE=4/float32)
+# Metal compiler (Apple Silicon, always NPRE=4/float32)
 ifeq ($(COMPILER),METAL)
    # _METAL define gates the Metal path in CPU source files.
    # NPRE=4 is hardcoded: Apple GPU has no float64.
-   # No MPI support for the PoC.
+   # No MPI support.
    DEFINES     += -D_METAL -DNPRE=4 -DWITHOUTMPI
    FFLAGS       = -cpp $(DEFINES)
    F90          = gfortran -ffree-line-length-none -fimplicit-none
@@ -351,11 +351,6 @@ cub_module_radix_sort_f.o: cub_module_radix_sort.cuf cub_module_radix_sort_c.o
 # Metal-specific build rules
 metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-# hash.metal provides insert_hash_kernel (compiled separately).
-# refine.metal provides build_nbor_kernel (reads hash non-atomically).
-# hydro.metal provides set_uold/set_unew/cmpdt/hydro_integrator kernels.
-# rho.metal provides rho deposit/multipole kernels.
-# mg.metal provides multigrid Poisson solver kernels.
 hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
