@@ -5,7 +5,8 @@ module rho_fine_module
   use part_device, only: gpu_split_star, gpu_sort_star, gpu_cic_star_large, gpu_cic_star_medium, gpu_cic_star_small
 #endif
 #ifdef _METAL
-  use metal_runner, only: metal_multipole_leaf, metal_multipole_upload, metal_reset_rho, metal_cic_multipole2
+  use metal_runner, only: metal_multipole_leaf, metal_multipole_upload, metal_reset_rho, metal_cic_multipole2, &
+       metal_split_part, metal_sort_part, metal_cic_part_medium
 #endif
 contains
 !###############################################
@@ -717,6 +718,15 @@ recursive subroutine r_cic_part(pst,input_array,input_size)
         endif
         return
      endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)then
+           if(pst%s%r%part_dep_algo==2)then
+              call metal_cic_part_medium(pst%s, ilevel, rtype)
+           endif
+        endif
+        return
+     endif
 #endif
      ! Mass deposition for various components (DM particles, star, sink)
      ! based on their respective deposition schemes (CIC 1, TSC 2 or PCS 3)
@@ -1253,6 +1263,11 @@ recursive subroutine r_split_part(pst,ilevel,input_size)
      if(pst%s%m%data_on_device)then
         if(pst%s%r%part)call gpu_split_part(pst%s, ilevel)
         if(pst%s%r%star)call gpu_split_star(pst%s, ilevel)
+        return
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call metal_split_part(pst%s, ilevel)
         return
      endif
 #endif
@@ -2008,6 +2023,11 @@ recursive subroutine r_sort_part(pst,ilevel,input_size)
      if(pst%s%m%data_on_device)then
         if(pst%s%r%part)call gpu_sort_part(pst%s, ilevel)
         if(pst%s%r%star)call gpu_sort_star(pst%s, ilevel)
+        return
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call metal_sort_part(pst%s, ilevel)
         return
      endif
 #endif

@@ -832,6 +832,77 @@ module metal_interface
       real(c_float),  intent(in) :: constant_gravity(3)
     end subroutine mtl_grav_hydro
 
+    ! Particle interfaces
+    subroutine mtl_alloc_part(npartmax) bind(C, name="mtl_alloc_part")
+      import c_int
+      integer(c_int), value :: npartmax
+    end subroutine mtl_alloc_part
+
+    subroutine mtl_upload_part(xp, vp, mp, levelp, sortp, idp, npart) bind(C, name="mtl_upload_part")
+      import c_ptr, c_int
+      type(c_ptr), value :: xp, vp, mp, levelp, sortp, idp
+      integer(c_int), value :: npart
+    end subroutine mtl_upload_part
+
+    subroutine mtl_download_part(xp, vp, mp, levelp, sortp, idp, npart) bind(C, name="mtl_download_part")
+      import c_ptr, c_int
+      type(c_ptr), value :: xp, vp, mp, levelp, sortp, idp
+      integer(c_int), value :: npart
+    end subroutine mtl_download_part
+
+    subroutine mtl_kick_drift_part(action_part, ilevel, head_idx, num_parts, skip1, skip2, skip3, dx_loc, &
+        box_size, periodic, dtnew, dtold) bind(C, name="mtl_kick_drift_part")
+      import c_int, c_float, c_ptr
+      integer(c_int), value :: action_part, ilevel, head_idx, num_parts
+      real(c_float), value :: skip1, skip2, skip3, dx_loc
+      type(c_ptr), value :: box_size, periodic, dtnew, dtold
+    end subroutine mtl_kick_drift_part
+
+    subroutine mtl_newdt_part(head_idx, num_parts, vmax_out, ekin_out) bind(C, name="mtl_newdt_part")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_parts
+      real(c_float), intent(out) :: vmax_out, ekin_out
+    end subroutine mtl_newdt_part
+
+    subroutine mtl_split_part(head_idx, num_parts, ilevel, skip1, skip2, skip3, dx_loc, n_fine_out) &
+        bind(C, name="mtl_split_part")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_parts, ilevel
+      real(c_float), value :: skip1, skip2, skip3, dx_loc
+      integer(c_int), intent(out) :: n_fine_out
+    end subroutine mtl_split_part
+
+    subroutine mtl_sort_part(head_idx, num_parts, level, shift, dx_inv, skip) bind(C, name="mtl_sort_part")
+      import c_int, c_float, c_ptr
+      integer(c_int), value :: head_idx, num_parts, level
+      real(c_float), value :: shift, dx_inv
+      type(c_ptr), value :: skip
+    end subroutine mtl_sort_part
+
+    subroutine mtl_cic_part_medium(head_idx, num_parts, skip1, skip2, skip3, dx_loc, vol_loc, mass_sph, &
+        star, m_refine_at_level, mass_cut_refine, ilevel) bind(C, name="mtl_cic_part_medium")
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_parts, ilevel, star
+      real(c_float), value :: skip1, skip2, skip3, dx_loc, vol_loc, mass_sph, m_refine_at_level, mass_cut_refine
+    end subroutine mtl_cic_part_medium
+
+    subroutine mtl_multipole_q_part(head_idx, num_parts, leading, q_out) bind(C, name="mtl_multipole_q_part")
+      import c_int, c_long, c_float
+      integer(c_int),  value :: head_idx, num_parts
+      integer(c_long), value :: leading
+      real(c_float), intent(out) :: q_out(4)
+    end subroutine mtl_multipole_q_part
+
+    subroutine mtl_debug_rho(head_grid, num_octs, twotondim, ilevel) bind(C, name="mtl_debug_rho")
+      import c_int
+      integer(c_int), value :: head_grid, num_octs, twotondim, ilevel
+    end subroutine mtl_debug_rho
+
+    subroutine mtl_debug_xp(head_idx, num_parts, ilevel) bind(C, name="mtl_debug_xp")
+      import c_int
+      integer(c_int), value :: head_idx, num_parts, ilevel
+    end subroutine mtl_debug_xp
+
   end interface
 
 end module metal_interface

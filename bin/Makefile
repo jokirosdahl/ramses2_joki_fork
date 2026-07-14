@@ -216,8 +216,7 @@ ifeq ($(COMPILER),METAL)
    F90          = gfortran -ffree-line-length-none -fimplicit-none
    FC           = gfortran -ffree-line-length-none -fimplicit-none
    ifeq ($(DEBUG),1)
-      F90       += -O0 -fcheck=bounds -g -fbacktrace \
-                   -ffpe-trap=zero,overflow,invalid -finit-real=nan -Wall
+      F90       += -O0 -fcheck=bounds -g -fbacktrace -Wall
       FFLAGS    += -g
    else
       F90       += -O3
@@ -227,9 +226,15 @@ ifeq ($(COMPILER),METAL)
    METAL_KPATH  = ../metal/kernels
    CXX          = xcrun clang++
    CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
+   ifeq ($(DEBUG),1)
+      CXXFLAGS  += -g -O0
+   endif
    METALC       = xcrun -sdk macosx metal
    METALLIB     = xcrun -sdk macosx metallib
    METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
+   ifeq ($(DEBUG),1)
+      METALFLAGS += -gline-tables-only -frecord-sources
+   endif
    ifeq ($(HYDRO),1)
       METALFLAGS += -DHYDRO
    endif
@@ -365,7 +370,9 @@ mg.air: $(METAL_KPATH)/mg.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal
 	$(METALC) $(METALFLAGS) -c $< -o $@
 cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air
+part.air: $(METAL_KPATH)/part.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

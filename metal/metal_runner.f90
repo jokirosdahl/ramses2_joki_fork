@@ -92,6 +92,7 @@ recursive subroutine r_set_grid_device(pst)
      call mdl_get_reply(pst%s%mdl, rID, 0)
   else
      ! Copy host arrays into Metal buffers (mirrors H->D cudaMemcpy in gpu_manager.cuf).
+#ifdef HYDRO
      call mtl_set_grid_device( &
           c_loc(pst%s%m%uold(1,1,1)), &
           c_loc(pst%s%m%unew(1,1,1)), &
@@ -99,6 +100,15 @@ recursive subroutine r_set_grid_device(pst)
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
+#else
+     call mtl_set_grid_device( &
+          c_null_ptr, &
+          c_null_ptr, &
+          c_loc(pst%s%m%grid(1)),     &
+          int(pst%s%m%ngridmax, c_int), &
+          int(nvar,             c_int), &
+          int(twotondim,        c_int))
+#endif
 
      ! Mirror CUDA: flag1 = pst%s%m%flag1 under nlevelmax > levelmin guard.
      ! derefine_kernel reads device flag1; without this upload it sees zeros
@@ -112,6 +122,11 @@ recursive subroutine r_set_grid_device(pst)
      ! Build nbor on device via insert_hash + build_nbor kernels
      ! (mirrors insert_hash_kernel + update_nbor_array in gpu_manager.cuf).
      call metal_set_nbor(pst%s, pst%s%r%levelmin)
+
+     ! Copy particles to device
+     if (pst%s%r%part) then
+        call metal_upload_part(pst%s)
+     end if
      pst%s%m%data_on_device = .true.
   endif
 
@@ -137,17 +152,22 @@ recursive subroutine r_transfer_grid_host(pst)
      call r_transfer_grid_host(pst%pLower)
      call mdl_get_reply(pst%s%mdl, rID, 0)
   else
+#ifdef HYDRO
      ! Copy Metal buffer back into host uold
      call mtl_transfer_grid_host( &
           c_loc(pst%s%m%uold(1,1,1)), &
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
+#endif
      ! Copy s_grid back into host grid
      if (pst%s%r%nlevelmax > pst%s%r%levelmin) then
         call mtl_transfer_grid_struct_host( &
              c_loc(pst%s%m%grid(1)), &
              int(pst%s%m%ngridmax, c_int))
+     end if
+     if (pst%s%r%part) then
+        call metal_download_part(pst%s)
      end if
   endif
 
@@ -516,9 +536,10 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   ! if nmake > 0 created them.  The existing head(ilevel+1) is the old value;
   ! new octs were appended starting at old_ifree.  We need to sort all octs
   ! in the range [head(ilevel+1) .. new_ifree-1] regardless of their level.
-  head_child = int(sim%m%head(ilevel + 1), c_int)
+!  head_child = int(sim%m%head(ilevel + 1), c_int)
+  head_child = int(sim%m%tail(ilevel) + 1, c_int)
   n_all      = new_ifree - head_child   ! total slots in child region
-
+  
   if (n_all > 0) then
      ! Init identity permutation.
      call mtl_init_swap_table(head_child, n_all)
@@ -1378,5 +1399,237 @@ subroutine metal_grav_hydro(sim, ilevel)
        gamma, smallr, smallc2, &
        dt, constant_gravity)
 end subroutine metal_grav_hydro
+
+!###########################################################
+!###########################################################
+subroutine metal_allocate_part(sim)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  call mtl_alloc_part(int(sim%r%npartmax, c_int))
+end subroutine metal_allocate_part
+
+!###########################################################
+!###########################################################
+subroutine metal_upload_part(sim)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  type(c_ptr) :: xp_ptr, vp_ptr, mp_ptr, levelp_ptr, sortp_ptr, idp_ptr
+  xp_ptr = c_null_ptr
+  vp_ptr = c_null_ptr
+  mp_ptr = c_null_ptr
+  levelp_ptr = c_null_ptr
+  sortp_ptr = c_null_ptr
+  idp_ptr = c_null_ptr
+  if (allocated(sim%p%xp)) xp_ptr = c_loc(sim%p%xp(1,1))
+  if (allocated(sim%p%vp)) vp_ptr = c_loc(sim%p%vp(1,1))
+  if (allocated(sim%p%mp)) mp_ptr = c_loc(sim%p%mp(1))
+  if (allocated(sim%p%levelp)) levelp_ptr = c_loc(sim%p%levelp(1))
+  if (allocated(sim%p%sortp)) sortp_ptr = c_loc(sim%p%sortp(1))
+  if (allocated(sim%p%idp)) idp_ptr = c_loc(sim%p%idp(1))
+  call mtl_upload_part(xp_ptr, vp_ptr, mp_ptr, levelp_ptr, sortp_ptr, idp_ptr, int(sim%p%npart, c_int))
+end subroutine metal_upload_part
+
+!###########################################################
+!###########################################################
+subroutine metal_download_part(sim)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  type(c_ptr) :: xp_ptr, vp_ptr, mp_ptr, levelp_ptr, sortp_ptr, idp_ptr
+  xp_ptr = c_null_ptr
+  vp_ptr = c_null_ptr
+  mp_ptr = c_null_ptr
+  levelp_ptr = c_null_ptr
+  sortp_ptr = c_null_ptr
+  idp_ptr = c_null_ptr
+  if (allocated(sim%p%xp)) xp_ptr = c_loc(sim%p%xp(1,1))
+  if (allocated(sim%p%vp)) vp_ptr = c_loc(sim%p%vp(1,1))
+  if (allocated(sim%p%mp)) mp_ptr = c_loc(sim%p%mp(1))
+  if (allocated(sim%p%levelp)) levelp_ptr = c_loc(sim%p%levelp(1))
+  if (allocated(sim%p%sortp)) sortp_ptr = c_loc(sim%p%sortp(1))
+  if (allocated(sim%p%idp)) idp_ptr = c_loc(sim%p%idp(1))
+  call mtl_download_part(xp_ptr, vp_ptr, mp_ptr, levelp_ptr, sortp_ptr, idp_ptr, int(sim%p%npart, c_int))
+end subroutine metal_download_part
+
+!###########################################################
+!###########################################################
+subroutine metal_kick_drift_part(sim, ilevel, action_part)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: action_part
+  integer :: head_idx, tail_idx, num_parts
+  real(kind=8) :: dx_loc
+  real(c_float), target :: box_size_f(3), dtnew_f(size(sim%g%dtnew)), dtold_f(size(sim%g%dtold))
+  integer(c_int), target :: periodic_i(3)
+  box_size_f = real(sim%r%boxlen, c_float)
+  dtnew_f = real(sim%g%dtnew, c_float)
+  dtold_f = real(sim%g%dtold, c_float)
+  periodic_i(1:3) = merge(1, 0, sim%r%periodic(1:3))
+  dx_loc = sim%r%boxlen/2.0d0**ilevel
+  head_idx = sim%p%headp(ilevel)
+  tail_idx = sim%p%tailp(ilevel)
+  num_parts = tail_idx - head_idx + 1
+  if (num_parts > 0) then
+     call mtl_kick_drift_part( &
+          int(action_part, c_int), &
+          int(ilevel, c_int), &
+          int(head_idx, c_int), &
+          int(num_parts, c_int), &
+          real(sim%m%skip(1), c_float), &
+          real(sim%m%skip(2), c_float), &
+          real(sim%m%skip(3), c_float), &
+          real(dx_loc, c_float), &
+          c_loc(box_size_f(1)), &
+          c_loc(periodic_i(1)), &
+          c_loc(dtnew_f(1)), &
+          c_loc(dtold_f(1)))
+  endif
+end subroutine metal_kick_drift_part
+
+!###########################################################
+!###########################################################
+subroutine metal_newdt_part(sim, ilevel, vmax, ekin)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(inout) :: vmax, ekin
+  integer :: head_idx, tail_idx, num_parts
+  real(c_float) :: vmax_f, ekin_f
+  head_idx = sim%p%headp(ilevel)
+  tail_idx = sim%p%tailp(ilevel)
+  num_parts = tail_idx - head_idx + 1
+  if (num_parts > 0) then
+     call mtl_newdt_part( &
+          int(head_idx, c_int), &
+          int(num_parts, c_int), &
+          vmax_f, ekin_f)
+     vmax = max(vmax, real(vmax_f, kind=8))
+     ekin = ekin + real(ekin_f, kind=8)
+  endif
+end subroutine metal_newdt_part
+
+!###########################################################
+!###########################################################
+subroutine metal_split_part(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  integer, intent(in) :: ilevel
+  integer :: head_idx, num_parts, n_fine, n_coarse, ilev
+  real(kind=8) :: dx_loc
+  integer(c_int) :: n_fine_c
+  head_idx = sim%p%headp(ilevel)
+  num_parts = sim%p%tailp(sim%r%nlevelmax) - head_idx + 1
+  if (num_parts <= 0) then
+     sim%p%tailp(ilevel) = sim%p%headp(ilevel) - 1
+     do ilev = ilevel + 1, sim%r%nlevelmax
+        sim%p%headp(ilev) = sim%p%tailp(ilevel) + 1
+        sim%p%tailp(ilev) = sim%p%npart
+     end do
+     return
+  endif
+  dx_loc = sim%r%boxlen/2.0d0**ilevel
+  call mtl_split_part( &
+       int(head_idx, c_int), &
+       int(num_parts, c_int), &
+       int(ilevel, c_int), &
+       real(sim%m%skip(1), c_float), &
+       real(sim%m%skip(2), c_float), &
+       real(sim%m%skip(3), c_float), &
+       real(dx_loc, c_float), &
+       n_fine_c)
+  n_fine = int(n_fine_c)
+  n_coarse = num_parts - n_fine
+  sim%p%tailp(ilevel) = sim%p%headp(ilevel) + n_coarse - 1
+  do ilev = ilevel + 1, sim%r%nlevelmax
+     sim%p%headp(ilev) = sim%p%tailp(ilev - 1) + 1
+     sim%p%tailp(ilev) = sim%p%tailp(ilev - 1)
+  end do
+  sim%p%tailp(sim%r%nlevelmax) = sim%p%headp(ilevel) + num_parts - 1
+end subroutine metal_split_part
+
+!###########################################################
+!###########################################################
+subroutine metal_sort_part(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout), target :: sim
+  integer, intent(in) :: ilevel
+  integer :: head_idx, tail_idx, num_parts
+  real(kind=8) :: dx, dx_inv, shift
+  real(c_float), target :: skip_f(3)
+  head_idx = sim%p%headp(ilevel)
+  tail_idx = sim%p%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+  if (num_parts <= 0) return
+  dx = sim%r%boxlen/2.0d0**ilevel
+  dx_inv = 1.0d0 / dx
+  if (sim%r%part_dep_algo >= 2) then
+     shift = 0.5d0
+  else
+     shift = 0.0d0
+  endif
+  skip_f = real(sim%m%skip, c_float)
+  call mtl_sort_part( &
+       int(head_idx, c_int), &
+       int(num_parts, c_int), &
+       int(ilevel, c_int), &
+       real(shift, c_float), &
+       real(dx_inv, c_float), &
+       c_loc(skip_f(1)))
+end subroutine metal_sort_part
+
+!###########################################################
+!###########################################################
+subroutine metal_cic_part_medium(sim, ilevel, rtype)
+  use ramses_commons, only: ramses_t
+  use amr_parameters, only: ndim, twotondim
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: rtype
+  integer :: head_idx, tail_idx, num_parts, idim
+  real(kind=8) :: dx_loc, vol_loc
+  real(c_float) :: q_out(4)
+  if (rtype /= 0 .and. rtype /= 1) return
+
+  ! At the coarsest level accumulate monopole + dipole on the GPU,
+  ! mirroring multipole_q_kernel call in gpu_cic_part_medium (gpu_part.cuf).
+  if (ilevel == sim%r%levelmin .and. sim%p%npart > 0) then
+     call mtl_multipole_q_part( &
+          int(1, c_int), &
+          int(sim%p%npart, c_int), &
+          int(sim%r%npartmax, c_long), &
+          q_out)
+     do idim = 1, ndim + 1
+        sim%g%multipole%q(idim) = sim%g%multipole%q(idim) + real(q_out(idim), kind=8)
+     end do
+  end if
+
+  head_idx = sim%p%headp(ilevel)
+  tail_idx = sim%p%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+  if (num_parts <= 0) return
+  dx_loc = sim%r%boxlen/2.0d0**ilevel
+  vol_loc = dx_loc**ndim
+  call mtl_cic_part_medium( &
+       int(head_idx, c_int), &
+       int(num_parts, c_int), &
+       real(sim%m%skip(1), c_float), &
+       real(sim%m%skip(2), c_float), &
+       real(sim%m%skip(3), c_float), &
+       real(dx_loc, c_float), &
+       real(vol_loc, c_float), &
+       real(1.0d0, c_float), &
+       int(0, c_int), &
+       real(sim%r%m_refine(ilevel), c_float), &
+       real(sim%r%mass_cut_refine, c_float), &
+       int(ilevel, c_int))
+end subroutine metal_cic_part_medium
 
 end module metal_runner

@@ -2,6 +2,8 @@ module move_fine_module
   use rho_fine_module, only: cic_weight, cic_index, tsc_weight, tsc_index, pcs_weight, pcs_index
 #ifdef _CUDA
   use part_device, only: gpu_kick_drift_part, gpu_kick_drift_star
+#elif defined(_METAL)
+  use metal_runner, only: metal_kick_drift_part
 #endif
   use rng
   implicit none
@@ -68,6 +70,10 @@ recursive subroutine r_kick_drift_part(pst,input_array,input_size,output_array,o
      endif
      if(pst%s%r%star)then
         call gpu_kick_drift_star(pst%s, ilevel, action_part)
+     endif
+#elif defined(_METAL)
+     if(pst%s%r%part)then
+        call metal_kick_drift_part(pst%s, ilevel, action_part)
      endif
 #else
      if(pst%s%r%part)then

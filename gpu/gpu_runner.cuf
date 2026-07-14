@@ -1015,7 +1015,8 @@ contains
     ! Sort remaining octs per level and per Hilbert key
 
     ! Compute kernel size and offset
-    head_idx = sim%m%head(ilevel+1)
+!    head_idx = sim%m%head(ilevel+1)
+    head_idx = sim%m%tail(ilevel)+1
     num_octs = new_ifree - head_idx
     num_threads = 128
     num_blocks = (num_octs + num_threads - 1) / num_threads
