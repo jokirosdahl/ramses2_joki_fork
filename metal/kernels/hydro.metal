@@ -110,8 +110,6 @@ inline void u_set(device float *u, int oct_1, int ivar_1, int cell_1, float v) {
 inline int u_flat(int oct_1, int ivar_1, int cell_1) {
     return (oct_1-1)*(NVAR)*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1);
 }
-/* nbor_get, atomic_add_float, atomic_min_float_bits, index_1Dto3D
- * are now provided as static inline by metal_utils.h */
 
 /* ===========================================================================
  * Scalar helpers — mirror gpu_hydro.cuf
