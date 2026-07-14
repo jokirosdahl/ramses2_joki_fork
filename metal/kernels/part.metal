@@ -474,8 +474,8 @@ kernel void compute_hkey_part_kernel(
     int box_min[3] = {0, 0, 0};
     int box_max[3] = {0, 0, 0};
     for (int idim = 0; idim < 3; idim++) {
-        box_min[idim] = box_ckey_min_d[idim + (level - 1) * 3];
-        box_max[idim] = box_ckey_max_d[idim + (level - 1) * 3];
+        box_min[idim] = box_ckey_min_d[idim + level * 3];
+        box_max[idim] = box_ckey_max_d[idim + level * 3];
     }
 
     int ix[3];
@@ -647,10 +647,10 @@ kernel void cic_part_medium_kernel(
     constant long &leading                [[buffer(22)]],
     constant int &head_idx                [[buffer(23)]],
     constant int &num_parts               [[buffer(24)]],
-    uint tid                              [[thread_position_in_grid]])
+    uint tid                              [[thread_position_in_grid]],
+    uint lane                             [[thread_index_in_simdgroup]])
 {
-    if ((int)tid >= num_parts) return;
-    int ipart = sortp_d[(head_idx - 1) + (int)tid] - 1;
+    bool valid_lane = (tid < (uint)num_parts);
 
     float skip[3] = {skip1, skip2, skip3};
     long nx          = (long)ckey_max_d[ilevel - 1];
@@ -659,83 +659,139 @@ kernel void cic_part_medium_kernel(
     int box_min[3] = {0, 0, 0};
     int box_max[3] = {0, 0, 0};
     for (int idim = 0; idim < 3; idim++) {
-        box_min[idim] = box_ckey_min_d[idim + (ilevel - 1) * 3];
-        box_max[idim] = box_ckey_max_d[idim + (ilevel - 1) * 3];
+        box_min[idim] = box_ckey_min_d[idim + ilevel * 3];
+        box_max[idim] = box_ckey_max_d[idim + ilevel * 3];
     }
 
-    float mp_i = mp_d[ipart];
-    int src_full_ckey[3] = {0, 0, 0};
+    int combined = 0;
+    int icell_src_lane = 0;
+    int igrid_src_lane = 0;
+    float mp_i = 0.0f;
     float frac[3] = {0.0f, 0.0f, 0.0f};
+    int src_full_ckey[3] = {0, 0, 0};
 
-    for (int idim = 0; idim < 3; idim++) {
-        float xs = (xp_d[ipart + idim * leading] + skip[idim]) / dx_loc + 0.5f;
-        src_full_ckey[idim] = (int)floor(xs);
-        frac[idim] = xs - (float)src_full_ckey[idim];
-        if (src_full_ckey[idim] <  box_min[idim]) src_full_ckey[idim] = box_max[idim] - 1;
-        if (src_full_ckey[idim] >= box_max[idim]) src_full_ckey[idim] = box_min[idim];
+    if (valid_lane) {
+        int ipart = sortp_d[(head_idx - 1) + (int)tid] - 1;
+        mp_i = mp_d[ipart];
+
+        for (int idim = 0; idim < 3; idim++) {
+            float xs = (xp_d[ipart + idim * leading] + skip[idim]) / dx_loc + 0.5f;
+            src_full_ckey[idim] = (int)floor(xs);
+            frac[idim] = xs - (float)src_full_ckey[idim];
+            if (src_full_ckey[idim] <  box_min[idim]) src_full_ckey[idim] = box_max[idim] - 1;
+            if (src_full_ckey[idim] >= box_max[idim]) src_full_ckey[idim] = box_min[idim];
+        }
+
+        int father_ckey[3] = {src_full_ckey[0] / 2, src_full_ckey[1] / 2, src_full_ckey[2] / 2};
+        int ii[3] = {src_full_ckey[0] - 2 * father_ckey[0],
+                     src_full_ckey[1] - 2 * father_ckey[1],
+                     src_full_ckey[2] - 2 * father_ckey[2]};
+
+        icell_src_lane = ii[0] + ii[1] * 2 + ii[2] * 4;
+
+        long ix8 = (long)father_ckey[0];
+        long iy8 = (long)father_ckey[1];
+        long iz8 = (long)father_ckey[2];
+        long key = hkey_offset + ix8 + iy8*nx + iz8*nx*nx;
+        igrid_src_lane = hash_get_p(hash_key_d, hash_val_d, hash_size_d, key);
+
+        if (igrid_src_lane == 0) {
+            valid_lane = false;
+            mp_i = 0.0f;
+            frac[0] = 0.0f; frac[1] = 0.0f; frac[2] = 0.0f;
+            src_full_ckey[0] = 0; src_full_ckey[1] = 0; src_full_ckey[2] = 0;
+        } else {
+            combined = (igrid_src_lane << 5) | icell_src_lane;
+        }
     }
-
-    int father_ckey[3] = {src_full_ckey[0] / 2, src_full_ckey[1] / 2, src_full_ckey[2] / 2};
-    int ii[3] = {src_full_ckey[0] - 2 * father_ckey[0],
-                 src_full_ckey[1] - 2 * father_ckey[1],
-                 src_full_ckey[2] - 2 * father_ckey[2]};
-
-    long ix8 = (long)father_ckey[0];
-    long iy8 = (long)father_ckey[1];
-    long iz8 = (long)father_ckey[2];
-    long key = hkey_offset + ix8 + iy8*nx + iz8*nx*nx;
-
-    int igrid_src = hash_get_p(hash_key_d, hash_val_d, hash_size_d, key);
-
-    if (igrid_src == 0) return;
 
     float wx[2] = {1.0f - frac[0], frac[0]};
     float wy[2] = {1.0f - frac[1], frac[1]};
     float wz[2] = {1.0f - frac[2], frac[2]};
 
-    // Medium projection: atomic updates to cells surrounding the particle position.
-    for (int bz = 0; bz <= 1; bz++) {
-        int target_z = father_ckey[2] * 2 + ii[2] + bz - 1; // Local cell coordinate offset
-        float weight_z = wz[bz];
-        for (int by = 0; by <= 1; by++) {
-            int target_y = father_ckey[1] * 2 + ii[1] + by - 1;
-            float weight_y = weight_z * wy[by];
-            for (int bx = 0; bx <= 1; bx++) {
-                int target_x = father_ckey[0] * 2 + ii[0] + bx - 1;
-                float weight = weight_y * wx[bx];
+    int prev_combined = simd_shuffle_up(combined, 1);
+    int next_combined = simd_shuffle_down(combined, 1);
+    bool is_head = (lane == 0)  || (combined != prev_combined);
+    bool is_tail = (lane == 31) || (combined != next_combined);
 
-                int wrapped_ckey[3] = {target_x, target_y, target_z};
-                for (int idim = 0; idim < 3; idim++) {
-                    if (wrapped_ckey[idim] <  box_min[idim]) wrapped_ckey[idim] = box_max[idim] - 1;
-                    if (wrapped_ckey[idim] >= box_max[idim]) wrapped_ckey[idim] = box_min[idim];
-                }
+    for (int k = 1; k <= 8; k++) {
+        int bx = (k - 1) & 1;
+        int by = ((k - 1) >> 1) & 1;
+        int bz = ((k - 1) >> 2) & 1;
 
-                int f_ckey[3] = {wrapped_ckey[0] / 2, wrapped_ckey[1] / 2, wrapped_ckey[2] / 2};
-                int f_ii[3] = {wrapped_ckey[0] - 2 * f_ckey[0],
-                               wrapped_ckey[1] - 2 * f_ckey[1],
-                               wrapped_ckey[2] - 2 * f_ckey[2]};
-                int dst_icell = f_ii[0] + f_ii[1] * 2 + f_ii[2] * 4;
+        float my_rho = 0.0f;
+        float my_nref = 0.0f;
 
-                long dst_key = hkey_offset + (long)f_ckey[0] + (long)f_ckey[1]*nx + (long)f_ckey[2]*nx*nx;
-                int dst_igrid = hash_get_p(hash_key_d, hash_val_d, hash_size_d, dst_key);
-
-                if (dst_igrid == 0) continue;
-
-                // Add to rho
-                float deposit_val = mp_i * weight / vol_loc;
-                int dst_idx = (dst_igrid - 1) * 8 + dst_icell;
-                atomic_add_float((device atomic_uint*)&rho_d[dst_idx], deposit_val);
-
-                // Add to nref
-                if (m_refine_at_level > 0.0f) {
-                    float nref_val = 0.0f;
-                    if (mass_sph > 0.0f) {
-                        nref_val = deposit_val / mass_sph;
-                    } else if (mass_cut_refine > 0.0f) {
-                        nref_val = deposit_val / mass_cut_refine;
+        if (valid_lane) {
+            float w = wx[bx] * wy[by] * wz[bz];
+            if (w > 0.0f) {
+                my_rho = mp_i * w / vol_loc;
+                if (m_refine_at_level >= 0.0f) {
+                    if (!star) {
+                        if (mass_cut_refine > 0.0f) {
+                            if (mp_i < mass_cut_refine) {
+                                my_nref = w;
+                            }
+                        } else {
+                            my_nref = w;
+                        }
+                    } else {
+                        my_nref = mp_i * w / mass_sph;
                     }
-                    atomic_add_float((device atomic_uint*)&nref_d[dst_idx], nref_val);
                 }
+            }
+        }
+
+        int dst_igrid_lane = 0;
+        int dst_icell_lane = 0;
+
+        if (is_tail && valid_lane) {
+            int target_ckey[3];
+            target_ckey[0] = src_full_ckey[0] - 1 + bx;
+            target_ckey[1] = src_full_ckey[1] - 1 + by;
+            target_ckey[2] = src_full_ckey[2] - 1 + bz;
+
+            for (int idim = 0; idim < 3; idim++) {
+                if (target_ckey[idim] <  box_min[idim]) target_ckey[idim] = box_max[idim] - 1;
+                if (target_ckey[idim] >= box_max[idim]) target_ckey[idim] = box_min[idim];
+            }
+
+            int father_ckey[3] = {target_ckey[0] / 2, target_ckey[1] / 2, target_ckey[2] / 2};
+            int ii[3] = {target_ckey[0] - 2 * father_ckey[0],
+                         target_ckey[1] - 2 * father_ckey[1],
+                         target_ckey[2] - 2 * father_ckey[2]};
+
+            dst_icell_lane = ii[0] + ii[1] * 2 + ii[2] * 4;
+
+            long ix8 = (long)father_ckey[0];
+            long iy8 = (long)father_ckey[1];
+            long iz8 = (long)father_ckey[2];
+            long key = hkey_offset + ix8 + iy8*nx + iz8*nx*nx;
+            dst_igrid_lane = hash_get_p(hash_key_d, hash_val_d, hash_size_d, key);
+        }
+
+        int head_acc = is_head ? 1 : 0;
+        for (int scan_iter = 0; scan_iter <= 4; scan_iter++) {
+            int scan_offset = 1 << scan_iter;
+            float other_rho  = simd_shuffle_up(my_rho,  scan_offset);
+            float other_nref = simd_shuffle_up(my_nref, scan_offset);
+            int other_head   = simd_shuffle_up(head_acc, scan_offset);
+            if (lane >= (uint)scan_offset) {
+                if (head_acc == 0) {
+                    my_rho  += other_rho;
+                    my_nref += other_nref;
+                }
+                head_acc = head_acc | other_head;
+            }
+        }
+
+        if (is_tail && valid_lane && dst_igrid_lane != 0) {
+            int dst_idx = (dst_igrid_lane - 1) * 8 + dst_icell_lane;
+            if (my_rho != 0.0f) {
+                atomic_add_float((device atomic_uint*)&rho_d[dst_idx], my_rho);
+            }
+            if (m_refine_at_level >= 0.0f && my_nref != 0.0f) {
+                atomic_add_float((device atomic_uint*)&nref_d[dst_idx], my_nref);
             }
         }
     }
