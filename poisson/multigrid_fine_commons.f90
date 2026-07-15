@@ -7,7 +7,10 @@ module multigrid_fine_commons
 #endif
 
 #ifdef _CUDA
-  use gpu_runner, only: gpu_init_phi, gpu_make_mask, gpu_make_rhs, gpu_build_mg, gpu_clean_mg
+  use gpu_runner, only: gpu_make_mask, gpu_make_rhs, gpu_build_mg, gpu_clean_mg
+#endif
+#ifdef _METAL
+  use metal_runner, only: metal_make_mask, metal_make_rhs, metal_build_mg, metal_clean_mg
 #endif
 
 contains
@@ -381,6 +384,8 @@ recursive subroutine r_build_mg(pst,input,input_size)
   else
 #ifdef _CUDA
      call gpu_build_mg(pst%s,input%ilevel,input%ifine)
+#elif defined(_METAL)
+     call metal_build_mg(pst%s,input%ilevel,input%ifine)
 #else
      if(input%ifine==input%ilevel)then
         call build_mg(pst%s,pst%s%m,input%ifine)
@@ -642,6 +647,8 @@ recursive subroutine r_cleanup_mg(pst)
   else
 #ifdef _CUDA
      call gpu_clean_mg(pst%s)
+#elif defined(_METAL)
+     call metal_clean_mg(pst%s)
 #else
      call cleanup_mg(pst%s%m_mg)
 #endif
@@ -695,6 +702,8 @@ recursive subroutine r_make_mask(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_make_mask(pst%s,ilevel)
+#elif defined(_METAL)
+     call metal_make_mask(pst%s,ilevel)
 #else
      call make_mask(pst%s%m,ilevel)
 #endif
@@ -760,6 +769,8 @@ recursive subroutine r_make_bc_rhs(pst,input,input_size)
   else
 #ifdef _CUDA
      call gpu_make_rhs(pst%s,input%ilevel)
+#elif defined(_METAL)
+     call metal_make_rhs(pst%s,input%ilevel)
 #else
      call make_bc_rhs(pst%s,input%ilevel,input%icount)
 #endif

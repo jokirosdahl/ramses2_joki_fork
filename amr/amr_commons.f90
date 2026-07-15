@@ -272,6 +272,8 @@ module amr_commons
      character(LEN=20)::filetype='ascii'
      logical::multiple=.false.
      character(LEN=80),dimension(1:MAXLEVEL)::initfile=' '
+     real(kind=8)::ic_scale_l=1.0d0
+     real(kind=8)::ic_scale_v=1.0d0
      real(kind=8)::ic_scale_m=1.0d0
 
      ! Boundary conditions parameters

@@ -2,6 +2,9 @@ module phi_fine_cg_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_init_phi
 #endif
+#ifdef _METAL
+  use metal_runner, only: metal_init_phi
+#endif
   use multigrid_fine_coarse, only: level_count_t
   type recurrence_t
      integer::ilevel
@@ -542,6 +545,8 @@ recursive subroutine r_make_initial_phi(pst,input,input_size)
   else
 #ifdef _CUDA
      call gpu_init_phi(pst%s,input%ilevel,input%icount)
+#elif defined(_METAL)
+     call metal_init_phi(pst%s,input%ilevel,input%icount)
 #else
      call make_initial_phi(pst%s,input%ilevel,input%icount)
 #endif

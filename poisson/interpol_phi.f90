@@ -1,6 +1,8 @@
 module interpol_phi_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_save_phi_old
+#elif defined(_METAL)
+  use metal_runner, only: metal_save_phi_old
 #endif
 contains
 !###########################################################
@@ -80,6 +82,8 @@ recursive subroutine r_save_phi_old(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_save_phi_old(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_save_phi_old(pst%s, ilevel)
 #else
      call save_phi_old(pst%s%m,ilevel)
 #endif

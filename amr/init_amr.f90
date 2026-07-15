@@ -49,7 +49,7 @@ recursive subroutine r_init_amr(pst)
   use gpu_manager
 #endif
 #ifdef _METAL
-  use metal_runner, only: metal_allocate_amr
+  use metal_runner, only: metal_allocate_amr, metal_allocate_grav
 #endif
   implicit none
   type(pst_t)::pst
@@ -77,6 +77,7 @@ recursive subroutine r_init_amr(pst)
 #endif
 #ifdef _METAL
      call metal_allocate_amr(pst%s)
+     if(pst%s%r%poisson) call metal_allocate_grav(pst%s)
 #endif
   endif
 

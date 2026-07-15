@@ -11,6 +11,8 @@ recursive subroutine r_init_part(pst)
   use mdl_parameters
 #ifdef _CUDA
   use gpu_manager
+#elif defined(_METAL)
+  use metal_runner
 #endif
   implicit none
   type(pst_t)::pst
@@ -28,6 +30,8 @@ recursive subroutine r_init_part(pst)
         call init_part(pst%s%r,pst%s%g,pst%s%m,pst%s%p)
 #ifdef _CUDA
         call gpu_allocate_part(pst%s)
+#elif defined(_METAL)
+        call metal_allocate_part(pst%s)
 #endif
      endif
      if(pst%s%r%star)then

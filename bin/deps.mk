@@ -6,7 +6,7 @@ amr_commons.o: amr_parameters.o domain_hilbert.o hash.o hydro_commons.o hydro_pa
 amr_step.o: clump_finder.o cooling_fine.o feedback.o flag_utils.o godunov_fine.o interpol_phi.o lightcone.o move_fine.o movie.o newdt_fine.o output_amr.o pm_parameters.o ramses_commons.o refine_utils.o rho_fine.o rt_godunov_fine.o rt_step.o sink_evolution.o sink_formation.o sink_merger.o source_hydro_fine.o star_formation.o synchro_hydro_fine.o tree_formation.o turb_driving.o turb_hydro.o update_time.o upload.o
 boundana.o: amr_commons.o amr_parameters.o hydro_parameters.o
 boundaries.o: amr_commons.o amr_parameters.o hydro_parameters.o ramses_commons.o rt_parameters.o
-cache.o: amr_commons.o amr_parameters.o cache_commons.o clfind_commons.o hash.o mdl.o
+cache.o: amr_commons.o amr_parameters.o cache_commons.o clfind_commons.o hash.o hilbert.o mdl.o
 cache_commons.o: amr_parameters.o call_back.o hydro_parameters.o rt_parameters.o
 call_back.o: amr_commons.o amr_parameters.o clfind_commons.o ramses_commons.o
 clfind_commons.o: hash.o
@@ -130,12 +130,28 @@ write_screen.o: amr_commons.o amr_parameters.o hydro_parameters.o
 ifeq ($(COMPILER),METAL)
 adaptive_loop.o: metal_runner.o
 amr_step.o: metal_runner.o
+cooling_fine.o: metal_runner.o
 courant_fine.o: metal_runner.o
+flag_utils.o: metal_runner.o
+force_fine.o: metal_runner.o
 godunov_fine.o: metal_runner.o
 init_amr.o: metal_runner.o
+init_part.o: metal_runner.o
+interpol_phi.o: metal_runner.o
 mdl.o: metal_interface.o
-metal_runner.o: amr_parameters.o hydro_parameters.o mdl.o mdl_commons.o metal_interface.o ramses_commons.o
+metal_runner.o: amr_parameters.o constants.o cooling_module.o hydro_parameters.o mdl.o mdl_commons.o metal_interface.o ramses_commons.o
+move_fine.o: metal_runner.o
+multigrid_fine_coarse.o: metal_runner.o
+multigrid_fine_commons.o: metal_runner.o
+newdt_fine.o: metal_runner.o
+phi_fine_cg.o: metal_runner.o
+refine_utils.o: metal_runner.o
+rho_fine.o: metal_runner.o
+smooth.o: metal_runner.o
+synchro_hydro_fine.o: metal_runner.o
+task_manager.o: metal_runner.o
 timer.o: metal_interface.o
+upload.o: metal_runner.o
 endif
 
 ifeq ($(COMPILER),NVHPC)
