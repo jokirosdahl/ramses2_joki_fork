@@ -8,6 +8,11 @@ module metal_interface
     subroutine mtl_init() bind(C, name="mtl_init")
     end subroutine mtl_init
 
+    function mtl_nsubgrid() bind(C, name="mtl_nsubgrid")
+      import c_int
+      integer(c_int) :: mtl_nsubgrid
+    end function mtl_nsubgrid
+
     ! Allocate Metal buffers for uold, unew, grid, nbor, hash_key, hash_val.
     ! ncachemax is included so grid/nbor cover the full ngridmax+ncachemax range
     ! needed for AMR ghost-zone caching.
@@ -43,11 +48,18 @@ module metal_interface
     ! Copy host arrays into Metal buffers (H->D).
     ! Mirrors r_set_grid_device / cudaMemcpy in the CUDA path.
     ! On Apple Silicon the memcpy stays within DRAM; no PCIe transfer.
-    subroutine mtl_set_grid_device(uold, unew, grid, ngridmax, nvar, twotondim) &
+    subroutine mtl_set_grid_device(uold, unew, &
+#ifdef MHD
+        bold, &
+#endif
+        grid, ngridmax, nvar, twotondim) &
         bind(C, name="mtl_set_grid_device")
       import c_ptr, c_int
       type(c_ptr), value  :: uold   ! real(kind=4)(1:twotondim,1:nvar,1:ngridmax)
       type(c_ptr), value  :: unew   ! real(kind=4)(1:twotondim,1:nvar,1:ngridmax)
+#ifdef MHD
+      type(c_ptr), value  :: bold
+#endif
       type(c_ptr), value  :: grid   ! type(oct)(1:ngridmax)
       integer(c_int), value :: ngridmax, nvar, twotondim
     end subroutine mtl_set_grid_device
@@ -62,10 +74,17 @@ module metal_interface
 
     ! Copy Metal uold buffer back to host (D->H), called before I/O.
     ! Mirrors r_transfer_grid_host / cudaMemcpy in the CUDA path.
-    subroutine mtl_transfer_grid_host(uold, ngridmax, nvar, twotondim) &
+    subroutine mtl_transfer_grid_host(uold, &
+#ifdef MHD
+        bold, &
+#endif
+        ngridmax, nvar, twotondim) &
         bind(C, name="mtl_transfer_grid_host")
       import c_ptr, c_int
       type(c_ptr), value  :: uold
+#ifdef MHD
+      type(c_ptr), value  :: bold
+#endif
       integer(c_int), value :: ngridmax, nvar, twotondim
     end subroutine mtl_transfer_grid_host
 
@@ -95,11 +114,18 @@ module metal_interface
     ! Dispatch cmpdt_kernel and return integrated quantities + Courant dt.
     ! Mirrors gpu_cmpdt in gpu_runner.cuf; output args passed by reference.
     subroutine mtl_cmpdt(head_idx, num_octs, dx, gamma, smallr, smallc2, &
-        courant_factor, constant_gravity, mass, ekin, eint, emag, dt) &
+        courant_factor, &
+#ifdef MHD
+        induction, &
+#endif
+        constant_gravity, mass, ekin, eint, emag, dt) &
         bind(C, name="mtl_cmpdt")
       import c_int, c_float
       integer(c_int), value :: head_idx, num_octs
       real(c_float),  value :: dx, gamma, smallr, smallc2, courant_factor
+#ifdef MHD
+      integer(c_int), value :: induction
+#endif
       real(c_float), intent(in) :: constant_gravity(3)
       real(c_float), intent(out) :: mass, ekin, eint, emag, dt
     end subroutine mtl_cmpdt
@@ -151,7 +177,12 @@ module metal_interface
     ! Replaces metal_user_flag's separate calls with 1 batch.
     function mtl_user_flag_batch(head_idx, num_octs, &
         gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p, &
-        mass_sph, m_refine, jeans_refine, factG, dx_loc) &
+        mass_sph, m_refine, jeans_refine, factG, dx_loc &
+#ifdef MHD
+        , err_grad_b2, floor_b2, err_grad_A, floor_A, &
+        err_grad_B, floor_B, err_grad_C, floor_C &
+#endif
+        ) &
         bind(C, name="mtl_user_flag_batch")
       import c_int, c_float
       integer(c_int)        :: mtl_user_flag_batch
@@ -159,7 +190,16 @@ module metal_interface
       real(c_float),  value :: gamma, smallr, smallc2
       real(c_float),  value :: err_grad_d, err_grad_p, floor_d, floor_p
       real(c_float),  value :: mass_sph, m_refine, jeans_refine, factG, dx_loc
+#ifdef MHD
+      real(c_float), value :: err_grad_b2, floor_b2, err_grad_A, floor_A
+      real(c_float), value :: err_grad_B, floor_B, err_grad_C, floor_C
+#endif
     end function mtl_user_flag_batch
+
+    subroutine mtl_enforce_subgrid(head_idx, num_octs) bind(C, name="mtl_enforce_subgrid")
+      import c_int
+      integer(c_int), value :: head_idx, num_octs
+    end subroutine mtl_enforce_subgrid
 
     ! Batch: 3×(count_neighbors + flag_count) + count_flag1 in one cmd buf.
     ! n_nbor = {1,2,2} hardcoded for NDIM=3.
@@ -198,12 +238,21 @@ module metal_interface
 
     ! Gradient-based density/pressure refinement criterion (HYDRO=1, GRAV=0, MHD=0).
     subroutine mtl_hydro_flag(head_idx, num_octs, &
-        gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p) &
+        gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p &
+#ifdef MHD
+        , err_grad_b2, floor_b2, err_grad_A, floor_A, &
+        err_grad_B, floor_B, err_grad_C, floor_C &
+#endif
+        ) &
         bind(C, name="mtl_hydro_flag")
       import c_int, c_float
       integer(c_int), value :: head_idx, num_octs
       real(c_float),  value :: gamma, smallr, smallc2
       real(c_float),  value :: err_grad_d, err_grad_p, floor_d, floor_p
+#ifdef MHD
+      real(c_float), value :: err_grad_b2, floor_b2, err_grad_A, floor_A
+      real(c_float), value :: err_grad_B, floor_B, err_grad_C, floor_C
+#endif
     end subroutine mtl_hydro_flag
 
     ! Count flagged face-adjacent neighbours → flag2.
@@ -268,10 +317,11 @@ module metal_interface
     end subroutine mtl_advance_ifree_cache
 
     ! Create child octs for flagged unrefined cells (refine_kernel).
-    subroutine mtl_refine_cells(head_idx, num_octs) &
+    subroutine mtl_refine_cells(head_idx, num_octs, hash_size, interpol_var, interpol_type, smallr) &
         bind(C, name="mtl_refine_cells")
-      import c_int
-      integer(c_int), value :: head_idx, num_octs
+      import c_int, c_float
+      integer(c_int), value :: head_idx, num_octs, hash_size, interpol_var, interpol_type
+      real(c_float), value :: smallr
     end subroutine mtl_refine_cells
 
     ! Reset hash table every coarse step: zero + re-insert all octs + cache.
@@ -432,10 +482,12 @@ module metal_interface
     ! Run compute_cache_swap + make_cache_octs + insert_hash_cache in one command buffer.
     ! Replaces three separate commit/wait calls per cache direction.
     subroutine mtl_cache_fill(head_idx, num_subgrids, hash_size, input_ind, &
-        ngridmax, ifree_cache, new_noct) bind(C, name="mtl_cache_fill")
-      import c_int
+        ngridmax, ifree_cache, new_noct, interpol_var, interpol_type, smallr) bind(C, name="mtl_cache_fill")
+      import c_int, c_float
       integer(c_int), value :: head_idx, num_subgrids, hash_size, input_ind
       integer(c_int), value :: ngridmax, ifree_cache, new_noct
+      integer(c_int), value :: interpol_var, interpol_type
+      real(c_float), value :: smallr
     end subroutine mtl_cache_fill
 
     ! Set nbor[input_ind, sg] and prefix_sum[sg] = (nbor==0 ? 1 : 0).
@@ -454,11 +506,13 @@ module metal_interface
 
     ! Create ghost octs (cache region) with straight hydro injection.
     subroutine mtl_make_cache_octs(head_idx, num_subgrids, hash_size, &
-        ngridmax, ifree_cache, new_noct, input_ind) &
+        ngridmax, ifree_cache, new_noct, input_ind, interpol_var, interpol_type, smallr) &
         bind(C, name="mtl_make_cache_octs")
-      import c_int
+      import c_int, c_float
       integer(c_int), value :: head_idx, num_subgrids, hash_size
       integer(c_int), value :: ngridmax, ifree_cache, new_noct, input_ind
+      integer(c_int), value :: interpol_var, interpol_type
+      real(c_float), value :: smallr
     end subroutine mtl_make_cache_octs
 
     ! Insert new cache octs into the hash table.
@@ -489,14 +543,24 @@ module metal_interface
     ! constant_gravity: 3-element array (all zeros for GRAV=0).
     subroutine mtl_godunov(head_idx, num_subgrids, ngridmax, &
         ilevel, levelmin, levelmax, &
-        gamma, smallr, smallc2, dt, dx, slope, riemann, &
+        gamma, smallr, smallc2, dt, dx, slope, &
+#ifdef MHD
+        slope_mag, switch_llf_dmin, switch_llf_pmin, induction, etamag, &
+#else
+        riemann, &
+#endif
         constant_gravity) &
         bind(C, name="mtl_godunov")
       import c_int, c_float
       integer(c_int), value :: head_idx, num_subgrids, ngridmax
       integer(c_int), value :: ilevel, levelmin, levelmax
       real(c_float),  value :: gamma, smallr, smallc2, dt, dx
+#ifdef MHD
+      integer(c_int), value :: slope, slope_mag, induction
+      real(c_float), value :: switch_llf_dmin, switch_llf_pmin, etamag
+#else
       integer(c_int), value :: slope, riemann
+#endif
       real(c_float), intent(in) :: constant_gravity(3)
     end subroutine mtl_godunov
 

@@ -212,6 +212,20 @@ ifeq ($(COMPILER),METAL)
    # NPRE=4 is hardcoded: Apple GPU has no float64.
    # No MPI support.
    DEFINES     += -D_METAL -DNPRE=4 -DWITHOUTMPI
+   METAL_NSUBGRID ?= AUTO
+   ifeq ($(METAL_NSUBGRID),AUTO)
+      ifeq ($(MHD),1)
+         METAL_NSUBGRID_VALUE = 2
+      else
+         METAL_NSUBGRID_VALUE = 1
+      endif
+   else
+      METAL_NSUBGRID_VALUE = $(METAL_NSUBGRID)
+   endif
+   DEFINES += -DNSUBGRID=$(METAL_NSUBGRID_VALUE)
+   ifeq ($(HYDRO_FASTMATH),1)
+      METAL_FASTMATH = -ffast-math -fmetal-math-mode=fast -fmetal-math-fp32-functions=fast
+   endif
    FFLAGS       = -cpp $(DEFINES)
    F90          = gfortran -ffree-line-length-none -fimplicit-none
    FC           = gfortran -ffree-line-length-none -fimplicit-none
@@ -231,7 +245,7 @@ ifeq ($(COMPILER),METAL)
    endif
    METALC       = xcrun -sdk macosx metal
    METALLIB     = xcrun -sdk macosx metallib
-   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
+   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -DNSUBGRID=$(METAL_NSUBGRID_VALUE) -I$(METAL_PATH) -I$(METAL_KPATH)
    ifeq ($(DEBUG),1)
       METALFLAGS += -gline-tables-only -frecord-sources
    endif
@@ -367,7 +381,14 @@ cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 part.air: $(METAL_KPATH)/part.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
+mhd_uct.air: $(METAL_KPATH)/mhd_uct.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) $(METAL_FASTMATH) -c $< -o $@
+ifeq ($(MHD),1)
+METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air mhd_uct.air
+else
+METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
+endif
+ramses_kernels.metallib: $(METAL_AIR)
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

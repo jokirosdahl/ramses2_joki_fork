@@ -44,6 +44,10 @@ static id<MTLCommandQueue>         s_queue        = nil;
 static id<MTLLibrary>              s_library      = nil;
 static id<MTLBuffer>               s_uold         = nil;
 static id<MTLBuffer>               s_unew         = nil;
+#ifdef MHD
+static id<MTLBuffer>               s_bold         = nil;
+static id<MTLBuffer>               s_bnew         = nil;
+#endif
 static id<MTLBuffer>               s_grid         = nil;
 static id<MTLBuffer>               s_nbor         = nil;
 static id<MTLBuffer>               s_hash_key     = nil;
@@ -81,6 +85,12 @@ static id<MTLComputePipelineState> s_pso_cmpdt    = nil;
 static id<MTLComputePipelineState> s_pso_sync_hydro = nil;
 static id<MTLComputePipelineState> s_pso_grav_hydro = nil;
 static id<MTLComputePipelineState> s_pso_godunov      = nil;
+#ifdef MHD
+static id<MTLComputePipelineState> s_pso_mhd_set_unew = nil;
+static id<MTLComputePipelineState> s_pso_mhd_set_uold = nil;
+static id<MTLComputePipelineState> s_pso_mhd_cmpdt = nil;
+static id<MTLComputePipelineState> s_pso_mhd_godunov = nil;
+#endif
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
 static id<MTLComputePipelineState> s_pso_scan_fixup        = nil;
@@ -92,6 +102,7 @@ static id<MTLComputePipelineState> s_pso_hydro_flag        = nil;
 static id<MTLComputePipelineState> s_pso_poisson_flag      = nil;
 static id<MTLComputePipelineState> s_pso_count_neighbors   = nil;
 static id<MTLComputePipelineState> s_pso_flag_count        = nil;
+static id<MTLComputePipelineState> s_pso_enforce_subgrid  = nil;
 static id<MTLComputePipelineState> s_pso_enforce_rules     = nil;
 static id<MTLComputePipelineState> s_pso_update_father     = nil;
 
@@ -285,12 +296,21 @@ extern "C" void mtl_init(void)
         exit(1);
     }
 
+#ifdef MHD
+    s_pso_mhd_set_unew = make_pso(@"mhd_set_unew_kernel");
+    s_pso_mhd_set_uold = make_pso(@"mhd_set_uold_kernel");
+    s_pso_mhd_cmpdt = make_pso(@"mhd_cmpdt_kernel");
+    s_pso_mhd_godunov = make_pso(@"hydro_integrator_uct_kernel");
+#else
     s_pso_set_unew     = make_pso(@"set_unew_kernel");
     s_pso_set_uold     = make_pso(@"set_uold_kernel");
     s_pso_cmpdt        = make_pso(@"cmpdt_kernel");
+#endif
     s_pso_sync_hydro   = make_pso(@"sync_hydro_kernel");
     s_pso_grav_hydro   = make_pso(@"grav_hydro_kernel");
+#ifndef MHD
     s_pso_godunov      = make_pso(@"hydro_integrator_kernel");
+#endif
     s_pso_build_nbor   = make_pso(@"build_nbor_kernel");
     s_pso_scan_block        = make_pso(@"scan_block_kernel");
     s_pso_scan_fixup        = make_pso(@"scan_fixup_kernel");
@@ -302,6 +322,7 @@ extern "C" void mtl_init(void)
     s_pso_poisson_flag      = make_pso(@"poisson_flag_kernel");
     s_pso_count_neighbors   = make_pso(@"count_neighbors_kernel");
     s_pso_flag_count        = make_pso(@"flag_count_kernel");
+    s_pso_enforce_subgrid   = make_pso(@"enforce_subgrid_kernel");
     s_pso_enforce_rules     = make_pso(@"enforce_rules_kernel");
     s_pso_update_father     = make_pso(@"update_father_kernel");
 
@@ -416,7 +437,11 @@ extern "C" void mtl_alloc_amr(int ngridmax, int ncachemax,
     int ntotal = ngridmax + ncachemax;
     NSUInteger u_bytes        = (NSUInteger)ntotal    * nvar * twotondim * sizeof(float);
     NSUInteger grid_bytes     = (NSUInteger)ntotal    * sizeof(oct_t);
-    NSUInteger nbor_bytes     = (NSUInteger)ntotal    * 27   * sizeof(int);
+#ifdef MHD
+    NSUInteger nbor_bytes     = (NSUInteger)ntotal * (NSUBGRID + 2) * (NSUBGRID + 2) * (NSUBGRID + 2) * sizeof(int);
+#else
+    NSUInteger nbor_bytes     = (NSUInteger)ntotal * 27 * sizeof(int);
+#endif
     NSUInteger hash_key_bytes = (NSUInteger)hash_size * sizeof(long);
     NSUInteger hash_val_bytes = (NSUInteger)hash_size * sizeof(int);
 
@@ -424,6 +449,11 @@ extern "C" void mtl_alloc_amr(int ngridmax, int ncachemax,
                                        options:MTLResourceStorageModeShared];
     s_unew     = [s_device newBufferWithLength:u_bytes
                                        options:MTLResourceStorageModeShared];
+#ifdef MHD
+    NSUInteger b_bytes = (NSUInteger)ntotal * 6 * twotondim * sizeof(float);
+    s_bold = [s_device newBufferWithLength:b_bytes options:MTLResourceStorageModeShared];
+    s_bnew = [s_device newBufferWithLength:b_bytes options:MTLResourceStorageModeShared];
+#endif
     s_grid     = [s_device newBufferWithLength:grid_bytes
                                        options:MTLResourceStorageModeShared];
     s_nbor     = [s_device newBufferWithLength:nbor_bytes
@@ -442,6 +472,9 @@ extern "C" void mtl_alloc_amr(int ngridmax, int ncachemax,
  * allocations at different addresses.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_set_grid_device(void *uold_ptr, void *unew_ptr,
+#ifdef MHD
+                                    void *bold_ptr,
+#endif
                                     void *grid_ptr,
                                     int ngridmax, int nvar, int twotondim)
 {
@@ -453,6 +486,11 @@ extern "C" void mtl_set_grid_device(void *uold_ptr, void *unew_ptr,
     if (unew_ptr && s_unew) {
         memcpy(s_unew.contents, unew_ptr, u_bytes);
     }
+#ifdef MHD
+    size_t b_bytes = (size_t)ngridmax * 6 * twotondim * sizeof(float);
+    if (bold_ptr && s_bold) memcpy(s_bold.contents, bold_ptr, b_bytes);
+    if (bold_ptr && s_bnew) memcpy(s_bnew.contents, bold_ptr, b_bytes);
+#endif
     memcpy(s_grid.contents, grid_ptr, grid_bytes);
 }
 
@@ -474,12 +512,21 @@ extern "C" void mtl_upload_flag1(void *flag1_host, int ngridmax)
  * Called before each output dump so m%uold reflects the GPU result.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_transfer_grid_host(void *uold_ptr,
+#ifdef MHD
+                                       void *bold_ptr,
+#endif
                                        int ngridmax, int nvar, int twotondim)
 {
     if (uold_ptr && s_uold) {
         size_t u_bytes = (size_t)ngridmax * nvar * twotondim * sizeof(float);
         memcpy(uold_ptr, s_uold.contents, u_bytes);
     }
+#ifdef MHD
+    if (bold_ptr && s_bold) {
+        size_t b_bytes = (size_t)ngridmax * 6 * twotondim * sizeof(float);
+        memcpy(bold_ptr, s_bold.contents, b_bytes);
+    }
+#endif
 }
 
 /* -----------------------------------------------------------------------
@@ -508,6 +555,15 @@ extern "C" void mtl_device_sync(void)
     id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
     [cmd commit];
     [cmd waitUntilCompleted];
+}
+
+extern "C" int mtl_nsubgrid(void)
+{
+#ifdef NSUBGRID
+    return NSUBGRID;
+#else
+    return 1;
+#endif
 }
 
 
@@ -559,11 +615,22 @@ extern "C" void mtl_set_unew(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+ #ifdef MHD
+    [enc setComputePipelineState:s_pso_mhd_set_unew];
+ #else
     [enc setComputePipelineState:s_pso_set_unew];
+ #endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
+#ifdef MHD
+    [enc setBuffer:s_bold   offset:0 atIndex:2];
+    [enc setBuffer:s_bnew   offset:0 atIndex:3];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:4];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:5];
+#else
     [enc setBytes:&head_idx length:sizeof(int) atIndex:2];
     [enc setBytes:&num_octs length:sizeof(int) atIndex:3];
+#endif
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
     [cmd commit];
@@ -580,11 +647,22 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+ #ifdef MHD
+    [enc setComputePipelineState:s_pso_mhd_set_uold];
+ #else
     [enc setComputePipelineState:s_pso_set_uold];
+ #endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
+#ifdef MHD
+    [enc setBuffer:s_bold   offset:0 atIndex:2];
+    [enc setBuffer:s_bnew   offset:0 atIndex:3];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:4];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:5];
+#else
     [enc setBytes:&head_idx length:sizeof(int) atIndex:2];
     [enc setBytes:&num_octs length:sizeof(int) atIndex:3];
+#endif
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
     [cmd commit];
@@ -604,7 +682,11 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_cmpdt(int head_idx, int num_octs,
                            float dx, float gamma, float smallr, float smallc2,
-                           float courant_factor, float *constant_gravity,
+                           float courant_factor,
+#ifdef MHD
+                           int induction,
+#endif
+                           float *constant_gravity,
                            float *mass, float *ekin, float *eint, float *emag,
                            float *dt)
 {
@@ -626,9 +708,26 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+ #ifdef MHD
+    [enc setComputePipelineState:s_pso_mhd_cmpdt];
+ #else
     [enc setComputePipelineState:s_pso_cmpdt];
+ #endif
     [enc setBuffer:s_grid    offset:0 atIndex:0];
     [enc setBuffer:s_uold    offset:0 atIndex:1];
+#ifdef MHD
+    [enc setBuffer:s_bold    offset:0 atIndex:2];
+    [enc setBuffer:data_buf  offset:0 atIndex:3];
+    [enc setBytes:&head_idx       length:sizeof(int)       atIndex:4];
+    [enc setBytes:&num_octs       length:sizeof(int)       atIndex:5];
+    [enc setBytes:&dx             length:sizeof(float)     atIndex:6];
+    [enc setBytes:&gamma          length:sizeof(float)     atIndex:7];
+    [enc setBytes:&smallr         length:sizeof(float)     atIndex:8];
+    [enc setBytes:&smallc2        length:sizeof(float)     atIndex:9];
+    [enc setBytes:&courant_factor length:sizeof(float)     atIndex:10];
+    [enc setBytes:&induction      length:sizeof(int)       atIndex:11];
+    [enc setBytes:cg              length:3 * sizeof(float) atIndex:12];
+#else
     [enc setBuffer:data_buf  offset:0 atIndex:2];
     [enc setBytes:&head_idx       length:sizeof(int)       atIndex:3];
     [enc setBytes:&num_octs       length:sizeof(int)       atIndex:4];
@@ -639,6 +738,7 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
     [enc setBytes:&courant_factor length:sizeof(float)     atIndex:9];
     [enc setBytes:cg              length:3 * sizeof(float) atIndex:10];
     [enc setBuffer:s_f_grav       offset:0                 atIndex:11];
+#endif
 
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
@@ -661,21 +761,58 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
                              int ilevel, int levelmin, int levelmax,
                              float gamma, float smallr, float smallc2,
-                             float dt, float dx, int slope, int riemann,
+                             float dt, float dx, int slope,
+#ifdef MHD
+                             int slope_mag, float switch_llf_dmin, float switch_llf_pmin,
+                             int induction, float etamag,
+#else
+                             int riemann,
+#endif
                              float *constant_gravity)
 {
     float cg[3] = {constant_gravity[0], constant_gravity[1], constant_gravity[2]};
 
-    /* 64 threads/threadgroup matches CUDA nsubgrid=1 branch */
+#ifdef MHD
+    MTLSize tg_size = {256, 1, 1};
+#else
     MTLSize tg_size   = {64, 1, 1};
+#endif
     MTLSize grid_size = {(NSUInteger)num_subgrids, 1, 1};
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+ #ifdef MHD
+    [enc setComputePipelineState:s_pso_mhd_godunov];
+ #else
     [enc setComputePipelineState:s_pso_godunov];
+ #endif
     [enc setBuffer:s_grid  offset:0 atIndex:0];
     [enc setBuffer:s_uold  offset:0 atIndex:1];
     [enc setBuffer:s_unew  offset:0 atIndex:2];
+#ifdef MHD
+    [enc setBuffer:s_bold  offset:0 atIndex:3];
+    [enc setBuffer:s_bnew  offset:0 atIndex:4];
+    [enc setBuffer:s_father offset:0 atIndex:5];
+    [enc setBuffer:s_nbor  offset:0 atIndex:6];
+    [enc setBytes:&head_idx     length:sizeof(int)       atIndex:7];
+    [enc setBytes:&num_subgrids length:sizeof(int)       atIndex:8];
+    [enc setBytes:&ngridmax    length:sizeof(int)       atIndex:9];
+    [enc setBytes:&ilevel       length:sizeof(int)       atIndex:10];
+    [enc setBytes:&levelmin     length:sizeof(int)       atIndex:11];
+    [enc setBytes:&levelmax     length:sizeof(int)       atIndex:12];
+    [enc setBytes:&gamma        length:sizeof(float)     atIndex:13];
+    [enc setBytes:&smallr       length:sizeof(float)     atIndex:14];
+    [enc setBytes:&smallc2      length:sizeof(float)     atIndex:15];
+    [enc setBytes:&dt           length:sizeof(float)     atIndex:16];
+    [enc setBytes:&dx           length:sizeof(float)     atIndex:17];
+    [enc setBytes:&slope        length:sizeof(int)       atIndex:18];
+    [enc setBytes:&slope_mag    length:sizeof(int)       atIndex:19];
+    [enc setBytes:&switch_llf_dmin length:sizeof(float)  atIndex:20];
+    [enc setBytes:&switch_llf_pmin length:sizeof(float)  atIndex:21];
+    [enc setBytes:&induction    length:sizeof(int)       atIndex:22];
+    [enc setBytes:&etamag       length:sizeof(float)     atIndex:23];
+    [enc setBytes:cg            length:3 * sizeof(float) atIndex:24];
+#else
     [enc setBuffer:s_nbor  offset:0 atIndex:3];
     [enc setBytes:&head_idx     length:sizeof(int)       atIndex:4];
     [enc setBytes:&num_subgrids length:sizeof(int)       atIndex:5];
@@ -693,6 +830,7 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
     [enc setBytes:cg            length:3 * sizeof(float) atIndex:17];
     [enc setBuffer:s_father     offset:0               atIndex:18];
     [enc setBuffer:s_f_grav     offset:0               atIndex:19];
+#endif
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
     [cmd commit];
@@ -762,12 +900,22 @@ extern "C" void mtl_upload(int head_idx, int num_octs,
     [enc setBuffer:s_grid          offset:0 atIndex:0];
     [enc setBuffer:s_father        offset:0 atIndex:1];
     [enc setBuffer:s_uold          offset:0 atIndex:2];
+#ifdef MHD
+    [enc setBuffer:s_bold          offset:0 atIndex:3];
+    [enc setBytes:&head_idx        length:sizeof(int)   atIndex:4];
+    [enc setBytes:&num_octs        length:sizeof(int)   atIndex:5];
+    [enc setBytes:&internal_energy length:sizeof(int)   atIndex:6];
+    [enc setBytes:&gamma           length:sizeof(float) atIndex:7];
+    [enc setBytes:&smallr          length:sizeof(float) atIndex:8];
+    [enc setBytes:&smallc2         length:sizeof(float) atIndex:9];
+#else
     [enc setBytes:&head_idx        length:sizeof(int)   atIndex:3];
     [enc setBytes:&num_octs        length:sizeof(int)   atIndex:4];
     [enc setBytes:&internal_energy length:sizeof(int)   atIndex:5];
     [enc setBytes:&gamma           length:sizeof(float) atIndex:6];
     [enc setBytes:&smallr          length:sizeof(float) atIndex:7];
     [enc setBytes:&smallc2         length:sizeof(float) atIndex:8];
+#endif
     [enc dispatchThreadgroups:MTLSizeMake(num_tg, 1, 1)
         threadsPerThreadgroup:MTLSizeMake(tg_size, 1, 1)];
     [enc endEncoding];
@@ -1171,7 +1319,14 @@ extern "C" int mtl_count_flag1(int head_idx, int num_octs)
 extern "C" void mtl_hydro_flag(int head_idx, int num_octs,
                                 float gamma, float smallr, float smallc2,
                                 float err_grad_d, float err_grad_p,
-                                float floor_d,   float floor_p)
+                                float floor_d,   float floor_p
+#ifdef MHD
+                                , float err_grad_b2, float floor_b2,
+                                float err_grad_A, float floor_A,
+                                float err_grad_B, float floor_B,
+                                float err_grad_C, float floor_C
+#endif
+                                )
 {
     if (num_octs <= 0) return;
     NSUInteger nblk = ((NSUInteger)num_octs + 15) / 16;
@@ -1190,6 +1345,17 @@ extern "C" void mtl_hydro_flag(int head_idx, int num_octs,
     [enc setBytes:&err_grad_p   length:sizeof(float) atIndex:9];
     [enc setBytes:&floor_d      length:sizeof(float) atIndex:10];
     [enc setBytes:&floor_p      length:sizeof(float) atIndex:11];
+#ifdef MHD
+    [enc setBuffer:s_bold       offset:0 atIndex:12];
+    [enc setBytes:&err_grad_b2  length:sizeof(float) atIndex:13];
+    [enc setBytes:&floor_b2     length:sizeof(float) atIndex:14];
+    [enc setBytes:&err_grad_A   length:sizeof(float) atIndex:15];
+    [enc setBytes:&floor_A      length:sizeof(float) atIndex:16];
+    [enc setBytes:&err_grad_B   length:sizeof(float) atIndex:17];
+    [enc setBytes:&floor_B      length:sizeof(float) atIndex:18];
+    [enc setBytes:&err_grad_C   length:sizeof(float) atIndex:19];
+    [enc setBytes:&floor_C      length:sizeof(float) atIndex:20];
+#endif
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{128,1,1}];
     [enc endEncoding];
     [cmd commit];
@@ -1256,6 +1422,22 @@ extern "C" void mtl_enforce_rules(int head_idx, int num_octs, int ngridmax)
     [enc setBytes:&num_octs   length:sizeof(int) atIndex:3];
     [enc setBytes:&ngridmax   length:sizeof(int) atIndex:4];
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg128,1,1}];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+}
+
+extern "C" void mtl_enforce_subgrid(int head_idx, int num_octs)
+{
+    if (num_octs <= 0) return;
+    id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_enforce_subgrid];
+    [enc setBuffer:s_flag1 offset:0 atIndex:0];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:1];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:2];
+    NSUInteger nblk = ((NSUInteger)num_octs + 15) / 16;
+    [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{128,1,1}];
     [enc endEncoding];
     [cmd commit];
     [cmd waitUntilCompleted];
@@ -1339,7 +1521,14 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
                                     float err_grad_d, float err_grad_p,
                                     float floor_d,    float floor_p,
                                     float mass_sph,   float m_refine, float jeans_refine,
-                                    float factG,      float dx_loc)
+                                    float factG,      float dx_loc
+#ifdef MHD
+                                    , float err_grad_b2, float floor_b2,
+                                    float err_grad_A, float floor_A,
+                                    float err_grad_B, float floor_B,
+                                    float err_grad_C, float floor_C
+#endif
+                                    )
 {
     if (num_octs <= 0) return 0;
 
@@ -1362,7 +1551,11 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
           [enc setBuffer:s_flag1      offset:0 atIndex:0];
           [enc setBuffer:s_nref       offset:0 atIndex:1];
           [enc setBuffer:s_uold       offset:0 atIndex:2];
-          [enc setBuffer:nil          offset:0 atIndex:3]; /* bold: nil for MHD=0 */
+#ifdef MHD
+      [enc setBuffer:s_bold       offset:0 atIndex:3];
+#else
+      [enc setBuffer:nil          offset:0 atIndex:3];
+#endif
           [enc setBytes:&head_idx     length:sizeof(int)   atIndex:4];
           [enc setBytes:&num_octs     length:sizeof(int)   atIndex:5];
           [enc setBytes:&gamma        length:sizeof(float) atIndex:6];
@@ -1390,6 +1583,17 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
       [enc setBytes:&err_grad_p   length:sizeof(float) atIndex:9];
       [enc setBytes:&floor_d      length:sizeof(float) atIndex:10];
       [enc setBytes:&floor_p      length:sizeof(float) atIndex:11];
+#ifdef MHD
+      [enc setBuffer:s_bold       offset:0 atIndex:12];
+      [enc setBytes:&err_grad_b2  length:sizeof(float) atIndex:13];
+      [enc setBytes:&floor_b2     length:sizeof(float) atIndex:14];
+      [enc setBytes:&err_grad_A   length:sizeof(float) atIndex:15];
+      [enc setBytes:&floor_A      length:sizeof(float) atIndex:16];
+      [enc setBytes:&err_grad_B   length:sizeof(float) atIndex:17];
+      [enc setBytes:&floor_B      length:sizeof(float) atIndex:18];
+      [enc setBytes:&err_grad_C   length:sizeof(float) atIndex:19];
+      [enc setBytes:&floor_C      length:sizeof(float) atIndex:20];
+#endif
       [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{128,1,1}];
 
       [enc updateFence:s_sort_fence];
@@ -1519,7 +1723,8 @@ extern "C" void mtl_advance_ifree_cache(int new_noct)
 
 /* --- refine_kernel: create child octs for flagged cells ---------------- */
 
-extern "C" void mtl_refine_cells(int head_idx, int num_octs)
+extern "C" void mtl_refine_cells(int head_idx, int num_octs, int hash_size,
+                                  int interpol_var, int interpol_type, float smallr)
 {
     if (num_octs <= 0) return;
     NSUInteger tg = 128, total = (NSUInteger)num_octs * 8;
@@ -1530,12 +1735,32 @@ extern "C" void mtl_refine_cells(int head_idx, int num_octs)
     [enc setBuffer:s_grid      offset:0 atIndex:0];
     [enc setBuffer:s_flag1     offset:0 atIndex:1];
     [enc setBuffer:s_uold      offset:0 atIndex:2];
+#ifdef MHD
+    [enc setBuffer:s_bold      offset:0 atIndex:3];
+    [enc setBuffer:s_ifree_dev offset:0 atIndex:4];
+    [enc setBuffer:s_hash_key  offset:0 atIndex:5];
+    [enc setBuffer:s_hash_val  offset:0 atIndex:6];
+    [enc setBuffer:s_ckey_max_dev offset:0 atIndex:7];
+    [enc setBuffer:s_key_off_dev offset:0 atIndex:8];
+    [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:9];
+    [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:10];
+    [enc setBuffer:s_periodic_dev offset:0 atIndex:11];
+    [enc setBytes:&hash_size length:sizeof(int) atIndex:12];
+    [enc setBytes:&interpol_var length:sizeof(int) atIndex:13];
+    [enc setBytes:&interpol_type length:sizeof(int) atIndex:14];
+    [enc setBytes:&smallr length:sizeof(float) atIndex:15];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:16];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:17];
+#else
     [enc setBuffer:s_ifree_dev offset:0 atIndex:3];
     [enc setBytes:&head_idx length:sizeof(int) atIndex:4];
     [enc setBytes:&num_octs length:sizeof(int) atIndex:5];
+#ifdef GRAV
     [enc setBuffer:s_f_grav    offset:0 atIndex:6];
     [enc setBuffer:s_phi       offset:0 atIndex:7];
     [enc setBuffer:s_phi_old   offset:0 atIndex:8];
+#endif
+#endif
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding];
     [cmd commit];
@@ -1999,9 +2224,17 @@ extern "C" void mtl_sort_gather_hydro(int head_idx, int num_octs)
     [enc setComputePipelineState:s_pso_gather_hydro];
     [enc setBuffer:s_unew        offset:0 atIndex:0];
     [enc setBuffer:s_uold        offset:0 atIndex:1];
+#ifdef MHD
+    [enc setBuffer:s_bnew        offset:0 atIndex:2];
+    [enc setBuffer:s_bold        offset:0 atIndex:3];
+    [enc setBuffer:s_swap_global offset:0 atIndex:4];
+    [enc setBytes:&head_idx length:sizeof(int) atIndex:5];
+    [enc setBytes:&num_octs length:sizeof(int) atIndex:6];
+#else
     [enc setBuffer:s_swap_global offset:0 atIndex:2];
     [enc setBytes:&head_idx length:sizeof(int) atIndex:3];
     [enc setBytes:&num_octs length:sizeof(int) atIndex:4];
+#endif
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding];
     [cmd commit];
@@ -2096,6 +2329,16 @@ extern "C" void mtl_blit_unew_to_uold(int head_idx, int num_octs)
     [blit endEncoding];
     [cmd commit];
     [cmd waitUntilCompleted];
+#ifdef MHD
+    NSUInteger boct = 6 * 8 * sizeof(float);
+    NSUInteger boff = (NSUInteger)(head_idx - 1) * boct;
+    id<MTLCommandBuffer> bcmd = [s_queue commandBuffer];
+    id<MTLBlitCommandEncoder> bblit = [bcmd blitCommandEncoder];
+    [bblit copyFromBuffer:s_bnew sourceOffset:boff toBuffer:s_bold destinationOffset:boff size:(NSUInteger)num_octs * boct];
+    [bblit endEncoding];
+    [bcmd commit];
+    [bcmd waitUntilCompleted];
+#endif
 }
 
 /* --- update_nbor_prefix_kernel: build one nbor column + prefix_sum ----- */
@@ -2152,7 +2395,8 @@ extern "C" void mtl_compute_cache_swap(int head_idx, int num_subgrids)
 extern "C" void mtl_make_cache_octs(int head_idx, int num_subgrids,
                                      int hash_size, int ngridmax,
                                      int ifree_cache, int new_noct,
-                                     int input_ind)
+                                     int input_ind, int interpol_var,
+                                     int interpol_type, float smallr)
 {
     if (new_noct <= 0) return;
     NSUInteger tg = 128, nblk = ((NSUInteger)new_noct + tg - 1) / tg;
@@ -2162,6 +2406,32 @@ extern "C" void mtl_make_cache_octs(int head_idx, int num_subgrids,
     [enc setBuffer:s_grid             offset:0 atIndex:0];
     [enc setBuffer:s_flag1            offset:0 atIndex:1];
     [enc setBuffer:s_uold             offset:0 atIndex:2];
+#ifdef MHD
+    [enc setBuffer:s_bold             offset:0 atIndex:3];
+    [enc setBuffer:s_swap_local       offset:0 atIndex:4];
+    [enc setBuffer:s_father           offset:0 atIndex:5];
+    [enc setBuffer:s_nbor             offset:0 atIndex:6];
+    [enc setBuffer:s_hash_key         offset:0 atIndex:7];
+    [enc setBuffer:s_hash_val         offset:0 atIndex:8];
+    [enc setBuffer:s_ckey_max_dev     offset:0 atIndex:9];
+    [enc setBuffer:s_key_off_dev      offset:0 atIndex:10];
+    [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:11];
+    [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:12];
+    [enc setBuffer:s_periodic_dev     offset:0 atIndex:13];
+    [enc setBytes:&hash_size   length:sizeof(int) atIndex:14];
+    [enc setBytes:&ngridmax    length:sizeof(int) atIndex:15];
+    [enc setBytes:&ifree_cache length:sizeof(int) atIndex:16];
+    [enc setBytes:&new_noct    length:sizeof(int) atIndex:17];
+    [enc setBytes:&input_ind   length:sizeof(int) atIndex:18];
+    [enc setBytes:&interpol_var length:sizeof(int) atIndex:19];
+    [enc setBytes:&interpol_type length:sizeof(int) atIndex:20];
+    [enc setBytes:&smallr      length:sizeof(float) atIndex:21];
+#ifdef GRAV
+    [enc setBuffer:s_f_grav offset:0 atIndex:22];
+    [enc setBuffer:s_phi offset:0 atIndex:23];
+    [enc setBuffer:s_phi_old offset:0 atIndex:24];
+#endif
+#else
     [enc setBuffer:s_swap_local       offset:0 atIndex:3];
     [enc setBuffer:s_father           offset:0 atIndex:4];
     [enc setBuffer:s_nbor             offset:0 atIndex:5];
@@ -2177,9 +2447,12 @@ extern "C" void mtl_make_cache_octs(int head_idx, int num_subgrids,
     [enc setBytes:&ifree_cache length:sizeof(int) atIndex:15];
     [enc setBytes:&new_noct    length:sizeof(int) atIndex:16];
     [enc setBytes:&input_ind   length:sizeof(int) atIndex:17];
+#ifdef GRAV
     [enc setBuffer:s_f_grav    offset:0 atIndex:18];
     [enc setBuffer:s_phi       offset:0 atIndex:19];
     [enc setBuffer:s_phi_old   offset:0 atIndex:20];
+#endif
+#endif
     [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding];
     [cmd commit];
@@ -2255,7 +2528,8 @@ extern "C" int mtl_nbor_scan(int head_idx, int num_subgrids,
  * Uses s_sort_fence for inter-encoder ordering.                           */
 extern "C" void mtl_cache_fill(int head_idx, int num_subgrids,
                                 int hash_size, int input_ind,
-                                int ngridmax, int ifree_cache, int new_noct)
+                                int ngridmax, int ifree_cache, int new_noct,
+                                int interpol_var, int interpol_type, float smallr)
 {
     if (new_noct <= 0) return;
 
@@ -2285,6 +2559,32 @@ extern "C" void mtl_cache_fill(int head_idx, int num_subgrids,
         [enc setBuffer:s_grid             offset:0 atIndex:0];
         [enc setBuffer:s_flag1            offset:0 atIndex:1];
         [enc setBuffer:s_uold             offset:0 atIndex:2];
+#ifdef MHD
+        [enc setBuffer:s_bold             offset:0 atIndex:3];
+        [enc setBuffer:s_swap_local       offset:0 atIndex:4];
+        [enc setBuffer:s_father           offset:0 atIndex:5];
+        [enc setBuffer:s_nbor             offset:0 atIndex:6];
+        [enc setBuffer:s_hash_key         offset:0 atIndex:7];
+        [enc setBuffer:s_hash_val         offset:0 atIndex:8];
+        [enc setBuffer:s_ckey_max_dev     offset:0 atIndex:9];
+        [enc setBuffer:s_key_off_dev      offset:0 atIndex:10];
+        [enc setBuffer:s_box_ckey_min_dev offset:0 atIndex:11];
+        [enc setBuffer:s_box_ckey_max_dev offset:0 atIndex:12];
+        [enc setBuffer:s_periodic_dev     offset:0 atIndex:13];
+        [enc setBytes:&hash_size    length:sizeof(int) atIndex:14];
+        [enc setBytes:&ngridmax     length:sizeof(int) atIndex:15];
+        [enc setBytes:&ifree_cache  length:sizeof(int) atIndex:16];
+        [enc setBytes:&new_noct     length:sizeof(int) atIndex:17];
+        [enc setBytes:&input_ind    length:sizeof(int) atIndex:18];
+        [enc setBytes:&interpol_var length:sizeof(int) atIndex:19];
+        [enc setBytes:&interpol_type length:sizeof(int) atIndex:20];
+        [enc setBytes:&smallr       length:sizeof(float) atIndex:21];
+#ifdef GRAV
+        [enc setBuffer:s_f_grav     offset:0 atIndex:22];
+        [enc setBuffer:s_phi        offset:0 atIndex:23];
+        [enc setBuffer:s_phi_old    offset:0 atIndex:24];
+#endif
+#else
         [enc setBuffer:s_swap_local       offset:0 atIndex:3];
         [enc setBuffer:s_father           offset:0 atIndex:4];
         [enc setBuffer:s_nbor             offset:0 atIndex:5];
@@ -2300,9 +2600,12 @@ extern "C" void mtl_cache_fill(int head_idx, int num_subgrids,
         [enc setBytes:&ifree_cache  length:sizeof(int) atIndex:15];
         [enc setBytes:&new_noct     length:sizeof(int) atIndex:16];
         [enc setBytes:&input_ind    length:sizeof(int) atIndex:17];
+#ifdef GRAV
         [enc setBuffer:s_f_grav     offset:0 atIndex:18];
         [enc setBuffer:s_phi        offset:0 atIndex:19];
         [enc setBuffer:s_phi_old    offset:0 atIndex:20];
+#endif
+#endif
         [enc dispatchThreadgroups:{(NSUInteger)nblk_cache,1,1}
              threadsPerThreadgroup:{128,1,1}];
         [enc updateFence:s_sort_fence];
@@ -3978,4 +4281,3 @@ extern "C" void mtl_cic_part_medium(
     [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
-

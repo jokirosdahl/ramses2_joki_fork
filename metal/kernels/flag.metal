@@ -24,6 +24,10 @@
 #define NVAR 5
 #endif
 
+#ifndef NSUBGRID
+#define NSUBGRID 1
+#endif
+
 #include <metal_stdlib>
 #include "../metal_types.h"
 using namespace metal;
@@ -31,9 +35,12 @@ using namespace metal;
 /* =========================================================================
  * Constants
  * ========================================================================= */
-constant int SUBGRIDSIZE_FL  = 27;   /* (nsubgrid+2)^3, nsubgrid=1   */
-constant int NSUBGRIDP2_FL   = 3;    /* nsubgrid + 2                 */
-constant int NSUBGRIDP2SQ_FL = 9;    /* NSUBGRIDP2^2                 */
+constant int NSUBGRID_FL        = NSUBGRID;
+constant int NSUBGRIDSQ_FL      = NSUBGRID_FL * NSUBGRID_FL;
+constant int NSUBGRIDTONDIM_FL  = NSUBGRIDSQ_FL * NSUBGRID_FL;
+constant int NSUBGRIDP2_FL      = NSUBGRID_FL + 2;
+constant int NSUBGRIDP2SQ_FL    = NSUBGRIDP2_FL * NSUBGRIDP2_FL;
+constant int SUBGRIDSIZE_FL     = NSUBGRIDP2SQ_FL * NSUBGRIDP2_FL;
 constant int FLAG_TG_OCTS    = 16;   /* octs per 2D threadgroup      */
 
 /* =========================================================================
@@ -43,6 +50,19 @@ constant int FLAG_TG_OCTS    = 16;   /* octs per 2D threadgroup      */
  * ========================================================================= */
 inline int nbor_fl(device const int *nb, int sg_1, int ind_1) {
     return nb[(sg_1 - 1) * SUBGRIDSIZE_FL + (ind_1 - 1)];
+}
+
+inline void fl_oct_position(int oct_1, thread int &sg_1,
+                            thread int &i, thread int &j, thread int &k) {
+    sg_1 = (oct_1 - 1) / NSUBGRIDTONDIM_FL + 1;
+    int rank = (oct_1 - 1) - (sg_1 - 1) * NSUBGRIDTONDIM_FL;
+    k = rank / NSUBGRIDSQ_FL;
+    rank -= k * NSUBGRIDSQ_FL;
+    j = rank / NSUBGRID_FL;
+    i = rank - j * NSUBGRID_FL;
+    i++;
+    j++;
+    k++;
 }
 
 /* =========================================================================
@@ -79,6 +99,9 @@ constant int iii_c[8][6] = {
  * ========================================================================= */
 struct fl_conserved_t {
     float density, momentum_x, momentum_y, momentum_z, energy;
+#ifdef MHD
+    float Bx, By, Bz;
+#endif
 };
 struct fl_primitive_t {
     float density, velocity_x, velocity_y, velocity_z, pressure;
@@ -90,7 +113,11 @@ inline float fl_compute_pressure(fl_conserved_t c, float gamma,
     float ke = 0.5f * (c.momentum_x * c.momentum_x +
                        c.momentum_y * c.momentum_y +
                        c.momentum_z * c.momentum_z) / d;
-    return max((gamma - 1.0f) * (c.energy - ke), smallc2 * d);
+    float eint = c.energy - ke;
+#ifdef MHD
+    eint -= 0.5f * (c.Bx * c.Bx + c.By * c.By + c.Bz * c.Bz);
+#endif
+    return max((gamma - 1.0f) * eint, smallc2 * d / gamma);
 }
 
 inline fl_primitive_t fl_c2p(fl_conserved_t c, float gamma,
@@ -121,8 +148,46 @@ inline bool fl_hydro_crit(fl_primitive_t l, fl_primitive_t m, fl_primitive_t r,
     return ok;
 }
 
+#ifdef MHD
+inline bool fl_mhd_component_crit(float vl, float vm, float vr,
+                                  float el, float em, float er,
+                                  float threshold, float floor) {
+    if (threshold < 0.0f) return false;
+    float cl = sqrt(el);
+    float cm = sqrt(em);
+    float cr = sqrt(er);
+    float left = abs((vm - vl) / (cm + cl + floor));
+    float right = abs((vr - vm) / (cr + cm + floor));
+    return 2.0f * max(left, right) > threshold;
+}
+
+inline bool fl_hydro_crit_mhd(float3 l, float3 m, float3 r,
+                              float eg_b2, float fl_b2,
+                              float eg_A, float fl_A,
+                              float eg_B, float fl_B,
+                              float eg_C, float fl_C) {
+    float el = 0.5f * dot(l, l);
+    float em = 0.5f * dot(m, m);
+    float er = 0.5f * dot(r, r);
+    bool ok = false;
+    if (eg_b2 >= 0.0f) {
+        float left = abs((em - el) / (em + el + fl_b2));
+        float right = abs((er - em) / (er + em + fl_b2));
+        ok = 2.0f * max(left, right) > eg_b2;
+    }
+    ok = ok || fl_mhd_component_crit(l.x, m.x, r.x, el, em, er, eg_A, fl_A);
+    ok = ok || fl_mhd_component_crit(l.y, m.y, r.y, el, em, er, eg_B, fl_B);
+    ok = ok || fl_mhd_component_crit(l.z, m.z, r.z, el, em, er, eg_C, fl_C);
+    return ok;
+}
+#endif
+
 /* Helper: load conserved state from uold buffer (column-major layout). */
-inline fl_conserved_t fl_load(device const float *uold, int cell_0, int oct_0) {
+inline fl_conserved_t fl_load(device const float *uold,
+#ifdef MHD
+                              device const float *bold,
+#endif
+                              int cell_0, int oct_0) {
     int base = cell_0 + 8 * (NVAR) * oct_0;
     fl_conserved_t c;
     c.density    = uold[base];
@@ -130,6 +195,12 @@ inline fl_conserved_t fl_load(device const float *uold, int cell_0, int oct_0) {
     c.momentum_y = uold[base + 16];
     c.momentum_z = uold[base + 24];
     c.energy     = uold[base + 32];
+#ifdef MHD
+    int bbase = cell_0 + 48 * oct_0;
+    c.Bx = 0.5f * (bold[bbase] + bold[bbase + 24]);
+    c.By = 0.5f * (bold[bbase + 8] + bold[bbase + 32]);
+    c.Bz = 0.5f * (bold[bbase + 16] + bold[bbase + 40]);
+#endif
     return c;
 }
 
@@ -258,6 +329,17 @@ kernel void hydro_flag_kernel(
     constant float      &err_grad_p [[buffer(9)]],
     constant float      &floor_d    [[buffer(10)]],
     constant float      &floor_p    [[buffer(11)]],
+#ifdef MHD
+    device const float  *bold        [[buffer(12)]],
+    constant float      &err_grad_b2 [[buffer(13)]],
+    constant float      &floor_b2    [[buffer(14)]],
+    constant float      &err_grad_A  [[buffer(15)]],
+    constant float      &floor_A     [[buffer(16)]],
+    constant float      &err_grad_B  [[buffer(17)]],
+    constant float      &floor_B     [[buffer(18)]],
+    constant float      &err_grad_C  [[buffer(19)]],
+    constant float      &floor_C     [[buffer(20)]],
+#endif
     uint tid [[thread_position_in_threadgroup]],
     uint bid [[threadgroup_position_in_grid]])
 {
@@ -265,12 +347,17 @@ kernel void hydro_flag_kernel(
     uint oct_off = bid * (uint)FLAG_TG_OCTS + tid / 8u;
     if (int(oct_off) >= num_octs) return;
 
-    /* sg_1 = 1-based subgrid index; for nsubgrid=1 this is the input oct */
-    int sg_1      = head_idx + int(oct_off);   /* 1-based */
-    int oct_abs_0 = nbor_fl(nbor, sg_1, 14) - 1;  /* true oct, 0-based */
+    int sg_1, i, j, k;
+    fl_oct_position(head_idx + int(oct_off), sg_1, i, j, k);
+    int ind_mid = 1 + i + NSUBGRIDP2_FL * j + NSUBGRIDP2SQ_FL * k;
+    int oct_abs_0 = nbor_fl(nbor, sg_1, ind_mid) - 1;
     if (oct_abs_0 < 0) return;
 
+#ifdef MHD
+    fl_conserved_t cm = fl_load(uold, bold, int(cell_0), oct_abs_0);
+#else
     fl_conserved_t cm = fl_load(uold, int(cell_0), oct_abs_0);
+#endif
     fl_primitive_t pm = fl_c2p(cm, gamma, smallr, smallc2);
     bool ok = false;
 
@@ -292,9 +379,8 @@ kernel void hydro_flag_kernel(
             kn_r = iii_c[cell_0][idir_r];
         }
 
-        /* nsubgrid=1 → i=j=k=1 (center of 3×3×3 subgrid) */
-        int ind_l = 1 + (1 + in_l) + NSUBGRIDP2_FL * (1 + jn_l) + NSUBGRIDP2SQ_FL * (1 + kn_l);
-        int ind_r = 1 + (1 + in_r) + NSUBGRIDP2_FL * (1 + jn_r) + NSUBGRIDP2SQ_FL * (1 + kn_r);
+        int ind_l = 1 + (i + in_l) + NSUBGRIDP2_FL * (j + jn_l) + NSUBGRIDP2SQ_FL * (k + kn_l);
+        int ind_r = 1 + (i + in_r) + NSUBGRIDP2_FL * (j + jn_r) + NSUBGRIDP2SQ_FL * (k + kn_r);
 
         int src_l_1 = nbor_fl(nbor, sg_1, ind_l);
         int src_r_1 = nbor_fl(nbor, sg_1, ind_r);
@@ -302,13 +388,27 @@ kernel void hydro_flag_kernel(
         int ic_l = hhh_c[cell_0][idir_l];
         int ic_r = hhh_c[cell_0][idir_r];
 
+#ifdef MHD
+        fl_conserved_t cl = (src_l_1 > 0) ? fl_load(uold, bold, ic_l, src_l_1 - 1) : cm;
+        fl_conserved_t cr = (src_r_1 > 0) ? fl_load(uold, bold, ic_r, src_r_1 - 1) : cm;
+#else
         fl_conserved_t cl = (src_l_1 > 0) ? fl_load(uold, ic_l, src_l_1 - 1) : cm;
         fl_conserved_t cr = (src_r_1 > 0) ? fl_load(uold, ic_r, src_r_1 - 1) : cm;
+#endif
 
         fl_primitive_t pl = fl_c2p(cl, gamma, smallr, smallc2);
         fl_primitive_t pr = fl_c2p(cr, gamma, smallr, smallc2);
 
         ok = ok || fl_hydro_crit(pl, pm, pr, err_grad_d, floor_d, err_grad_p, floor_p);
+#ifdef MHD
+        ok = ok || fl_hydro_crit_mhd(float3(cl.Bx, cl.By, cl.Bz),
+                                     float3(cm.Bx, cm.By, cm.Bz),
+                                     float3(cr.Bx, cr.By, cr.Bz),
+                                     err_grad_b2, floor_b2,
+                                     err_grad_A, floor_A,
+                                     err_grad_B, floor_B,
+                                     err_grad_C, floor_C);
+#endif
     }
 
     if (ok) flag1[cell_0 + 8u * uint(oct_abs_0)] = 1;
@@ -333,8 +433,10 @@ kernel void count_neighbors_kernel(
     uint oct_off = bid * (uint)FLAG_TG_OCTS + tid / 8u;
     if (int(oct_off) >= num_octs) return;
 
-    int sg_1      = head_idx + int(oct_off);
-    int oct_abs_0 = nbor_fl(nbor, sg_1, 14) - 1;
+    int sg_1, i, j, k;
+    fl_oct_position(head_idx + int(oct_off), sg_1, i, j, k);
+    int ind_mid = 1 + i + NSUBGRIDP2_FL * j + NSUBGRIDP2SQ_FL * k;
+    int oct_abs_0 = nbor_fl(nbor, sg_1, ind_mid) - 1;
     if (oct_abs_0 < 0) return;
 
     int count = 0;
@@ -345,7 +447,7 @@ kernel void count_neighbors_kernel(
         else if (idir < 4) jn = iii_c[cell_0][idir];
         else               kn = iii_c[cell_0][idir];
 
-        int ind   = 1 + (1 + in) + NSUBGRIDP2_FL * (1 + jn) + NSUBGRIDP2SQ_FL * (1 + kn);
+        int ind   = 1 + (i + in) + NSUBGRIDP2_FL * (j + jn) + NSUBGRIDP2SQ_FL * (k + kn);
         int src_1 = nbor_fl(nbor, sg_1, ind);
         if (src_1 > 0) count += flag1[ic + 8 * (src_1 - 1)];
     }
@@ -381,6 +483,21 @@ kernel void flag_count_kernel(
     flag2[idx] = f2;
 }
 
+kernel void enforce_subgrid_kernel(
+    device int        *flag1    [[buffer(0)]],
+    constant int      &head_idx [[buffer(1)]],
+    constant int      &num_octs [[buffer(2)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (int(gid) >= num_octs) return;
+    int oct_abs_0 = head_idx - 1 + int(gid);
+    bool ok = false;
+    for (int ic = 0; ic < 8; ic++) ok = ok || flag1[ic + 8 * oct_abs_0] == 1;
+    if (ok) {
+        for (int ic = 0; ic < 8; ic++) flag1[ic + 8 * oct_abs_0] = 1;
+    }
+}
+
 /* =========================================================================
  * enforce_rules_kernel — clear flag1 for an oct if any of its 27 subgrid
  * neighbour slots is missing (0) or in the ghost cache (> ngridmax).
@@ -397,17 +514,19 @@ kernel void enforce_rules_kernel(
 {
     if (int(gid) >= num_octs) return;
 
-    int sg_1      = head_idx + int(gid);           /* 1-based subgrid */
-    int oct_abs_0 = nbor_fl(nbor, sg_1, 14) - 1;  /* true oct, 0-based */
+    int sg_1, i, j, k;
+    fl_oct_position(head_idx + int(gid), sg_1, i, j, k);
+    int ind_mid = 1 + i + NSUBGRIDP2_FL * j + NSUBGRIDP2SQ_FL * k;
+    int oct_abs_0 = nbor_fl(nbor, sg_1, ind_mid) - 1;
     if (oct_abs_0 < 0) return;
 
     bool ok = false;
-    for (int kn = 0; kn <= 2; kn++) {
-        for (int jn = 0; jn <= 2; jn++) {
-            for (int in = 0; in <= 2; in++) {
-                /* ind_0 in [0..26]; same as ind_1 - 1 */
-                int ind_0  = in + NSUBGRIDP2_FL * jn + NSUBGRIDP2SQ_FL * kn;
-                int nb_val = nbor[(sg_1 - 1) * SUBGRIDSIZE_FL + ind_0];
+    for (int kn = -1; kn <= 1; kn++) {
+        for (int jn = -1; jn <= 1; jn++) {
+            for (int in = -1; in <= 1; in++) {
+                int ind = 1 + (i + in) + NSUBGRIDP2_FL * (j + jn) +
+                          NSUBGRIDP2SQ_FL * (k + kn);
+                int nb_val = nbor_fl(nbor, sg_1, ind);
                 ok = ok || (nb_val == 0) || (nb_val > ngridmax);
             }
         }

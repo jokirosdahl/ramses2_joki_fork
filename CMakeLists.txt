@@ -90,6 +90,9 @@ option(PAPER        "Enable PAPER timing mode (NVHPC only)"        OFF)
 option(CUB_SORT_PART   "Use CUB radix sort for particles (NVHPC)"  ON)
 option(CUB_SORT_REFINE "Use CUB radix sort for refine (NVHPC)"     ON)
 option(CUB_SCAN_REFINE "Use CUB inclusive scan for refine (NVHPC)" ON)
+option(HYDRO_FASTMATH "Use fast FP32 math in the Metal hydro kernels" OFF)
+set(METAL_NSUBGRID AUTO CACHE STRING "Metal subgrid size (AUTO, 1, or 2)")
+set_property(CACHE METAL_NSUBGRID PROPERTY STRINGS AUTO 1 2)
 
 set(CUDA_ARCH "sm_80" CACHE STRING "CUDA target architecture (e.g. sm_80, sm_90)")
 
@@ -575,6 +578,26 @@ if(COMPILER STREQUAL "METAL")
         metal/metal_interface.f90
         metal/metal_runner.f90)
 
+    if(METAL_NSUBGRID STREQUAL "AUTO")
+        if(MHD)
+            set(_metal_nsubgrid 2)
+        else()
+            set(_metal_nsubgrid 1)
+        endif()
+    else()
+        set(_metal_nsubgrid ${METAL_NSUBGRID})
+    endif()
+    if(NOT _metal_nsubgrid STREQUAL "1" AND NOT _metal_nsubgrid STREQUAL "2")
+        message(FATAL_ERROR "METAL_NSUBGRID must be AUTO, 1, or 2")
+    endif()
+    if(NOT MHD AND NOT _metal_nsubgrid STREQUAL "1")
+        message(FATAL_ERROR "Metal hydro requires METAL_NSUBGRID=1")
+    endif()
+    set(_metal_bridge_flags -DNSUBGRID=${_metal_nsubgrid})
+    if(MHD)
+        list(APPEND _metal_bridge_flags -DMHD)
+    endif()
+
     # ObjC++ bridge: compiled explicitly with xcrun clang++, same pattern as
     # the CUB wrappers in the NVHPC block — avoids relying on CMake's CXX
     # compiler detection (which may pick g++ instead of clang++ on macOS).
@@ -583,6 +606,7 @@ if(COMPILER STREQUAL "METAL")
         OUTPUT  ${_metal_bridge_o}
         COMMAND xcrun clang++ -std=c++17 -ObjC++ -fobjc-arc -O2
                 -I${CMAKE_SOURCE_DIR}/metal
+                ${_metal_bridge_flags}
                 -c ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
                 -o ${_metal_bridge_o}
         DEPENDS ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
@@ -615,10 +639,26 @@ if(COMPILER STREQUAL "METAL")
         list(APPEND _metalflags -gline-tables-only -frecord-sources)
     endif()
 
-    foreach(_kernel hydro refine flag scan rho mg cooling part)
+    set(_metal_kernels hydro refine flag scan rho mg cooling part)
+    if(MHD)
+        list(APPEND _metal_kernels mhd_uct)
+        set(_metal_hydro_kernel mhd_uct)
+    else()
+        set(_metal_hydro_kernel hydro)
+    endif()
+    set(_metal_air)
+    foreach(_kernel IN LISTS _metal_kernels)
+        set(_kernel_flags)
+        if(_kernel STREQUAL "refine" OR _kernel STREQUAL "flag" OR _kernel STREQUAL "mhd_uct")
+            list(APPEND _kernel_flags -DNSUBGRID=${_metal_nsubgrid})
+        endif()
+        if("${_kernel}" STREQUAL "${_metal_hydro_kernel}" AND HYDRO_FASTMATH)
+            list(APPEND _kernel_flags -ffast-math -fmetal-math-mode=fast -fmetal-math-fp32-functions=fast)
+        endif()
+        list(APPEND _metal_air ${CMAKE_BINARY_DIR}/${_kernel}.air)
         add_custom_command(
             OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
-            COMMAND ${_metalc} ${_metalflags}
+            COMMAND ${_metalc} ${_metalflags} ${_kernel_flags}
                     -c ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
                     -o ${CMAKE_BINARY_DIR}/${_kernel}.air
             DEPENDS ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
@@ -631,24 +671,9 @@ if(COMPILER STREQUAL "METAL")
 
     add_custom_command(
         OUTPUT  ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
-        COMMAND ${_metallib}
-                ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/refine.air
-                ${CMAKE_BINARY_DIR}/flag.air
-                ${CMAKE_BINARY_DIR}/scan.air
-                ${CMAKE_BINARY_DIR}/rho.air
-                ${CMAKE_BINARY_DIR}/mg.air
-                ${CMAKE_BINARY_DIR}/cooling.air
-                ${CMAKE_BINARY_DIR}/part.air
+        COMMAND ${_metallib} ${_metal_air}
                 -o ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
-        DEPENDS ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/refine.air
-                ${CMAKE_BINARY_DIR}/flag.air
-                ${CMAKE_BINARY_DIR}/scan.air
-                ${CMAKE_BINARY_DIR}/rho.air
-                ${CMAKE_BINARY_DIR}/mg.air
-                ${CMAKE_BINARY_DIR}/cooling.air
-                ${CMAKE_BINARY_DIR}/part.air
+        DEPENDS ${_metal_air}
         COMMENT "Linking ramses_kernels.metallib"
         VERBATIM
     )

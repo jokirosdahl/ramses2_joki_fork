@@ -1122,12 +1122,22 @@ kernel void upload_kernel(
     device const oct_t  *grid             [[buffer(0)]],
     device const int    *father           [[buffer(1)]],
     device float        *uold             [[buffer(2)]],
+#ifdef MHD
+    device float        *bold             [[buffer(3)]],
+    constant int        &head_idx         [[buffer(4)]],
+    constant int        &num_octs         [[buffer(5)]],
+    constant int        &internal_energy  [[buffer(6)]],
+    constant float      &gamma            [[buffer(7)]],
+    constant float      &smallr           [[buffer(8)]],
+    constant float      &smallc2          [[buffer(9)]],
+#else
     constant int        &head_idx         [[buffer(3)]],
     constant int        &num_octs         [[buffer(4)]],
     constant int        &internal_energy  [[buffer(5)]],
     constant float      &gamma            [[buffer(6)]],
     constant float      &smallr           [[buffer(7)]],
     constant float      &smallc2          [[buffer(8)]],
+#endif
     uint tid [[thread_position_in_grid]])
 {
     if ((int)tid >= num_octs) return;
@@ -1149,6 +1159,13 @@ kernel void upload_kernel(
             avg += u_get(uold, oct_idx, ivar, ind);
         u_set(uold, father_idx, ivar, cell_idx, avg * inv8);
     }
+#ifdef MHD
+    for (int ivar = 1; ivar <= 6; ivar++) {
+        float avg = 0.0f;
+        for (int ind = 1; ind <= 8; ind++) avg += bold[(oct_idx - 1) * 48 + (ivar - 1) * 8 + ind - 1];
+        bold[(father_idx - 1) * 48 + (ivar - 1) * 8 + cell_idx - 1] = avg * inv8;
+    }
+#endif
 
     /* Non-conservative upload: average internal energy, restore total */
     if (internal_energy != 0) {
@@ -1161,7 +1178,16 @@ kernel void upload_kernel(
             float mz   = u_get(uold, oct_idx, 4, ind);
             float etot = u_get(uold, oct_idx, 5, ind);
             float ekin = 0.5f * (mx*mx + my*my + mz*mz) / dens;
+#ifdef MHD
+            float eb = 0.0f;
+            for (int idim = 0; idim < 3; idim++) {
+                float b = 0.5f * (bold[(oct_idx - 1) * 48 + idim * 8 + ind - 1] + bold[(oct_idx - 1) * 48 + (idim + 3) * 8 + ind - 1]);
+                eb += 0.5f * b * b;
+            }
+            eint_sum += max(etot - ekin - eb, smalle * dens);
+#else
             eint_sum += max(etot - ekin, smalle * dens);
+#endif
         }
         /* Recompute parent kinetic energy from averaged parent momenta */
         float dens = max(u_get(uold, father_idx, 1, cell_idx), smallr);
@@ -1169,7 +1195,16 @@ kernel void upload_kernel(
         float my   = u_get(uold, father_idx, 3, cell_idx);
         float mz   = u_get(uold, father_idx, 4, cell_idx);
         float ekin = 0.5f * (mx*mx + my*my + mz*mz) / dens;
+#ifdef MHD
+        float eb = 0.0f;
+        for (int idim = 0; idim < 3; idim++) {
+            float b = 0.5f * (bold[(father_idx - 1) * 48 + idim * 8 + cell_idx - 1] + bold[(father_idx - 1) * 48 + (idim + 3) * 8 + cell_idx - 1]);
+            eb += 0.5f * b * b;
+        }
+        u_set(uold, father_idx, 5, cell_idx, eint_sum * inv8 + ekin + eb);
+#else
         u_set(uold, father_idx, 5, cell_idx, eint_sum * inv8 + ekin);
+#endif
     }
 }
 

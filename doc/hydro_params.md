@@ -8,7 +8,7 @@ This namelist is called &HYDRO_PARAMS, and is used to specify runtime parameters
 | `constant_gravity=0.0`|  `Real array` | 3 components of the constant gravitational acceleration in code units in case `poisson=.false.` |
 | `smallr=1d-10 `      |  `Real`    | Minimum density to prevent floating exceptions |
 | `smallc=1d-10 `      |  `Real`    | Minimum sound speed to prevent floating exceptions |
-| `riemann=’llf’`      |  `Character LEN=20`| Name of the 1D Riemann solver. For the hydro solver (`MHD=0`), possible choices are `llf`, `hll` or `hllc`. For the MHD solver (`MHD=1`), possible choices are `llf`, `hll`, `roe`, `hlld` and `upwind`. |
+| `riemann=’llf’`      |  `Character LEN=20`| Name of the 1D Riemann solver. For the hydro solver (`MHD=0`), possible choices are `llf`, `hll` or `hllc`. For the MHD solver (`MHD=1`), possible choices are `llf`, `hll`, `roe`, `hlld`, `upwind`, and `uct-hlld` on Metal. |
 | `riemann2d=’none’`   |  `Characher LEN=20`| Name of the 2D Riemann solver for the induction equation (`MHD=1` only). Possible choices are `llf`, `hll`, `roe`,`hlla`, `hllf`, `hlld` and `upwind`. If not set or set to `none`, the code will use the same as the 1D Riemann solver. |
 | `switch_llf_dmin=-1` |  `Real`| Minimum density in code units below which the adopted Riemann solvers (1D and 2D) will switch to the more diffusive LLF Riemann solver. |
 | `switch_llf_pmin=-1` |  `Real`| Minimum pressure in code units below which the adopted Riemann solvers (1D and 2D) will switch to the more diffusive LLF Riemann solver. |
