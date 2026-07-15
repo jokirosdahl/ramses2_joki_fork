@@ -161,7 +161,7 @@ subroutine gpu_to_host_part(pst)
      call nvtxEndRange()
   endif
 
-  if (.not. allocated(star_xp)) then
+  if (allocated(star_xp)) then
      call nvtxStartRange("Copy star from device to host", color=5)!red
      pst%s%star%xp     = star_xp
      pst%s%star%vp     = star_vp
