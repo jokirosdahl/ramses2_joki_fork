@@ -1293,6 +1293,7 @@ kernel void make_cache_octs_kernel(
             }
         }
 #endif
+#endif
     }
 }
 
