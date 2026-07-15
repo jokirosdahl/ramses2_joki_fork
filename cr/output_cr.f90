@@ -38,7 +38,7 @@ end subroutine r_output_cr
 !###################################################
 subroutine output_cr(s,filename)
   use amr_parameters, only: ndim,twotondim, flen
-  use cr_parameters, only: ncrvar, ncrgrp
+  use cr_parameters, only: ncruvar, ncrgrp
   use ramses_commons, only: ramses_t, open_file, close_file
   implicit none
   type(ramses_t)::s
@@ -48,9 +48,9 @@ subroutine output_cr(s,filename)
   !-----------------------------------
   integer::ilevel,igrid,ilun
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
-  real(kind=4),dimension(1:twotondim,1:ncrvar)::qout
+  real(kind=4),dimension(1:twotondim,1:ncruvar)::qout
 #ifdef CRS
-  real(kind=8),dimension(1:twotondim,1:ncrvar)::cruold
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold
 #endif
   logical::overflow_reported=.false.
 
@@ -81,7 +81,7 @@ end subroutine output_cr
 !###################################################
 subroutine backup_cr(r,g,m,mdl,filename)
   use amr_parameters, only: ndim,flen
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: run_t,global_t,mesh_t
   use mdl_module
   implicit none
@@ -105,7 +105,7 @@ subroutine backup_cr(r,g,m,mdl,filename)
   end if
   open(unit=ilun,file=fileloc,access="stream",action="write",form='unformatted')
   write(ilun)ndim
-  write(ilun)ncrvar
+  write(ilun)ncruvar
   write(ilun)r%levelmin
   write(ilun)r%nlevelmax
   do ilevel=r%levelmin,r%nlevelmax
@@ -166,7 +166,7 @@ subroutine output_crinfo(r, g, filename)
 !------------------------------------------------------------------------
   use amr_parameters, only: flen
   use amr_commons, only: run_t, global_t
-  use cr_parameters, only: ncrvar, ncrgrp
+  use cr_parameters, only: ncruvar, ncrgrp
   use constants, only: c_cgs
   implicit none
   type(run_t)::r
@@ -184,7 +184,7 @@ subroutine output_crinfo(r, g, filename)
   open(unit=ilun,file=fileloc,form='formatted')
 
   ! Write run parameters
-  write(ilun,'("ncrvar       = ", I11)') ncrvar
+  write(ilun,'("ncruvar       = ", I11)') ncruvar
   write(ilun,'("ncrgrp       = ", I11)') ncrgrp
 
 

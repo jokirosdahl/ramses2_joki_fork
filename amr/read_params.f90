@@ -284,7 +284,7 @@ subroutine m_read_params(pst)
   ! Refinement parameters for cosmic rays
 #ifdef CRS
   real(kind=8)::cr_err_grad_ecr(ncrgrp)=-1 ! CR density gradient for refinement
-  real(kind=8)::cr_floor_ecr(nrtgrp)=1d-10 ! CR density floor for refinement
+  real(kind=8)::cr_floor_ecr(ncrgrp)=1d-10 ! CR density floor for refinement
 #endif
 
   ! Hydro solver parameters

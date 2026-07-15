@@ -40,7 +40,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
   use amr_parameters, only: ndim, twotondim, nvector
   use hydro_parameters, only: nvar, nener
   use rt_parameters, only: nrtvar, nrtgrp
-  use cr_parameters, only: ncrvar, ncrgrp
+  use cr_parameters, only: ncruvar, ncrgrp
   use amr_commons, only: run_t, global_t, mesh_t, oct
   type(run_t)::r
   type(global_t)::g
@@ -86,7 +86,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
   real(kind=8),dimension(1:nvector)::phi
   real(kind=8)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
 #ifdef CRS
-  real(kind=8),dimension(1:nvector,1:ncrvar)::cruu
+  real(kind=8),dimension(1:nvector,1:ncruvar)::cruu
 #endif
 
   type = r%bound_type(ibound)
@@ -157,9 +157,9 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #ifdef CRS
-        do ivar=1,ncrvar
+        do ivar=1,ncruvar
            reverse=1
-           if(mod(ivar-1, ndim+1) == dir) reverse=-1
+           if((mod(ivar-1, ndim)+1) == dir) reverse=-1
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind1_right(ind,dir),ivar,igrid_ref)*reverse
            end do
@@ -203,9 +203,9 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #ifdef CRS
-        do ivar=1,ncrvar
+        do ivar=1,ncruvar
            reverse=1
-           if(mod(ivar-1, ndim+1) == dir) reverse=-1
+           if((mod(ivar-1, ndim)+1) == dir) reverse=-1
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind1_left(ind,dir),ivar,igrid_ref)*reverse
            end do
@@ -250,7 +250,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #ifdef CRS
-        do ivar=1,ncrvar
+        do ivar=1,ncruvar
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind2_right(ind,dir),ivar,igrid_ref)
            end do
@@ -290,7 +290,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #ifdef CRS
-        do ivar=1,ncrvar
+        do ivar=1,ncruvar
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind2_left(ind,dir),ivar,igrid_ref)
            end do
@@ -442,7 +442,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         ! Call initial condition routine
         call cr_boundana(r,g,xx,cruu,dx,ibound,1)
         ! Scatter variables to main memory
-        do ivar=1,ncrvar
+        do ivar=1,ncruvar
            m%cruold(ind,ivar,igrid)=cruu(1,ivar)
         end do
      end do

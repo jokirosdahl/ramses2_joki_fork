@@ -29,7 +29,7 @@ end subroutine r_cr_input_condinit
 !#########################################################################
 subroutine cr_input_condinit(r,g,m,ilevel)
   use amr_parameters, only: ndim, twotondim, nvector
-  use cr_parameters,only: ncrvar
+  use cr_parameters,only: ncrvar, ncrgrp
   use amr_commons, only: run_t, global_t, mesh_t
   implicit none
   type(run_t)::r
@@ -38,7 +38,7 @@ subroutine cr_input_condinit(r,g,m,ilevel)
   integer::ilevel
   
   ! Local variables
-  integer::igrid,ngrid,ind,idim,nstride,i,ivar
+  integer::igrid,ngrid,ind,idim,nstride,i,ivar,igrp
   !integer::l
   real(kind=8),dimension(1:nvector,1:ndim)::xx
   real(kind=8),dimension(1:nvector,1:ncrvar)::qq
@@ -65,10 +65,12 @@ subroutine cr_input_condinit(r,g,m,ilevel)
         ! Call initial condition routine
         call cr_condinit(r,g,xx,qq,dx,ngrid)
         ! Scatter primitive variables to main memory
-        do ivar=1,ncrvar
+        do igrp=1,ncrgrp
            do i=1,ngrid
+              m%uold(ind,r%iEcr+igrp-1,igrid+i-1) = qq(i,1+(igrp-1)*(ndim+1))
 #ifdef CRS
-              m%cruold(ind,ivar,igrid+i-1)=qq(i,ivar)
+              m%cruold(ind, 1+(igrp-1)*ndim:igrp*ndim, igrid+i-1) = &
+                & qq(i, 2+(igrp-1)*(ndim+1):igrp*(ndim+1))
 #endif
            end do
         end do
@@ -209,7 +211,7 @@ end subroutine r_cr_input_source_regions
 !#########################################################################
 subroutine cr_input_source_regions(r,g,m,ilevel)
   use amr_parameters, only: ndim, twotondim, nvector
-  use cr_parameters,only: ncrvar
+  use cr_parameters,only: ncrvar, ncrgrp
   use amr_commons, only: run_t, global_t, mesh_t
   implicit none
   type(run_t)::r
@@ -218,7 +220,7 @@ subroutine cr_input_source_regions(r,g,m,ilevel)
   integer::ilevel
   
   ! Local variables
-  integer::igrid,ngrid,ind,idim,nstride,i,ivar
+  integer::igrid,ngrid,ind,idim,nstride,i,igrp
   !integer::l
   real(kind=8),dimension(1:nvector,1:ndim)::xx
   real(kind=8),dimension(1:nvector,1:ncrvar)::qq
@@ -244,10 +246,13 @@ subroutine cr_input_source_regions(r,g,m,ilevel)
         end do
 
         ! Add what is already in the grid
-        do ivar=1,ncrvar
+        do igrp=1,ncrgrp
            do i=1,ngrid
+              qq(i,1+(igrp-1)*(ndim+1)) = m%unew(ind,r%iEcr+igrp-1,igrid+i-1)
 #ifdef CRS
-              qq(i,ivar) = m%crunew(ind,ivar,igrid+i-1)
+              do idim=1,ndim
+                qq(i,1+idim+(igrp-1)*(ndim+1)) = m%crunew(ind,idim+(igrp-1)*ndim,igrid+i-1)
+              end do
 #endif
            end do
         end do
@@ -256,10 +261,13 @@ subroutine cr_input_source_regions(r,g,m,ilevel)
         call cr_source_regions_sweep(r,g,xx,qq,dx,g%dtnew(ilevel),ngrid)
 
         ! Scatter primitive variables to main memory
-        do ivar=1,ncrvar
+        do igrp=1,ncrgrp
            do i=1,ngrid
+              m%unew(ind,r%iEcr+igrp-1,igrid+i-1)=qq(i,1+(igrp-1)*(ndim+1))
 #ifdef CRS
-              m%crunew(ind,ivar,igrid+i-1)=qq(i,ivar)
+              do idim=1,ndim
+                m%crunew(ind,idim+(igrp-1)*ndim,igrid+i-1)=qq(i,1+idim+(igrp-1)*(ndim+1))
+              end do
 #endif
            end do
         end do

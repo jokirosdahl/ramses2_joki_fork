@@ -342,10 +342,10 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !-----------
   if(r%hydro)then
 
-     if(.not.r%static_gas)then
+     !if(.not.r%static_gas)then
         ! Hyperbolic solver
         call m_timer('hydro - godunov','start')
-        call r_godunov_fine(pst,ilevel,1)
+        if(.not. r%static_gas) call r_godunov_fine(pst,ilevel,1)
 
         ! Add gravity source terms to unew with half time step
         if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
@@ -361,6 +361,16 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         call m_timer('hydro - set uold','start')
         call r_set_uold(pst,ilevel,1)
 
+        !------------------------
+        ! Cosmic rays step
+        !------------------------
+        if(r%cr)then
+          if(r%cr_advect)then
+            call m_timer('cosmic rays','start')
+            call m_cr_step(pst,ilevel)
+          endif
+        endif
+
         ! Add gravity source terms to uold with half time step
         ! to complete the time step with old force (will be removed later)
         if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
@@ -373,7 +383,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
            call m_timer('hydro - turbulence','start')
            call m_turb_hydro(pst,ilevel,dble(g%dtnew(ilevel)))
         endif
-     endif
+     !endif
 
      ! Restriction operator
      if(ilevel<r%nlevelmax)then
@@ -391,16 +401,6 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         call m_rt_step(pst,ilevel)
      else
         if(r%hydro .and. (r%neq_chem.or.r%cooling_ism.or.r%cooling.or.r%isothermal))call r_cooling_fine(pst,ilevel,1)
-     endif
-  endif
-
-  !------------------------
-  ! Cosmic rays step
-  !------------------------
-  if(r%cr)then
-     if(r%cr_advect)then
-        call m_timer('cosmic rays','start')
-        call m_cr_step(pst,ilevel)
      endif
   endif
 

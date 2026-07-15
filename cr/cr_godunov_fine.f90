@@ -101,7 +101,7 @@ recursive subroutine r_set_crunew(pst,ilevel,input_size)
      call r_set_crunew(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call set_crunew(pst%s%m,ilevel)
+     call set_crunew(pst%s%r, pst%s%m,ilevel)
   endif
 
 end subroutine r_set_crunew
@@ -109,10 +109,11 @@ end subroutine r_set_crunew
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine set_crunew(m,ilevel)
-  use amr_parameters, only: ndim, twotondim
-  use amr_commons, only: run_t, global_t, mesh_t
+subroutine set_crunew(r,m,ilevel)
+  use amr_commons, only: run_t, mesh_t
+  use cr_parameters, only: ncrgrp
   implicit none
+  type(run_t)::r
   type(mesh_t)::m
   integer::ilevel
   !--------------------------------------------------------------------------
@@ -121,12 +122,18 @@ subroutine set_crunew(m,ilevel)
   !--------------------------------------------------------------------------
   integer::i
 
-  ! Set crunew to cruold for myid cells
+  ! For CR energies, stored in NENER
+  do i=m%head(ilevel),m%tail(ilevel)
+     m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)=m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)
+  end do
+
+  ! And for CR fluxes, stored in cruold
 #ifdef CRS
   do i=m%head(ilevel),m%tail(ilevel)
      m%crunew(:,:,i)=m%cruold(:,:,i)
   end do
 #endif
+
 
 end subroutine set_crunew
 !###########################################################
@@ -170,7 +177,7 @@ subroutine set_cruold(r, g, m, ilevel)
   ! This routine sets array cruold to its new value crunew 
   ! after the hydro step.
   !---------------------------------------------------------
-  integer :: i, j, ig, iE
+  integer :: i, j, ig, iE, iFlx
 
   if(r%cr_isotropic_pressure)then
      sqrt3=sqrt(3d0)
@@ -181,19 +188,20 @@ subroutine set_cruold(r, g, m, ilevel)
  ! Set cruold to crunew
 #ifdef CRS
   if (r%cr_reduced_flux_correction) then
-     ! Make a CR conservation fix (prevent CR explosions)
+     ! Make a CR conservation fix
      do ig = 1, ncrgrp
-        iE = 1 + (ig-1)*ndim
+        iE = r%iecr+ig-1
+        iFlx = 1 + (ig-1)*ndim
         do i = m%head(ilevel), m%tail(ilevel)
            do j = 1, twotondim
               ! No negative CR densities:
-              m%crunew(j,iE,i) = max(m%crunew(j,iE,i),smallecr)
-              Ecrc=m%crunew(j,iE,i)*g%cr_c(ilevel)
+              m%unew(j,iE,i) = max(m%unew(j,iE,i),smallecr)
+              Ecrc=m%unew(j,iE,i)*g%cr_c(ilevel)
               ! Reduced flux, should always be .le. 1
-              fred = sqrt(sum((m%crunew(j,iE+1:iE+ndim,i))**2))/Ecrc*sqrt3
-              if(fred .gt. 1d0) then ! Too big so normalize flux to one
-                 m%crunew(j,iE+1:iE+ndim,i) &
-                      = m%crunew(j,iE+1:iE+ndim,i)/fred
+              fred = sqrt(sum((m%crunew(j,iFlx:iFlx+ndim-1,i))**2))/Ecrc*sqrt3
+              if(fred .gt. 1d0) then ! Too big so normalize
+                 m%crunew(j,iFlx:iFlx+ndim-1,i) &
+                      = m%unew(j,iFlx:iFlx+ndim-1,i)/fred
               endif
            end do
         end do
@@ -201,11 +209,18 @@ subroutine set_cruold(r, g, m, ilevel)
      ! End CR conservation fix
   endif
 
+  ! CR fluxes, stored in cruold
   do i = m%head(ilevel), m%tail(ilevel)
      m%cruold(:,:,i) = m%crunew(:,:,i)
   end do
 
 #endif
+
+  ! CR energies, stored in NENER
+  do i=m%head(ilevel),m%tail(ilevel)
+     m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)=m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)
+  end do
+
 
 end subroutine set_cruold
 !###########################################################
@@ -216,7 +231,8 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   use mdl_module
   use amr_parameters, only: ndim, twondim, twotondim
   use hydro_parameters, only: nvar
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncrvar,ncruvar,ncrgrp
+
   use ramses_commons, only: ramses_t
   use nbors_utils
   use cr_commons
@@ -247,6 +263,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   integer::ii1min,ii1max,jj1min,jj1max,kk1min,kk1max
   integer::i2min,i2max,j2min,j2max,k2min,k2max
   integer::i3min,i3max,j3min,j3max,k3min,k3max
+  integer::igrp, icr_f, icr_u
 #ifdef MHD
   real(kind=8),dimension(0:twondim  ,1:6)::b1
   real(kind=8),dimension(1:twotondim,1:6)::b2
@@ -263,8 +280,8 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   integer,dimension(0:twondim)::igrid_nbor
   real(kind=8)::dx,oneontwotondim
 #ifdef CRS
-  real(kind=8),dimension(0:twondim  ,1:ncrvar)::cr1 ! CR vars
-  real(kind=8),dimension(1:twotondim,1:ncrvar)::cr2
+  real(kind=8),dimension(0:twondim  ,1:ncruvar)::cr1 ! CR vars
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cr2
 #endif
   real(kind=8),dimension(0:twondim  ,1:nvar)::u1    ! Hydro vars
   real(kind=8),dimension(1:twotondim,1:nvar)::u2
@@ -274,7 +291,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   i3min=1; i3max=1; j3min=1; j3max=1; k3min=1; k3max=1
   okx=.true.; oky=.true.; okz=.true.
 
-  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl,iecr=>s%r%iecr)
 
   oneontwotondim = 1.d0/dble(twotondim)
 
@@ -394,7 +411,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
 #ifdef CRS
                        ! Gather CR variables
-                       do ivar=1,ncrvar
+                       do ivar=1,ncruvar
                           h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ind_oct)
                        end do
 #endif
@@ -518,7 +535,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #ifdef CRS
                  ! Gather CR variables
                  do inbor=0,twondim
-                    do ivar=1,ncrvar
+                    do ivar=1,ncruvar
                        cr1(inbor,ivar)=m%cruold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
                     end do
                  end do
@@ -566,7 +583,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
 #ifdef CRS
                           ! Gather CR variables
-                          do ivar=1,ncrvar
+                          do ivar=1,ncruvar
                              h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ichild)
                           end do
 #endif
@@ -589,7 +606,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                           end do
 #endif
 #ifdef CRS
-                          do ivar=1,ncrvar
+                          do ivar=1,ncruvar
                              h%cruloc(i3,j3,k3,ivar)=cr2(ind_son,ivar)
                           end do
 #endif
@@ -677,11 +694,20 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
                        ! Update conservative variables new state vector
                        if(.not. h%okloc(i3,j3,k3)) then
-                          do ivar=1,ncrvar
+                          do igrp=1,ncrgrp
+                            icr_u = 1+(igrp-1)*ndim
+                            icr_f = 1+(igrp-1)*(ndim+1)
+                            m%unew(ind_son,iEcr+igrp-1,ichild)=m%unew(ind_son,iEcr+igrp-1,ichild) &
+                               & +(h%crflux(i3   ,j3   ,k3   ,icr_f,idim)                         &
+                               &  -h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim))
+                            m%unew(ind_son,5,ichild)=m%unew(ind_son,5,ichild)                     &
+                               & +(h%crflux(i3   ,j3   ,k3   ,icr_f,idim)                         &
+                               & - h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim))
 #ifdef CRS
-                            m%crunew(ind_son,ivar,ichild)=m%crunew(ind_son,ivar,ichild)+ &
-                               & (h%crflux(i3   ,j3   ,k3   ,ivar,idim) &
-                               & -h%crflux(i3+i0,j3+j0,k3+k0,ivar,idim))
+                            m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild) =               &
+                              & m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild)             &
+                              & +(h%crflux(i3   ,j3   ,k3   ,icr_f+1:icr_f+ndim,idim)   &
+                              & -h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim))
 #endif
                           end do
                        endif
@@ -753,10 +779,18 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                           k3=1+2*(k1+k0-1)+k2
 #endif
                           ! Conservative update of new state variables
-                          do ivar=1,ncrvar
+                          do igrp=1,ncrgrp
+                             icr_u = 1+(igrp-1)*ndim
+                             icr_f = 1+(igrp-1)*(ndim+1)
+                             m%unew(ind_son,iEcr+igrp-1,igrid)=                                   &
+                               & m%unew(ind_son,iEcr+igrp-1,igrid)                                &
+                               & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
+                             m%unew(ind_son,5,igrid)=m%unew(ind_son,5,igrid)                      &
+                               & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
 #ifdef CRS
-                             m%crunew(icell,ivar,igrid)=m%crunew(icell,ivar,igrid) &
-                                  & -h%crflux(i3,j3,k3,ivar,idim) * oneontwotondim
+                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                          &
+                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                       &
+                               & -h%crflux(i3,j3,k3,icr_f+1:icr_f+ndim,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -803,9 +837,18 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #endif
                           ! Conservative update of new state variables
                           do ivar=1,ncrvar
+                             icr_u = 1+(igrp-1)*ndim
+                             icr_f = 1+(igrp-1)*(ndim+1)
+                             m%unew(ind_son,iEcr+igrp-1,igrid)=                            &
+                               & m%unew(ind_son,iEcr+igrp-1,igrid)                         &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
+                             m%unew(ind_son,5,igrid)=                                      &
+                               & m%unew(ind_son,5,igrid)                                   &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
 #ifdef CRS
-                             m%crunew(icell,ivar,igrid)=m%crunew(icell,ivar,igrid) &
-                                  & +h%crflux(i3+i0,j3+j0,k3+k0,ivar,idim) * oneontwotondim
+                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                   &
+                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -859,7 +902,8 @@ end subroutine cr_godfine1
 !###########################################################
 subroutine init_flush_cr_godunov(mesh,igrid,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   type(mesh_t)::mesh
   integer::igrid
@@ -870,8 +914,16 @@ subroutine init_flush_cr_godunov(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
+#ifdef HYDRO
+  do ivar=1,nvar
+     do ind=1,twotondim
+        mesh%unew(ind,ivar,igrid)=0.0d0
+     enddo
+  enddo
+#endif
+
 #ifdef CRS
-  do ivar=1,ncrvar
+  do ivar=1,ncruvar
      do ind=1,twotondim
         mesh%crunew(ind,ivar,igrid)=0.0d0
      enddo
@@ -885,7 +937,8 @@ end subroutine init_flush_cr_godunov
 !###########################################################
 subroutine pack_flush_cr_godunov(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: twotondim
-  use cr_parameters, only: ncrvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -896,13 +949,20 @@ subroutine pack_flush_cr_godunov(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_large_realdp)::msg
 
-  do ivar=1,ncrvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-#ifdef CRS
-        msg%realdp_cr(ind,ivar)=mesh%crunew(ind,ivar,igrid)
-#endif
+        msg%realdp_hydro(ind,ivar)=mesh%unew(ind,ivar,igrid)
      end do
   end do
+#endif
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        msg%realdp_cr(ind,ivar)=mesh%crunew(ind,ivar,igrid)
+     end do
+  end do
+#endif
 
   msg_array=transfer(msg,msg_array)
 
@@ -913,7 +973,8 @@ end subroutine pack_flush_cr_godunov
 !###########################################################
 subroutine unpack_flush_cr_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -929,13 +990,22 @@ subroutine unpack_flush_cr_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-  do ivar=1,ncrvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-#ifdef CRS
-        mesh%crunew(ind,ivar,igrid)=mesh%crunew(ind,ivar,igrid)+msg%realdp_cr(ind,ivar)
-#endif
+        mesh%unew(ind,ivar,igrid)=mesh%unew(ind,ivar,igrid)+msg%realdp_hydro(ind,ivar)
      end do
   end do
+#endif
+
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%crunew(ind,ivar,igrid) = &
+            & mesh%crunew(ind,ivar,igrid) + msg%realdp_cr(ind,ivar)
+     end do
+  end do
+#endif
 
 end subroutine unpack_flush_cr_godunov
 !###########################################################

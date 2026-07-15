@@ -24,11 +24,11 @@ subroutine cr_boundana(r,g,x,cru,dx,ibound,ncell)
   integer::ivar,i
   if(r%cr_test_setup=='streaming_triangle') then
      do i=1,ncell
-        cru(i,1)=2d0+r%cr_gamma(1)*g%t-abs(x(i,1)-r%box_size(1)*0.5d0)
+        cru(i,1)=2d0+r%gamma_rad(1)*g%t-abs(x(i,1)-r%box_size(1)*0.5d0)
         if(x(i,1)<r%box_size(1)*0.5d0)then
-           cru(i,2)=-r%cr_gamma(1)*cru(i,1)
+           cru(i,2)=-r%gamma_rad(1)*cru(i,1)
         else
-           cru(i,2)= r%cr_gamma(1)*cru(i,1)
+           cru(i,2)= r%gamma_rad(1)*cru(i,1)
         endif
         if(ncrvar.gt.2) cru(i,3:)=0d0
      end do

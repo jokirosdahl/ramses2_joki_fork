@@ -23,7 +23,7 @@ subroutine cr_flag(s,ilevel)
        & (/0,0,0,1,0,0,0,1,0,1,1,0,0,0,1,1,0,1,0,1,1,1,1,1/),(/3,8/))
   integer,dimension(1:3,1:6),save::shift=reshape(&
        & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
-  integer::igrid,ind,idim,ivar,i_nbor
+  integer::igrid,ind,idim,iidim,igrp,i_nbor
   integer::icelld,icellg,igridg,igridd,icellp,igridp,igroup
   integer,dimension(1:twondim)::icelln
   integer(kind=8),dimension(0:ndim)::hash_key,hash_nbor
@@ -86,15 +86,20 @@ subroutine cr_flag(s,ilevel)
         ! Loop over dimensions
         do idim=1,ndim
            ! Gather cr variables
-           do ivar=1,ncrgrp
+           do igrp=1,ncrgrp
               icellg=icelln(2*idim-1)
               icelld=icelln(2*idim  )
               igridg=igridn(2*idim-1)
               igridd=igridn(2*idim  )
 #ifdef CRS
-              uug(ivar)=m%cruold(icellg,ivar,igridg)
-              uum(ivar)=m%cruold(ind   ,ivar,igrid )
-              uud(ivar)=m%cruold(icelld,ivar,igridd)
+              uug(1+(igrp-1)*(ndim+1))=m%uold(icellg,r%iEcr+igrp-1,igridg)
+              uum(1+(igrp-1)*(ndim+1))=m%uold(ind   ,r%iEcr+igrp-1,igrid )
+              uud(1+(igrp-1)*(ndim+1))=m%uold(icelld,r%iEcr+igrp-1,igridd)
+              do iidim=1,ndim
+                uug(1+iidim+(igrp-1)*(ndim+1))=m%cruold(icellg,iidim+(igrp-1)*ndim,igridg)
+                uum(1+iidim+(igrp-1)*(ndim+1))=m%cruold(ind   ,iidim+(igrp-1)*ndim,igrid )
+                uud(1+iidim+(igrp-1)*(ndim+1))=m%cruold(icelld,iidim+(igrp-1)*ndim,igridd)
+              end do
 #endif 
            end do
            call cr_refine(r,uug,uum,uud,ok)
@@ -124,7 +129,8 @@ end subroutine cr_flag
 !#####################################################################
 subroutine pack_fetch_cr(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
   type(mesh_t)::mesh
@@ -143,13 +149,20 @@ subroutine pack_fetch_cr(mesh,igrid,msg_size,msg_array)
      endif
   end do
 
-  do ivar=1,ncrvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-#ifdef CRS
-        msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
-#endif
+        msg%realdp(ind,ivar)=mesh%uold(ind,ivar,igrid)
      end do
   end do
+#endif
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
+     end do
+  end do
+#endif
 
   msg_array=transfer(msg,msg_array)
 
@@ -160,7 +173,8 @@ end subroutine pack_fetch_cr
 !#####################################################################
 subroutine unpack_fetch_cr(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
   type(mesh_t)::mesh
@@ -184,13 +198,21 @@ subroutine unpack_fetch_cr(mesh,igrid,msg_size,msg_array,hash_key)
      endif
   end do
 
-  do ivar=1,ncrvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-#ifdef CRS
-        mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
-#endif
+        mesh%uold(ind,ivar,igrid)=msg%realdp(ind,ivar)
      end do
   end do
+#endif
+
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
+     end do
+  end do
+#endif
 
 end subroutine unpack_fetch_cr
 !#####################################################################

@@ -127,6 +127,7 @@ subroutine m_newdt_fine(pst,ilevel)
      g%cr_c(ilevel) = cr_c_min
      if(r%cr_varc) then
        ! Update the variable light speed
+       ! This is not necessary in the fluid frame, unless we want to make c faster than diffusion or streaming speed
        g%cr_c(ilevel) = max(cr_c_min, dx/3./out_courant_fine%dt * r%cr_varc_fudge)
      endif
      ! Broadcast the new value of cr_c

@@ -52,7 +52,7 @@ end subroutine r_cr_upload_fine
 !###########################################################
 subroutine cr_upload_fine(s,ilevel)
   use mdl_module
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_parameters, only: ndim, twotondim
   use ramses_commons, only: ramses_t
   use nbors_utils
@@ -83,7 +83,7 @@ subroutine cr_upload_fine(s,ilevel)
 
   ! Set conservative variable to zero in refined cells
   do ioct=m%head(ilevel),m%tail(ilevel)
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         do ind=1,twotondim
            if(m%grid(ioct)%refined(ind))then
 #ifdef CRS
@@ -107,7 +107,7 @@ subroutine cr_upload_fine(s,ilevel)
      call get_parent_cell(s,hash_key,igrid,icell,flush_cache=.true.,fetch_cache=.false.)
 
      ! Average conservative variables
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         average=0.0d0
         do ind=1,twotondim
 #ifdef CRS
@@ -133,7 +133,7 @@ end subroutine cr_upload_fine
 !##########################################################################
 subroutine init_flush_upload_cr(mesh,igrid,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   type(mesh_t)::mesh
   integer::igrid
@@ -144,7 +144,7 @@ subroutine init_flush_upload_cr(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-  do ivar=1,ncrvar
+  do ivar=1,ncruvar
      do ind=1,twotondim
 #ifdef CRS
         mesh%cruold(ind,ivar,igrid)=0.0d0
@@ -159,7 +159,7 @@ end subroutine init_flush_upload_cr
 !##########################################################################
 subroutine pack_flush_upload_cr(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: twotondim
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
   type(mesh_t)::mesh
@@ -170,7 +170,7 @@ subroutine pack_flush_upload_cr(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_realdp)::msg
 
-  do ivar=1,ncrvar
+  do ivar=1,ncruvar
      do ind=1,twotondim
 #ifdef CRS
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -187,7 +187,7 @@ end subroutine pack_flush_upload_cr
 !##########################################################################
 subroutine unpack_flush_upload_cr(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_realdp
   type(mesh_t)::mesh
@@ -203,7 +203,7 @@ subroutine unpack_flush_upload_cr(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-  do ivar=1,ncrvar
+  do ivar=1,ncruvar
      do ind=1,twotondim
 #ifdef CRS
         if(mesh%grid(igrid)%refined(ind))then

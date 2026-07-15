@@ -2,12 +2,13 @@ module cr_parameters
   use amr_parameters, only: ndim
 
 #ifdef NCRGRP
-  integer,parameter::ncrgrp=NCRGRP             ! # of CR groups (set in Makefile)
+  integer,parameter::ncrgrp=NCRGRP       ! # of CR groups (set in Makefile)
 #else
   integer,parameter::ncrgrp=1
 #endif
-  integer,parameter::ncrvar=ncrgrp*(1+ndim)    ! # of CR variables (CR density and flux)
+  integer,parameter::ncruvar=ncrgrp*ndim    ! # of CR flux variables, stored in cruold and crunew
+  integer,parameter::ncrvar=ncrgrp*(ndim+1) ! # of CR variables energy densities plus fluxes
 
-  real(kind=8),parameter::smallEcr=1d-50        !  Minimum CR density
+  real(kind=8),parameter::smallEcr=1d-50 !  Minimum CR density
 
 end module cr_parameters

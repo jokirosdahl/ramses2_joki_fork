@@ -215,19 +215,18 @@ end subroutine hydro_refine
 subroutine cmpdt(r,uu,bb,gg,dx,dt)
   use amr_parameters, only: ndim
   use hydro_parameters, only: nvar, nener
-  use cr_parameters, only: ncrgrp
   use amr_commons, only: run_t
   use const
   implicit none
   type(run_t)::r
   real(kind=8)::dx,dt
-  real(kind=8),dimension(1:nvar+ncrgrp)::uu
+  real(kind=8),dimension(1:nvar)::uu
   real(kind=8),dimension(1:ndim)::gg
   real(kind=8),dimension(1:6)::bb
   
   real(kind=8)::dtcell,smallp
-  real(kind=8)::b2,a2,c2,cfast2,ctot,grav,cr_cs
-  integer::idim,ivar
+  real(kind=8)::b2,a2,c2,cfast2,ctot,grav
+  integer::idim,igrp
 #if NENER>0
   integer::irad
 #endif
@@ -290,18 +289,6 @@ subroutine cmpdt(r,uu,bb,gg,dx,dt)
   end do
 #endif  
   a2=a2/uu(1)
-
-  if(r%cr_advect) then
-      ! Add CR sound speed
-      cr_cs=0d0
-      do ivar = 1,ncrgrp
-            cr_cs=cr_cs + uu(nvar+ivar) * (r%cr_gamma(ivar)-1.0d0)
-      end do
-      cr_cs=cr_cs/uu(1)
-      ! Only consider CR c where rho is not tiny
-      if(uu(1) .gt. r%smallr*r%cr_smallr_decouple) &
-          a2 = a2 + cr_cs
-  endif
 
   ! Compute wave speed (note that we use ndim here, not 3)
   ctot = zero

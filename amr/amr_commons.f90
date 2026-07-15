@@ -149,7 +149,7 @@ module amr_commons
      real(kind=8)::switch_llf_dmin=-1
      real(kind=8)::switch_llf_pmin=-1
      real(kind=8),dimension(1:3)::constant_gravity
-     integer::inener,ientropy,imetal,iturb,ichem
+     integer::inener,ientropy,imetal,iturb,ichem,iecr
 
      ! Physics parameters
      real(kind=8)::units_density=1.0 ! [g/cm^3]
@@ -569,7 +569,6 @@ module amr_commons
      ! CR group parameters---------------------------------------------------------------------
      real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29 !Classical value cm^2/s (e.g., Jockipii 1999)
      real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp diffusion CR suppression  !
-     real(kind=8),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
      real(kind=8),dimension(1:ncrgrp)::fecr=0d0     ! SN fraction of CR energy
      real(kind=8)::cr_v_alfven=0.0                  ! For idealised tests
      ! Initial condition CR regions parameters-------------------------------------------------

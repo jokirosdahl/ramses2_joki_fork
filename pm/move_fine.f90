@@ -906,7 +906,7 @@ subroutine pack_fetch_kick_dust(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: twotondim
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -940,7 +940,7 @@ subroutine pack_fetch_kick_dust(mesh,igrid,msg_size,msg_array)
 #endif
 #ifdef CRS
   do ind=1,twotondim
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
      end do
   end do
@@ -961,7 +961,7 @@ subroutine unpack_fetch_kick_dust(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim, twotondim
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -1000,7 +1000,7 @@ subroutine unpack_fetch_kick_dust(mesh,igrid,msg_size,msg_array,hash_key)
 #endif
 #ifdef CRS
   do ind=1,twotondim
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
      end do
   end do

@@ -341,7 +341,7 @@ subroutine load_balance(s,ilevel)
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold_tmp
 #endif
 #ifdef CRS
-  real(kind=8),dimension(1:twotondim,1:ncrvar)::cruold_tmp
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold_tmp
 #endif
 #ifdef GRAV
   real(kind=8),dimension(1:twotondim,1:3)::f_tmp
@@ -671,7 +671,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   use rt_parameters, only: nrtvar
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   type(mesh_t)::mesh
   integer::igrid
   integer::msg_size
@@ -714,7 +714,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
   
 #ifdef CRS
   do ind=1,twotondim
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
      end do
   end do
@@ -743,7 +743,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   use rt_parameters, only: nrtvar
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   type(mesh_t)::mesh
   integer::igrid
   integer::msg_size
@@ -791,7 +791,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
 
 #ifdef CRS
   do ind=1,twotondim
-     do ivar=1,ncrvar
+     do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
      end do
   end do

@@ -42,7 +42,6 @@ subroutine m_read_cr_params(pst)
   character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
   real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29
   real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp CR diffusion suppression  !
-  real(kind=8),dimension(1:ncrgrp)::cr_gamma=4d0/3d0
   real(kind=8),dimension(1:ncrgrp)::fecr=0d0               ! SN fraction of CR energy       !
   real(kind=8)::cr_v_alfven=0.0           ! For idealised tests
 
@@ -72,7 +71,7 @@ subroutine m_read_cr_params(pst)
        & ,cr_nsubcycle, cr_courant_factor, cr_varc_fudge                 &
        & ,cr_smallr_decouple, cr_test_setup, cr_v_alfven
 
-  namelist/cr_groups/cr_d, cr_d_perp_factors, cr_gamma, fecr
+  namelist/cr_groups/cr_d, cr_d_perp_factors, fecr
 
   namelist/cr_sources/cr_nsource, cr_source_type                         &
        & ,cr_src_x_center, cr_src_y_center, cr_src_z_center              &
@@ -137,7 +136,6 @@ subroutine m_read_cr_params(pst)
 
   s%r%cr_d=cr_d
   s%r%cr_d_perp_factors=cr_d_perp_factors
-  s%r%cr_gamma=cr_gamma
   s%r%fecr=fecr
   s%r%cr_v_alfven=cr_v_alfven
 
@@ -155,6 +153,13 @@ subroutine m_read_cr_params(pst)
   s%r%cr_fx_source=cr_fx_source
   s%r%cr_fy_source=cr_fy_source
   s%r%cr_fz_source=cr_fz_source
+
+  s%r%iecr=s%r%inener
+  print*,'The index for cosmic ray energies is ', s%r%iecr
+  if(ncrgrp>nener) then
+     write(*,*)'There are not enough NENER variables to contain cosmic ray groups ', ncrgrp, nener
+     call mdl_abort(s%mdl)
+  endif
 
   end associate
 

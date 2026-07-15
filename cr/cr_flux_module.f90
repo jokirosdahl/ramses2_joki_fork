@@ -3,7 +3,7 @@ MODULE cr_flux_module
   use amr_commons, only: dp, global_t, run_t
   use amr_parameters, only: ndim
   use hydro_parameters, only: nvar
-  use cr_parameters, only: ncrvar, ncrgrp, smallecr
+  use cr_parameters, only: ncrgrp, smallecr
   use cr_commons
 
   implicit none
@@ -31,17 +31,17 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   integer::iGrp
   real(kind=8),dimension(1:ndim)::Fcr
   real(kind=8)::Ecr, cr_c, nedge
-  integer::i, j, k, idim, jdim, icrE
+  integer::i, j, k, idim, jdim
   real(kind=8)::mu1,mu2,chi,b_norm2,Fcr_norm
   real(kind=8),dimension(1:ndim)::bcell
   real(kind=8)::cr_c2,Ecr2,aniso_term
   !------------------------------------------------------------------------
   associate(iu1=>kcr%iu1, ju1=>kcr%ju1, ku1=>kcr%ku1 &
-           ,iu2=>kcr%iu2, ju2=>kcr%ju2, ku2=>kcr%ku2)
+           ,iu2=>kcr%iu2, ju2=>kcr%ju2, ku2=>kcr%ku2 &
+           ,iecr=>r%iecr)
 
   cr_c2=cr_c**2
 
-  icrE = 1+(ndim+1)*(iGrp-1) ! starting index of cr variables
   ! Loop 6X6X6 cells in grid, from -1 to 4.
   do k = ku1, ku2
   do j = ju1, ju2
@@ -52,8 +52,8 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
      if(ndim.gt.2 .and. (k.lt.1 .or. k.gt.2)) nedge=nedge+1
      if(nedge.ge.2) cycle
 
-     Ecr = kcr%cruloc(i,j,k,icrE)             ! CR density in cell
-     Fcr = kcr%cruloc(i,j,k,icrE+1:icrE+ndim) ! CR flux vector
+     Ecr = kcr%uloc(i,j,k,iEcr+iGrp-1)                          ! CR density in cell
+     Fcr = kcr%cruloc(i,j,k,1+(iGrp-1)*ndim:ndim+(iGrp-1)*ndim) ! CR flux vector
      if(Ecr .lt. 0d0) then
         write(*,*)'negative CR density in cmp_flux_tensors. -EXITING-'
         stop
@@ -63,7 +63,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
      if(r%cr_isotropic_pressure) then
         kcr%cflx(i,j,k,2:ndim+1,1:ndim) = 0d0
         do idim = 1, ndim
-           kcr%cflx(i,j,k,idim+1,idim) = Ecr*cr_c2/3d0
+           kcr%cflx(i,j,k,idim+1,idim) = Ecr*cr_c2*(r%gamma_rad(iEcr+igrp-1)-1.0)
         enddo
      else
         ! M1 closure
@@ -106,20 +106,22 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   !  r         => global vars
   !  kcr      <=> cr kernel
   !  iGrp      => CR group number
-  !  dt        =>  current CR timestep length
+  !  cr_c      => reduced light speed in code units
+  !  dx        => cell width at current level, code units
+  !  dt        => current CR timestep length, code units
   !------------------------------------------------------------------------
   type(run_t) :: r
   type(cr_kernel_t)::kcr
   integer,intent(in)::iGrp
   real(kind=8),intent(in)::cr_c, dt
-  real(kind=8)::dx, Ecr, va, twodx_inv
-  integer::icrE, i, j, k, idim, nedge
-  real(kind=8),dimension(1:3)::bcell, gradEcr, Dcr_vec
-  real(kind=8)::norm,bdotgradE,cosp,sinp,cost,sint,bxby,Dcr_dir
+  real(kind=8)::dx, Ecr, va, gmone_div_twodx_inv
+  integer::i, j, k, idim, nedge, iEgrp
+  real(kind=8),dimension(1:3)::bcell, gradpcr, Dcr_vec
+  real(kind=8)::norm,bdotgradp,cosp,sinp,cost,sint,bxby,Dcr_dir
   !------------------------------------------------------------------------
-  icrE = 1+(ndim+1)*(iGrp-1) ! starting index of cr variables
-  twodx_inv=1d0/(2d0*dx)
   associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
+  gmone_div_twodx_inv=(r%gamma_rad(r%iEcr+igrp-1)-1.0)/(2d0*dx)
+  iEgrp = r%iEcr+(iGrp-1)
 
   ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
   ! default. All dimension indices go from 0 to N+1.
@@ -136,9 +138,9 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
      if(ndim.gt.2 .and. mod(k,kf2).eq.0) nedge=nedge+1
      if(nedge.ge.2) cycle
 
-     Ecr  = kcr%cruloc(i, j, k, icrE)
+     Ecr  = kcr%uloc(i, j, k, iEgrp)
 
-     ! Magnetic field, needed to rotate Dcr and for bdotgradEcr
+     ! Magnetic field, needed to rotate Dcr and for bdotgradpcr
      norm=0.
      do idim=1,3
         bcell(idim) = 0.5*(kcr%bloc(i,j,k,idim)+kcr%bloc(i,j,k,3+idim))
@@ -168,18 +170,18 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
      if(r%cr_streaming_diffusion .and. r%cr_v_alfven.gt.0.0) va = r%cr_v_alfven
 
      ! Calculate grad Pcr
-     gradEcr(1) = (kcr%cruloc(i+1,j  ,k  ,icrE) - kcr%cruloc(i-1,j  ,k  ,icrE)) * twodx_inv
+     gradpcr(1) = (kcr%uloc(i+1,j  ,k  ,iEgrp) - kcr%uloc(i-1,j  ,k  ,iEgrp)) * gmone_div_twodx_inv
 #if NDIM>1 
-     gradEcr(2) = (kcr%cruloc(i  ,j+1,k  ,icrE) - kcr%cruloc(i  ,j-1,k  ,icrE)) * twodx_inv
+     gradpcr(2) = (kcr%uloc(i  ,j+1,k  ,iEgrp) - kcr%uloc(i  ,j-1,k  ,iEgrp)) * gmone_div_twodx_inv
 #endif
 #if NDIM>2
-     gradEcr(3) = (kcr%cruloc(i  ,j  ,k+1,icrE) - kcr%cruloc(i  ,j  ,k-1,icrE)) * twodx_inv
+     gradpcr(3) = (kcr%uloc(i  ,j  ,k+1,iEgrp) - kcr%uloc(i  ,j  ,k-1,iEgrp)) * gmone_div_twodx_inv
 #endif
 
      ! Calculate B dot grad Pcr
-     bdotgradE = 0.
+     bdotgradp = 0.
      do idim=1,ndim
-        bdotgradE = bdotgradE + bcell(idim) * gradEcr(idim)
+        bdotgradp = bdotgradp + bcell(idim) * gradpcr(idim)
      enddo
 
      ! Diffusion, eq 10 in JO17
@@ -188,7 +190,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
                   r%cr_d_code(igrp)*r%cr_d_perp_factors(iGrp) /)
      if(r%cr_streaming_diffusion) &
           Dcr_vec(1) = Dcr_vec(1) + &
-          min(r%cr_dmax_code, 3./max(abs(bdotgradE),1d-50) * va * r%cr_gamma(iGrp) * max(Ecr,smallecr))
+          min(r%cr_dmax_code, 3./max(abs(bdotgradp),1d-50) * va * r%gamma_rad(r%iEcr-1+iGrp) * max(Ecr,smallecr))
 
      ! Rotate Dcr_vec so it is parallel with B, hence
      ! describing Dcr in the simulation coordinate system
@@ -198,18 +200,18 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
      ! Calculate wavespeeds
      Dcr_dir = abs(Dcr_vec(1)) ! x component of rotated Dcr
      kcr%lmax(i,j,k,1) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
 
 #if NDIM>1
      Dcr_dir = abs(Dcr_vec(2)) ! y component of rotated Dcr
      kcr%lmax(i,j,k,2) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
 #endif
 
 #if NDIM>2
      Dcr_dir = abs(Dcr_vec(3)) ! z component of rotated Dcr
      kcr%lmax(i,j,k,3) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
 #endif
 
   end do
@@ -220,12 +222,12 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 END SUBROUTINE cmp_cr_wavespeeds
 
 !************************************************************************
-FUNCTION cmp_cr_lmax(r, dx, dcoeff, cr_c, dt)
+FUNCTION cmp_cr_lmax(r, dx, dcoeff, gamma_cr, cr_c, dt)
   
 ! Compute maximum local wavespeed
 !------------------------------------------------------------------------
   type(run_t) :: r
-  real(kind=8)::dx, cmp_cr_lmax, cr_c, dt
+  real(kind=8)::dx, cmp_cr_lmax, gamma_cr, cr_c, dt
   real(kind=8)::tau, dcoeff, r_factor
 !------------------------------------------------------------------------
   tau = 0.5d0 * dx**2 / dcoeff / dt
@@ -235,7 +237,7 @@ FUNCTION cmp_cr_lmax(r, dx, dcoeff, cr_c, dt)
     r_factor = sqrt((1.-exp(-min(tau,10.)**2))/min(tau,1e8)**2) ! Capital R on p 6 in YP17
   endif
   if(r%cr_isotropic_pressure) then
-     cmp_cr_lmax = r_factor * cr_c / sqrt(3d0)
+     cmp_cr_lmax = r_factor * cr_c * sqrt(gamma_cr-1.0)
   else
      cmp_cr_lmax = r_factor * cr_c
   endif
@@ -258,16 +260,8 @@ FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
   real(kind=8),dimension(nDim+1)::fdn, fup, udn, uup, cmp_cr_face
   real(kind=8)::lminus, lplus, llmax
 !------------------------------------------------------------------------
-  !if (r%cr_HLLE) then
-  !  coeff = 0D0
-  !  if (abs(lplus - lminus) > 1D-20) coeff = 0.5D0 * (lplus + lminus) / (lplus - lminus)
-  !  cmp_cr_face = 0.5D0 * (fdn + fup - lminus * udn - lplus * uup) &
-  !                + coeff * (fdn - fup - lminus * udn + lplus * uup)
-  !else ! Lax Friedrich
-    llmax = max(abs(lplus), abs(lminus))
-    cmp_cr_face = 0.5D0 * (fdn + fup - llmax * (uup - udn)) !LLF flux
-  !endif
-  return
+  llmax = max(abs(lplus), abs(lminus))
+  cmp_cr_face = 0.5D0 * (fdn + fup - llmax * (uup - udn)) !LLF flux
 END FUNCTION cmp_cr_face
 
 !************************************************************************
@@ -296,33 +290,25 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 !  kf1,kf2     |cells only (3x3x3).
 !------------------------------------------------------------------------
   type(run_t) :: r
-  type(cr_kernel_t)::kcr
-  real(kind=8)::cr_c, dx, dt
+  type(cr_kernel_t):: kcr
+  real(kind=8):: cr_c, dx, dt
   ! Upwards and downwards fluxes and states of the group
-  real(kind=8),dimension(nDim+1),save:: fdn, fup, udn, uup
-  real(kind=8):: lminus, lplus                        ! Intercell wavespeeds
-  real(kind=8)::dtdx, prod(ndim+1)
-  integer ::i, j, k
-  real(kind=8),dimension(ndim+1),save::slopeLM,slopeRM,slopeM
-  real(kind=8),dimension(ndim+1),save::slopeLL,slopeL
-  real(kind=8),save::vslopeLM,vslopeRM,vslopeM
-  real(kind=8),save::vslopeLL,vslopeL,vprod
-  real(kind=8):: vup,vdn,meanadv,meandiffv,aup,adn
-  real(kind=8)::fred, fred_dn, fred_up, c_tilde
-  integer::iP0, iP1, iGrp
+  real(kind=8),dimension(nDim+1),save:: f1,f2,f3,f4,u1,u2,u3,u4
+  real(kind=8):: a2,a3
+  real(kind=8):: lminus, lplus                     ! Intercell wavespeeds
+  real(kind=8):: meandiffv, dtdx, prod(ndim+1)
+  integer ::i, j, k, iGrp
+  real(kind=8),dimension(ndim+1),save:: slopeLM,slopeRM,slopeM
+  real(kind=8),dimension(ndim+1),save:: slopeLL,slopeL
 !------------------------------------------------------------------------
   associate(if1=>kcr%if1, if2=>kcr%if2, jf1=>kcr%jf1                    &
            ,jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2, crin=>kcr%cruloc  &
-           ,cFlx=>kcr%cFlx, uin=>kcr%uloc, lmax=>kcr%lmax)
-
+           ,cFlx=>kcr%cFlx, uin=>kcr%uloc, lmax=>kcr%lmax, iEcr=>r%iEcr)
+  
   do iGrp = 1, ncrgrp
-
-  iP0 = 1+(iGrp-1)*(ndim+1)            ! Index of CR group energy density
-  iP1 = iP0+nDim     
 
   ! Compute flux tensors for all the cells with correction
   call cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
-
   ! Wavespeeds in each cell
   call cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 
@@ -334,71 +320,58 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   do k=kf1,kf2                                 !
      if(ndim.gt.1 .and. j.eq.jf2) cycle
      if(ndim.gt.2 .and. k.eq.kf2) cycle
-     fdn = cFlx(i-1, j, k, :, 1    )    !
-     fup = cFlx(i,   j, k, :, 1    )    !  upwards and downwards
-     udn = crin(i-1, j, k, iP0:iP1 )    !  conditions
-     uup = crin(i,   j, k, iP0:iP1 )    !
-     vdn = uin( i-1, j, k, 2) / uin(i-1,j,k,1) ! left velocity
-     vup = uin( i,   j, k, 2) / uin(i  ,j,k,1) ! right velocity
+     f1 = cFlx(i-2, j, k, :, 1)               !
+     f2 = cFlx(i-1, j, k, :, 1)               ! upwards and downwards
+     f3 = cFlx(i,   j, k, :, 1)               ! conditions
+     f4 = cFlx(i+1, j, k, :, 1)               !
+     u1(1) = uin(i-2, j, k, iEcr+iGrp-1)
+     u2(1) = uin(i-1, j, k, iEcr+iGrp-1)
+     u3(1) = uin(i,   j, k, iEcr+iGrp-1)
+     u4(1) = uin(i+1, j, k, iEcr+iGrp-1)
+     u1(2:ndim+1) = crin(i-2, j, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u2(2:ndim+1) = crin(i-1, j, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u3(2:ndim+1) = crin(i,   j, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u4(2:ndim+1) = crin(i+1, j, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+
      ! Second-order interpolation with using Van-Leer slope Limiter
      ! interpolation of U
-     slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx(i+1, j, k, :, 1) - fup)/dx
+     slopeLM = (f3-f2)/dx
+     slopeRM = (f4-f3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx(i-2, j, k, :, 1))/dx
+     slopeLL = (f2-f1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
-     fdn = fdn+slopeL*0.5d0*dx
-     fup = fup-slopeM*0.5d0*dx
+     f2 = f2+slopeL*0.5d0*dx
+     f3 = f3-slopeM*0.5d0*dx
 
      ! interpolation of F
-     slopeLM = (uup-udn)/dx
-     slopeRM = (crin(i+1, j, k, iP0:iP1) - uup)/dx
+     slopeLM = (u3-u2)/dx
+     slopeRM = (u4-u3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin(i-2, j, k, iP0:iP1))/dx
+     slopeLL = (u2-u1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
-     udn = udn+slopeL*0.5d0*dx
-     uup = uup-slopeM*0.5d0*dx            
+     u2 = u2+slopeL*0.5d0*dx
+     u3 = u3-slopeM*0.5d0*dx            
 
-     ! interpolation of velocities
-     vslopeLM = (vup-vdn)/dx
-     vslopeRM = (uin(i+1,j,k,2)/uin(i+1,j,k,1) - vup)/dx
-     vprod = vslopeLM*vslopeRM
-     vslopeM=0.
-     if(vprod.gt.0) vslopeM=2.*vprod/(vslopeLM+vslopeRM)
-     vslopeLL = (vdn - uin(i-2,j,k,2)/uin(i-2,j,k,1))/dx
-     vprod = vslopeLL*vslopeLM
-     vslopeL=0.
-     if(vprod.gt.0.) vslopeL=2.*vprod/(vslopeLL+vslopeLM)
-
-     meanadv   = 0.5*( vdn             + vup           )
      meandiffv = 0.5*( lmax(i-1,j,k,1) + lmax(i,j,k,1) )
-     adn = min(meanadv-meandiffv, vdn-lmax(i-1,j,k,1))
-     adn = max(adn,-cr_c*sqrt(1./3.))
-     aup = max(meanadv+meandiffv, vup+lmax(i,j,k,1))
-     aup = min(aup,cr_c*sqrt(1./3.))
-     lminus = min(adn,0.)
-     lplus = max(aup,0.)
+     a2 = min(-meandiffv, lmax(i-1,j,k,1))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = max(meandiffv, lmax(i,j,k,1))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
 
-     kcr%crflux( i, j, k, iP0:iP1, 1)=&
-          cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
+     lminus = min(a2,0.)
+     lplus = max(a3,0.)
 
-     if(r%cr_reduced_flux_correction) then
-        fred = 1.0
-        c_tilde = MIN(ABS(lplus), ABS(lminus))
-        fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
-        fred_up = sqrt(sum(uup(2:2+ndim-1)**2)) / (c_tilde * uup(1))
-        fred = max(fred_dn, fred_up, 1.0)
-        fup(1) = fup(1) / fred; uup(2:2+ndim-1) = uup(2:2+ndim-1) / fred
-        fdn(1) = fdn(1) / fred; udn(2:2+ndim-1) = udn(2:2+ndim-1) / fred
-     endif
+     kcr%crflux( i, j, k, 1+(iGrp-1)*(ndim+1):iGrp*(ndim+1), 1)=&
+          cmp_cr_face( f2, f3, u2, u3, lminus, lplus)*dtdx
+
   end do
   end do
   end do
@@ -411,72 +384,54 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   do j=jf1,jf2
   do k=kf1,kf2
      if(ndim.gt.2 .and. k.eq.kf2) cycle
-     fdn = cFlx(i, j-1, k, :, 2    )
-     fup = cFlx(i, j,   k, :, 2    )
-     udn = crin(i, j-1, k, iP0:iP1 )
-     uup = crin(i, j,   k, iP0:iP1 )
-     vdn = uin( i, j-1, k, 3) / uin(i,j-1,k,1) ! left velocity
-     vup = uin( i ,j,   k, 3) / uin(i,j,  k,1) ! right velocity
+     f1 = cFlx(i, j-2, k, :, 2)
+     f2 = cFlx(i, j-1, k, :, 2)
+     f3 = cFlx(i, j,   k, :, 2)
+     f4 = cFlx(i, j+1, k, :, 2)
+     u1(1) = uin(i, j-2, k, iEcr+iGrp-1)
+     u2(1) = uin(i, j-1, k, iEcr+iGrp-1)
+     u3(1) = uin(i, j,   k, iEcr+iGrp-1)
+     u4(1) = uin(i, j+1, k, iEcr+iGrp-1)
+     u1(2:ndim+1) = crin(i, j-2, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u2(2:ndim+1) = crin(i, j-1, k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u3(2:ndim+1) = crin(i, j,   k, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u4(2:ndim+1) = crin(i, j+1, k, 1+(iGrp-1)*ndim:iGrp*ndim)
 
-     ! Second-order interpolation with using Van-Leer slope Limiter
-     ! interpolation of U
-     slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx(i, j+1, k, :, 2) - fup)/dx
+     slopeLM = (f3-f2)/dx
+     slopeRM = (f4-f3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx(i, j-2, k, :, 2))/dx
+     slopeLL = (f2-f1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
-     fdn = fdn+slopeL*0.5d0*dx
-     fup = fup-slopeM*0.5d0*dx
+     f2 = f2+slopeL*0.5d0*dx
+     f3 = f3-slopeM*0.5d0*dx
 
-     ! interpolation of F
-     slopeLM = (uup-udn)/dx
-     slopeRM = (crin(i, j+1, k, iP0:iP1) - uup)/dx
+     slopeLM = (u3-u2)/dx
+     slopeRM = (u4-u3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin(i, j-2, k, iP0:iP1))/dx
+     slopeLL = (u2-u1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
-     udn = udn+slopeL*0.5d0*dx
-     uup = uup-slopeM*0.5d0*dx            
+     u2 = u2+slopeL*0.5d0*dx
+     u3 = u3-slopeM*0.5d0*dx            
 
-     ! interpolation of velocities
-     vslopeLM = (vup-vdn)/dx
-     vslopeRM = (uin(i,j+1,k,3)/uin(i,j+1,k,1) - vup)/dx
-     vprod = vslopeLM*vslopeRM
-     vslopeM=0.
-     if(vprod.gt.0) vslopeM=2.*vprod/(vslopeLM+vslopeRM)
-     vslopeLL = (vdn - uin(i,j-2,k,3)/uin(i,j-2,k,1))/dx
-     vprod = vslopeLL*vslopeLM
-     vslopeL=0.
-     if(vprod.gt.0.) vslopeL=2.*vprod/(vslopeLL+vslopeLM)
-
-     meanadv = 0.5*(vdn+vup)
      meandiffv = 0.5*( lmax(i,j-1,k,2) + lmax(i,j,k,2) )
-     adn = min(meanadv-meandiffv, vdn-lmax(i,j-1,k,2))
-     adn = max(adn,-cr_c*sqrt(1./3.))
-     aup = max(meanadv+meandiffv, vup+lmax(i,j,k,2))
-     aup = min(aup,cr_c*sqrt(1./3.))
-     lminus = min(adn,0.)
-     lplus = max(aup,0.)
+     a2 = min(meandiffv, lmax(i,j-1,k,2))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = max(meandiffv, lmax(i,j,k,2))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     lminus = min(a2,0.)
+     lplus = max(a3,0.)
 
-     kcr%crflux(i, j, k, iP0:iP1, 2)=&
-          cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
+     kcr%crflux(i, j, k, 1+(iGrp-1)*(ndim+1):iGrp*(ndim+1), 2)=&
+          cmp_cr_face( f2, f3, u2, u3, lminus, lplus)*dtdx
 
-     if(r%cr_reduced_flux_correction) then
-        fred = 1.0
-        c_tilde = MIN(ABS(lplus), ABS(lminus))
-        fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
-        fred_up = sqrt(sum(uup(2:2+ndim-1)**2)) / (c_tilde * uup(1))
-        fred = max(fred_dn, fred_up, 1.0)
-        fup(1) = fup(1) / fred; uup(2:2+ndim-1) = uup(2:2+ndim-1) / fred
-        fdn(1) = fdn(1) / fred; udn(2:2+ndim-1) = udn(2:2+ndim-1) / fred
-     endif
   end do
   end do
   end do
@@ -489,72 +444,54 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   do i=if1,if2-1
   do j=jf1,jf2-1
   do k=kf1,kf2
-     fdn = cFlx(i, j, k-1, :, 3    )
-     fup = cFlx(i, j, k,   :, 3    )
-     udn = crin(i, j, k-1, iP0:iP1 )
-     uup = crin(i, j, k,   iP0:iP1 )
-     vdn = uin( i, j, k-1, 4) / uin(i,  j,k-1,1) ! left velocity
-     vup = uin( i, j, k,   4) / uin(i  ,j,k,  1) ! right velocity
+     f1 = cFlx(i, j, k-2, :, 3)
+     f2 = cFlx(i, j, k-1, :, 3)
+     f3 = cFlx(i, j, k,   :, 3)
+     f4 = cFlx(i, j, k+1, :, 3)
+     u1(1) = uin(i, j, k-2, iEcr+iGrp-1)
+     u2(1) = uin(i, j, k-1, iEcr+iGrp-1)
+     u3(1) = uin(i, j, k,   iEcr+iGrp-1)
+     u4(1) = uin(i, j, k+1, iEcr+iGrp-1)
+     u1(2:ndim+1) = crin(i, j, k-2, 1+(iGrp-1)*ndim:1+iGrp*ndim)
+     u2(2:ndim+1) = crin(i, j, k-1, 1+(iGrp-1)*ndim:1+iGrp*ndim)
+     u3(2:ndim+1) = crin(i, j, k,   1+(iGrp-1)*ndim:1+iGrp*ndim)
+     u4(2:ndim+1) = crin(i, j, k+1, 1+(iGrp-1)*ndim:1+iGrp*ndim)
 
-     ! Second-order interpolation with using Van-Leer slope Limiter
-     ! interpolation of U
-     slopeLM = (fup-fdn)/dx
-     slopeRM = (cFlx(i, j, k+1, :, 3) - fup)/dx
+     slopeLM = (f3-f2)/dx
+     slopeRM = (f4-f3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0.) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (fdn - cFlx(i, j, k-2, :, 3))/dx
+     slopeLL = (f2-f1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0) slopeL=2.*prod/(slopeLL+slopeLM)
-     fdn = fdn+slopeL*0.5d0*dx
-     fup = fup-slopeM*0.5d0*dx
+     f2 = f2+slopeL*0.5d0*dx
+     f3 = f3-slopeM*0.5d0*dx
 
-     ! interpolation of F
-     slopeLM = (uup-udn)/dx
-     slopeRM = (crin(i, j, k+1, iP0:iP1) - uup)/dx
+     slopeLM = (u3-u2)/dx
+     slopeRM = (u4-u3)/dx
      prod = slopeLM*slopeRM
      slopeM=0.
      where(prod.gt.0) slopeM=2.*prod/(slopeLM+slopeRM)
-     slopeLL = (udn - crin(i, j, k-2, iP0:iP1))/dx
+     slopeLL = (u2-u1)/dx
      prod = slopeLL*slopeLM
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
-     udn = udn+slopeL*0.5d0*dx
-     uup = uup-slopeM*0.5d0*dx            
+     u2 = u2+slopeL*0.5d0*dx
+     u3 = u3-slopeM*0.5d0*dx            
 
-     ! interpolation of velocities
-     vslopeLM = (vup-vdn)/dx
-     vslopeRM = (uin(i,j,k+1,4)/uin(i,j,k+1,1) - vup)/dx
-     vprod = vslopeLM*vslopeRM
-     vslopeM=0.
-     if(vprod.gt.0) vslopeM=2.*vprod/(vslopeLM+vslopeRM)
-     vslopeLL = (vdn - uin(i,j,k-2,4)/uin(i,j,k-2,1))/dx
-     vprod = vslopeLL*vslopeLM
-     vslopeL=0.
-     if(vprod.gt.0.) vslopeL=2.*vprod/(vslopeLL+vslopeLM)
-
-     meanadv = 0.5*(vdn+vup)
      meandiffv = 0.5*( lmax(i,j,k-1,3) + lmax(i,j,k,3) )
-     adn = min(meanadv-meandiffv, vdn-lmax(i,j,k-1,3))
-     adn = max(adn,-cr_c*sqrt(1./3.))
-     aup = max(meanadv+meandiffv, vup+lmax(i,j,k,3))
-     aup = min(aup,cr_c*sqrt(1./3.))
-     lminus = min(adn,0.)
-     lplus  = max(aup,0.)
+     a2 = min(meandiffv, lmax(i,j,k-1,3))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = max(meandiffv, lmax(i,j,k,3))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     lminus = min(a2,0.)
+     lplus  = max(a2,0.)
 
-     kcr%crflux( i, j, k, iP0:iP1, 3)=&
-          cmp_cr_face( fdn, fup, udn, uup, lminus, lplus)*dtdx
+     kcr%crflux( i, j, k, 1+(iGrp-1)*(ndim+1):iGrp*(ndim+1), 3)=&
+          cmp_cr_face( f2, f3, u2, u3, lminus, lplus)*dtdx
 
-     if (r%cr_reduced_flux_correction) then
-        fred = 1.0
-        c_tilde = MIN(ABS(lplus), ABS(lminus))
-        fred_dn = sqrt(sum(udn(2:2+ndim-1)**2)) / (c_tilde * udn(1))
-        fred_up = sqrt(sum(uup(2:2+ndim-1)**2)) / (c_tilde * uup(1))
-        fred = max(fred_dn, fred_up, 1.0)
-        fup(1) = fup(1) / fred; uup(2:2+ndim-1) = uup(2:2+ndim-1) / fred
-        fdn(1) = fdn(1) / fred; udn(2:2+ndim-1) = udn(2:2+ndim-1) / fred
-     endif
   end do
   end do
   end do

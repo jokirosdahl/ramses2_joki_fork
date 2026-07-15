@@ -4,11 +4,11 @@
 !##########################################################################
 subroutine interpol_cr(u1,u2,interpol_type)
   use amr_parameters, only: ndim, twotondim, twondim
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   implicit none
   integer::interpol_type
-  real(kind=8),dimension(0:twondim  ,1:ncrvar)::u1
-  real(kind=8),dimension(1:twotondim,1:ncrvar)::u2
+  real(kind=8),dimension(0:twondim  ,1:ncruvar)::u1
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::u2
   !----------------------------------------------------------
   ! This routine performs a prolongation (interpolation)
   ! operation for newly refined cells or buffer cells.
@@ -34,7 +34,7 @@ subroutine interpol_cr(u1,u2,interpol_type)
   end do
 
   ! Loop over interpolation variables
-  do ivar=1,ncrvar
+  do ivar=1,ncruvar
 
      ! Load father variable
      do j=0,twondim
