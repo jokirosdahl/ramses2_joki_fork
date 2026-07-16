@@ -131,8 +131,8 @@ module metal_interface
     end subroutine mtl_cmpdt
 
     ! Build nbor array from the already-populated hash table.
-    ! Mirrors the 27-launch update_nbor_array loop in r_set_grid_device
-    ! (gpu_manager.cuf); a single dispatch replaces those 27 launches.
+    ! Mirrors the update_nbor_array loop in r_set_grid_device
+    ! (gpu_manager.cuf); a single dispatch replaces those launches.
     subroutine mtl_build_nbor(head_idx, num_subgrids, hash_size, &
         ckey_max_l, key_off_l, &
         box_ckey_min, box_ckey_max, periodic_i) &
@@ -236,7 +236,7 @@ module metal_interface
       integer(c_int), value :: head_idx, num_octs
     end function mtl_count_flag1
 
-    ! Gradient-based density/pressure refinement criterion (HYDRO=1, GRAV=0, MHD=0).
+    ! Gradient-based hydro and MHD refinement criteria (GRAV=0).
     subroutine mtl_hydro_flag(head_idx, num_octs, &
         gamma, smallr, smallc2, err_grad_d, err_grad_p, floor_d, floor_p &
 #ifdef MHD
@@ -504,7 +504,7 @@ module metal_interface
       integer(c_int), value :: head_idx, num_subgrids
     end subroutine mtl_compute_cache_swap
 
-    ! Create ghost octs (cache region) with straight hydro injection.
+    ! Create ghost octs (cache region), interpolating MHD state when enabled.
     subroutine mtl_make_cache_octs(head_idx, num_subgrids, hash_size, &
         ngridmax, ifree_cache, new_noct, input_ind, interpol_var, interpol_type, smallr) &
         bind(C, name="mtl_make_cache_octs")

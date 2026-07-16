@@ -60,18 +60,17 @@ inline int hash_get(device const long* hash_key, device const int* hash_val,
 }
 
 /* =========================================================================
- * build_nbor_kernel — replaces the 27-launch update_nbor_array loop from
+ * build_nbor_kernel — replaces the multi-launch update_nbor_array loop from
  *                     r_set_grid_device in gpu_manager.cuf.
  *
- * Each thread handles one subgrid (= one oct for nsubgrid=1) and computes
- * all 27 neighbour indices.  The inner loop body mirrors update_nbor_array
- * for nsubgrid=1 (gpu_refine.cuf lines 1908-1939):
+ * Each thread handles one subgrid and computes all neighbour indices.  The
+ * inner loop body mirrors update_nbor_array:
  *
- *   ind = 1 + i_off + j_off*nsubgridp2 + k_off*nsubgridp2^2   (1..27)
- *   ckey_n[d] = ckey[d] + off - 1    (nsubgrid=1)
+ *   ind = 1 + i_off + j_off*nsubgridp2 + k_off*nsubgridp2^2
+ *   ckey_n[d] = (ckey[d]/nsubgrid)*nsubgrid + off - 1
  *   if periodic: wrap when ckey_n < box_min or ckey_n >= box_max
  *   key = key_off + ix + iy*nx + iz*nx*nx
- *   nbor[(subgrid_idx-1)*27 + (ind-1)] = hash_get(key)
+ *   nbor[(subgrid_idx-1)*subgridsize + (ind-1)] = hash_get(key)
  *
  * Thread layout: 128 threads/threadgroup.
  * ========================================================================= */
@@ -161,12 +160,12 @@ kernel void update_father_kernel(
 
 /* =========================================================================
  * AMR refinement kernels — port of gpu/gpu_refine.cuf
- * Scope: HYDRO=1, GRAV=0, MHD=0, NDIM=3, NSUBGRID=1, no CUB.
+ * Scope: HYDRO=1, NDIM=3, NSUBGRID=1 or 2, no CUB.
  *
  * Memory layout (0-based):
  *   uold    : float[8*(NVAR)*ntotal]  cell_0 + 8*ivar_0 + 8*(NVAR)*oct_abs_0
  *   flag1/2 : int[8*ntotal]           cell_0 + 8*oct_abs_0
- *   nbor    : int[27*ntotal]          (subgrid_abs_0)*27 + (ind_0)   row-major
+ *   nbor    : int[subgridsize*ntotal] (subgrid_abs_0)*subgridsize + ind_0
  *   grid    : oct_t[ntotal]           0-based oct index
  *   father  : int[ntotal]             1-based parent oct index per oct
  *   swap_*  : int[ntotal]             1-based oct index
@@ -560,7 +559,7 @@ inline void hash_update_r(device long* hash_key, device int* hash_val,
 /* =========================================================================
  * refine_kernel — create new child octs for flagged, unrefined cells.
  * Mirrors refine_kernel + make_new_oct (gpu_refine.cuf).
- * HYDRO=1, GRAV=0, MHD=0 — straight injection only.
+ * Uses MHD interpolation when MHD is enabled and straight injection otherwise.
  *
  * 1D thread layout: gid = oct_offset * 8 + cell_0 (< 8 * num_octs).
  * Each thread independently creates ONE child oct if flag1[cell_0, oct] is
@@ -660,6 +659,7 @@ kernel void refine_kernel(
 #endif
 
 #ifdef GRAV
+    /* Straight injection for gravity variables if active */
     if (f_grav && phi && phi_old) {
         int parent_abs_0 = oct_abs_0;
         for (int c = 0; c < 8; c++) {
@@ -1022,8 +1022,8 @@ kernel void sort_scatter_flag_kernel(
 }
 
 /* =========================================================================
- * sort_gather_hydro_kernel — unew[cell,ivar,oct] = uold[cell,ivar,swap_global[oct]-1].
- * Mirrors sort_gather_hydro_impl (HYDRO=1, no MHD).
+ * sort_gather_hydro_kernel — gather hydro and optional magnetic state.
+ * Mirrors sort_gather_hydro_impl.
  * 1D gid = oct_offset * 8 + cell_0; inner loop over NVAR variables.
  * ========================================================================= */
 kernel void sort_gather_hydro_kernel(
@@ -1062,7 +1062,6 @@ kernel void sort_gather_hydro_kernel(
  * update_nbor_prefix_kernel — compute nbor[input_ind, subgrid] and set
  * prefix_sum[subgrid] = 1 if missing, 0 if found.
  * Mirrors update_nbor_array(..., prefix_sum=prefix_sum) in gpu_refine.cuf.
- * NSUBGRID=1 → subgrid_idx == oct_idx; nsubgridp2=3, nsubgridp2sq=9.
  * 1 thread/subgrid.
  * ========================================================================= */
 kernel void update_nbor_prefix_kernel(
@@ -1086,14 +1085,12 @@ kernel void update_nbor_prefix_kernel(
     int subgrid_abs_0 = (head_idx - 1) + int(gid);
     int oct_abs_0     = subgrid_abs_0 * NSUBGRIDTONDIM_RF;
 
-    /* Decode 3D offset from input_ind (1-based, 1..27). */
     int ind0 = input_ind - 1;
     int k_off = ind0 / (NSUBGRIDP2_RF * NSUBGRIDP2_RF);
     int j_off = (ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF) / NSUBGRIDP2_RF;
     int i_off = ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF - j_off * NSUBGRIDP2_RF;
 
     int ilevel = grid[oct_abs_0].lev;
-    /* nsubgrid=1 → ckey/nsubgrid = ckey; offset = (ckey/1)*1 + i_off - 1 */
     int ckey_n[3];
     ckey_n[0] = (grid[oct_abs_0].ckey[0] / NSUBGRID_RF) * NSUBGRID_RF + i_off - 1;
     ckey_n[1] = (grid[oct_abs_0].ckey[1] / NSUBGRID_RF) * NSUBGRID_RF + j_off - 1;
@@ -1143,8 +1140,7 @@ kernel void compute_cache_swap_table_kernel(
 
 /* =========================================================================
  * make_cache_octs_kernel — create ghost octs in the cache region.
- * Mirrors make_cache_octs_impl (HYDRO=1, no GRAV, no MHD).
- * NSUBGRID=1 → oct_abs_0 = subgrid_abs_0.
+ * Mirrors make_cache_octs_impl.
  * 1 thread per new cache oct (gid < new_noct).
  * ========================================================================= */
 kernel void make_cache_octs_kernel(
@@ -1212,7 +1208,6 @@ kernel void make_cache_octs_kernel(
     int cache_1based = ngridmax + ifree_cache + int(gid);
     int cache_abs_0  = cache_1based - 1;
 
-    /* Update nbor for this subgrid (mirrors make_cache_octs_impl line 2192). */
     nbor[subgrid_abs_0 * SUBGRIDSIZE_RF + (input_ind - 1)] = cache_1based;
 
     /* Decode 3D offset for the neighbour direction. */

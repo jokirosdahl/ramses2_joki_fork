@@ -751,9 +751,8 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 }
 
 /* -----------------------------------------------------------------------
- * mtl_godunov — dispatch hydro_integrator_kernel (MUSCL-Hancock).
- * Thread layout mirrors CUDA nsubgrid=1: 64 threads/threadgroup,
- * 1 threadgroup per oct (subgrid).
+ * mtl_godunov — dispatch the hydro or MHD integrator.
+ * One threadgroup handles each subgrid.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
                              int ilevel, int levelmin, int levelmax,
@@ -1310,8 +1309,8 @@ extern "C" int mtl_count_flag1(int head_idx, int num_octs)
 }
 
 /* -----------------------------------------------------------------------
- * mtl_hydro_flag — gradient density/pressure refinement criterion.
- * head_idx / num_octs: octs at ilevel.  No MHD, no GRAV.
+ * mtl_hydro_flag — gradient-based hydro and MHD refinement criteria.
+ * head_idx / num_octs: octs at ilevel.  No GRAV.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_hydro_flag(int head_idx, int num_octs,
                                 float gamma, float smallr, float smallc2,
@@ -1549,9 +1548,9 @@ extern "C" int mtl_user_flag_batch(int head_idx, int num_octs,
           [enc setBuffer:s_nref       offset:0 atIndex:1];
           [enc setBuffer:s_uold       offset:0 atIndex:2];
 #ifdef MHD
-      [enc setBuffer:s_bold       offset:0 atIndex:3];
+          [enc setBuffer:s_bold       offset:0 atIndex:3];
 #else
-      [enc setBuffer:nil          offset:0 atIndex:3];
+          [enc setBuffer:nil          offset:0 atIndex:3]; /* bold: nil for MHD=0 */
 #endif
           [enc setBytes:&head_idx     length:sizeof(int)   atIndex:4];
           [enc setBytes:&num_octs     length:sizeof(int)   atIndex:5];
@@ -4278,3 +4277,4 @@ extern "C" void mtl_cic_part_medium(
     [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
+

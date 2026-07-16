@@ -2,7 +2,7 @@
  * metal/kernels/flag.metal
  *
  * Metal port of gpu/gpu_flag.cuf and hydro_flag_kernel from gpu/gpu_hydro.cuf.
- * Scope: HYDRO=1, GRAV=0, MHD=0, NDIM=3, NPRE=4 (float32), nsubgrid=1.
+ * Scope: HYDRO=1, GRAV=0, NDIM=3, NPRE=4 (float32), NSUBGRID=1 or 2.
  *
  * Kernels (thread layout):
  *   reset_flag1_kernel      2D TG(128): 8 cells × 16 octs
@@ -91,7 +91,7 @@ constant int iii_c[8][6] = {
 };
 
 /* =========================================================================
- * Minimal conserved/primitive structs for hydro_flag (NPRE=4, no MHD).
+ * Minimal conserved/primitive structs for hydro_flag (NPRE=4).
  * Redeclared here because .metal files compile independently.
  * ========================================================================= */
 struct fl_conserved_t {
@@ -311,9 +311,9 @@ kernel void count_flag1_kernel(
 }
 
 /* =========================================================================
- * hydro_flag_kernel — gradient-based density/pressure refinement criterion.
- * 2D threadgroup: 8 cells × 16 octs.  No MHD, no GRAV.
- * For nsubgrid=1: true oct = nbor centre slot (ind=14).
+ * hydro_flag_kernel — gradient-based hydro and MHD refinement criteria.
+ * 2D threadgroup: 8 cells × 16 octs.  No GRAV.
+ * The true oct is selected from its position within the subgrid.
  * ========================================================================= */
 kernel void hydro_flag_kernel(
     device int          *flag1      [[buffer(0)]],
