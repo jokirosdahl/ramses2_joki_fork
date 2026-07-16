@@ -3,6 +3,7 @@
 using namespace metal;
 
 #include "../metal_types.h"
+#include "../metal_config.h"
 
 #ifndef NVAR
 #define NVAR 5

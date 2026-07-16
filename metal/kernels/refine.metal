@@ -16,6 +16,7 @@
 
 #include <metal_stdlib>
 #include "../metal_types.h"
+#include "../metal_config.h"
 using namespace metal;
 
 constant int NSUBGRID_RF       = NSUBGRID;

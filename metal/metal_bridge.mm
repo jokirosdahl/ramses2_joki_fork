@@ -16,6 +16,7 @@ extern "C" long getmem_mac(void)
 }
 
 #include "metal_types.h"
+#include "metal_config.h"
 
 /* -----------------------------------------------------------------------
  * Dispatch helpers — thread layout macros.
@@ -559,11 +560,7 @@ extern "C" void mtl_device_sync(void)
 
 extern "C" int mtl_nsubgrid(void)
 {
-#ifdef NSUBGRID
     return NSUBGRID;
-#else
-    return 1;
-#endif
 }
 
 

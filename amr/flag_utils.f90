@@ -53,7 +53,7 @@ subroutine m_flag_fine(pst,ilevel,icount)
   if(r%verbose)write(*,*) '  ==> end step 4',nflag_tot
 
   ! In case of GPU and nsubgrid > 1, force refine the entire oct,
-#if defined(_CUDA)
+#ifdef _CUDA
   if (nsubgrid > 1)then
      call r_ensure_subgrid(pst,ilevel,1)
   endif

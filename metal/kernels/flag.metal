@@ -24,12 +24,9 @@
 #define NVAR 5
 #endif
 
-#ifndef NSUBGRID
-#define NSUBGRID 1
-#endif
-
 #include <metal_stdlib>
 #include "../metal_types.h"
+#include "../metal_config.h"
 using namespace metal;
 
 /* =========================================================================
@@ -116,8 +113,10 @@ inline float fl_compute_pressure(fl_conserved_t c, float gamma,
     float eint = c.energy - ke;
 #ifdef MHD
     eint -= 0.5f * (c.Bx * c.Bx + c.By * c.By + c.Bz * c.Bz);
-#endif
     return max((gamma - 1.0f) * eint, smallc2 * d / gamma);
+#else
+    return max((gamma - 1.0f) * eint, smallc2 * d);
+#endif
 }
 
 inline fl_primitive_t fl_c2p(fl_conserved_t c, float gamma,
