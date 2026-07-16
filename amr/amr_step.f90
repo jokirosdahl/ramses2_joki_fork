@@ -238,7 +238,8 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !-----------------------
   ! Set unew equal to uold
   !-----------------------
-  if(r%hydro.and..not.r%static_gas)then
+  !if(r%hydro.and..not.r%static_gas)then
+  if(r%hydro)then
      call m_timer('hydro - set unew','start')
      call r_set_unew(pst,ilevel,1)
   endif
@@ -357,10 +358,6 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         call m_timer('hydro - source','start')
         call r_source_hydro_fine(pst,ilevel,1)
 
-        ! Set uold equal to unew
-        call m_timer('hydro - set uold','start')
-        call r_set_uold(pst,ilevel,1)
-
         !------------------------
         ! Cosmic rays step
         !------------------------
@@ -370,6 +367,10 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
             call m_cr_step(pst,ilevel)
           endif
         endif
+
+        ! Set uold equal to unew
+        call m_timer('hydro - set uold','start')
+        call r_set_uold(pst,ilevel,1)
 
         ! Add gravity source terms to uold with half time step
         ! to complete the time step with old force (will be removed later)
