@@ -528,24 +528,7 @@ module amr_commons
      ! HK note --> OTSA required for RTZ
      integer,dimension(nIon)::spec2group=0                 ! Ion -> group # in recombinations
 
-     ! RT source regions parameters----------------------------------------------------------
-     integer                           ::cr_nsource=0
-     character(LEN=10),dimension(1:MAXREGION):: cr_source_type='square'
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_x_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_y_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_z_center=0.
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_x=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_y=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_z=1.E10
-     real(kind=8),dimension(1:MAXREGION)   ::cr_exp_source=2.0
-     integer, dimension(1:MAXREGION)       ::cr_src_group=1  
-     real(kind=8),dimension(1:MAXREGION)   ::cr_e_source=0.                      ! CR density
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fx_source=0.                     ! CR flux
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fy_source=0.                     ! CR flux
-     real(kind=8),dimension(1:MAXREGION)   ::cr_fz_source=0.                     ! CR flux
-
-     ! RT boundary condition parameters-------------------------------------------------------
-     real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_e_bound=0.0d0
+     ! CR boundary condition parameters-------------------------------------------------------
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
      real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
@@ -582,7 +565,6 @@ module amr_commons
      real(kind=8),dimension(1:MAXREGION)   ::cr_reg_length_z=1.E10
      real(kind=8),dimension(1:MAXREGION)   ::cr_exp_region=2.0
      integer,dimension(1:MAXREGION)        ::cr_reg_group=1
-     real(kind=8),dimension(1:MAXREGION)   ::cr_e_region=0.                     ! CR density
      real(kind=8),dimension(1:MAXREGION)   ::cr_fx_region=0.                    ! CR flux
      real(kind=8),dimension(1:MAXREGION)   ::cr_fy_region=0.                    ! CR flux
      real(kind=8),dimension(1:MAXREGION)   ::cr_fz_region=0.                    ! CR flux

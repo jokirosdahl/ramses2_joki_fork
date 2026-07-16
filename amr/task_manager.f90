@@ -161,7 +161,7 @@ function worker_init(mdl) result(pst)
   use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
   use cr_source_terms_module, only: r_cr_source_terms
   use update_cr_c_module, only: r_cr_updates, r_broadcast_cr_c
-  use cr_input_condinit_module, only: r_cr_input_condinit, r_cr_input_source_regions
+  use cr_input_condinit_module, only: r_cr_input_condinit
   use cr_upload_module, only: r_cr_upload_fine
   use output_cr_module, only: r_output_cr
 #ifdef _CUDA
@@ -320,7 +320,6 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_INIT_CR,                pst,C_FUNLOC(r_init_cr),0,0,"init_cr")
   call mdl_add_service(pst%s%mdl,MDL_CR_UPLOAD_FINE,         pst,C_FUNLOC(r_cr_upload_fine),1,0,"cr_upload_fine")
   call mdl_add_service(pst%s%mdl,MDL_CR_INPUT_CONDINIT,      pst,C_FUNLOC(r_cr_input_condinit),1,0,"cr_input_condinit")
-  call mdl_add_service(pst%s%mdl,MDL_CR_INPUT_SOURCE_REGIONS,pst,C_FUNLOC(r_cr_input_source_regions),1,0,"cr_input_source_regions")
   call mdl_add_service(pst%s%mdl,MDL_OUTPUT_CR,              pst,C_FUNLOC(r_output_cr),flen,0,"output_cr")
   call mdl_add_service(pst%s%mdl,MDL_CR_GODUNOV_FINE,        pst,C_FUNLOC(r_cr_godunov_fine),1,0,"cr_godunov_fine")
   call mdl_add_service(pst%s%mdl,MDL_CR_SOURCE_TERMS,        pst,C_FUNLOC(r_cr_source_terms),1,0,"cr_source_terms")

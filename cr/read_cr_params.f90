@@ -45,22 +45,6 @@ subroutine m_read_cr_params(pst)
   real(kind=8),dimension(1:ncrgrp)::fecr=0d0               ! SN fraction of CR energy       !
   real(kind=8)::cr_v_alfven=0.0           ! For idealised tests
 
-  ! CR source regions parameters----------------------------------------------------------
-  integer                           ::cr_nsource=0
-  character(LEN=10),dimension(1:MAXREGION)::cr_source_type='square'
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_x_center=0.
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_y_center=0.
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_z_center=0.
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_x=1.E10
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_y=1.E10
-  real(kind=8),dimension(1:MAXREGION)   ::cr_src_length_z=1.E10
-  real(kind=8),dimension(1:MAXREGION)   ::cr_exp_source=2.0
-  integer, dimension(1:MAXREGION)       ::cr_src_group=1  
-  real(kind=8),dimension(1:MAXREGION)   ::cr_e_source=0.                      ! CR density
-  real(kind=8),dimension(1:MAXREGION)   ::cr_fx_source=0.                     ! CR flux
-  real(kind=8),dimension(1:MAXREGION)   ::cr_fy_source=0.                     ! CR flux
-  real(kind=8),dimension(1:MAXREGION)   ::cr_fz_source=0.                     ! CR flux
-
   !--------------------------------------------------
   ! Namelist definitions
   !--------------------------------------------------
@@ -72,12 +56,6 @@ subroutine m_read_cr_params(pst)
        & ,cr_smallr_decouple, cr_test_setup, cr_v_alfven
 
   namelist/cr_groups/cr_d, cr_d_perp_factors, fecr
-
-  namelist/cr_sources/cr_nsource, cr_source_type                         &
-       & ,cr_src_x_center, cr_src_y_center, cr_src_z_center              &
-       & ,cr_src_length_x, cr_src_length_y, cr_src_length_z              &
-       & ,cr_exp_source, cr_src_group                                    &
-       & ,cr_e_source, cr_fx_source, cr_fy_source, cr_fz_source
 
   associate(s=>pst%s)
 
@@ -112,9 +90,6 @@ subroutine m_read_cr_params(pst)
   rewind(1)
   read(1,NML=cr_groups,END=114)
 114 continue
-  rewind(1)
-  read(1,NML=cr_sources,END=115)
-115 continue
   close(1)
 
   ! Fill in all run parameters in corresponding structure
@@ -138,21 +113,6 @@ subroutine m_read_cr_params(pst)
   s%r%cr_d_perp_factors=cr_d_perp_factors
   s%r%fecr=fecr
   s%r%cr_v_alfven=cr_v_alfven
-
-  s%r%cr_nsource=cr_nsource
-  s%r%cr_source_type=cr_source_type
-  s%r%cr_src_x_center=cr_src_x_center
-  s%r%cr_src_y_center=cr_src_y_center
-  s%r%cr_src_z_center=cr_src_z_center
-  s%r%cr_src_length_x=cr_src_length_x
-  s%r%cr_src_length_y=cr_src_length_y
-  s%r%cr_src_length_z=cr_src_length_z
-  s%r%cr_exp_source=cr_exp_source
-  s%r%cr_src_group=cr_src_group
-  s%r%cr_e_source=cr_e_source
-  s%r%cr_fx_source=cr_fx_source
-  s%r%cr_fy_source=cr_fy_source
-  s%r%cr_fz_source=cr_fz_source
 
   s%r%iecr=s%r%inener
   print*,'The index for cosmic ray energies is ', s%r%iecr

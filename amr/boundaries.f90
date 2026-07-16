@@ -358,10 +358,9 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
 #ifdef CRS
      do ind=1,twotondim
         do ivar=1,ncrgrp
-            m%cruold(ind,1+(ivar-1)*(ndim+1),igrid)= r%cr_e_bound(ibound,ivar)
-            m%cruold(ind,2+(ivar-1)*(ndim+1),igrid)= r%cr_fx_bound(ibound,ivar)
-            if(ndim>1) m%cruold(ind,3+(ivar-1)*(ndim+1),igrid)= r%cr_fy_bound(ibound,ivar)
-            if(ndim>2) m%cruold(ind,4+(ivar-1)*(ndim+1),igrid)= r%cr_fz_bound(ibound,ivar)
+            m%cruold(ind,1+(ivar-1)*ndim,igrid)= r%cr_fx_bound(ibound,ivar)
+            if(ndim>1) m%cruold(ind,2+(ivar-1)*ndim,igrid)= r%cr_fy_bound(ibound,ivar)
+            if(ndim>2) m%cruold(ind,3+(ivar-1)*ndim,igrid)= r%cr_fz_bound(ibound,ivar)
         end do
      end do
 #endif

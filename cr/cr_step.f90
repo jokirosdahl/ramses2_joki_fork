@@ -9,7 +9,6 @@ subroutine m_cr_step(pst,ilevel)
   use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
   use cr_source_terms_module, only: r_cr_source_terms
   use cr_upload_module, only: m_cr_upload_fine
-  use cr_input_condinit_module, only: r_cr_input_source_regions
   use constants,only: c_cgs
   type(pst_t)::pst
   integer::ilevel
@@ -57,9 +56,6 @@ subroutine m_cr_step(pst,ilevel)
      ! Hyperbolic CR solver
      if(r%cr_advect)call r_cr_godunov_fine(pst,ilevel,1)
      if(r%cr_advect)call r_cr_source_terms(pst,ilevel,1)
-
-     ! Add anisotropic radiation from other sources
-     if(r%cr_nsource>0)call r_cr_input_source_regions(pst,ilevel,1)
 
      ! Set cruold equal to crunew
      call r_set_cruold(pst,ilevel,1)

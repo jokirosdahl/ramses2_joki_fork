@@ -4,7 +4,7 @@
 !================================================================
 subroutine cr_condinit(r,g,x,q,dx,nn)
   use amr_parameters, only: ndim, nvector
-  use cr_parameters, only: ncrvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: run_t, global_t
   use cr_input_condinit_module, only: cr_region_condinit
   implicit none
@@ -12,7 +12,7 @@ subroutine cr_condinit(r,g,x,q,dx,nn)
   type(global_t)::g
   integer ::nn, i
   real(kind=8)::dx                              ! Cell size
-  real(kind=8),dimension(1:nvector,1:ncrvar)::q ! CR variables
+  real(kind=8),dimension(1:nvector,1:ncruvar)::q ! CR variables
   real(kind=8),dimension(1:nvector,1:ndim)::x   ! Cell center position.
   real(kind=8)::xx,yy,zz,rr,theta,pi,xcenter,ttmin,ttmax
   !================================================================
@@ -27,9 +27,7 @@ subroutine cr_condinit(r,g,x,q,dx,nn)
   ! Add here, if you wish, some user-defined initial conditions
   ! ........
   if(r%cr_test_setup=='none') return
-  if(r%cr_test_setup=='diffusion') then
-    q(1:nn,1)=exp(-40d0*(x(1:nn,1)-r%box_size(1)*0.5d0)**2)
-  else if(r%cr_test_setup=='streaming_triangle') then
+  if(r%cr_test_setup=='streaming_triangle') then
      q(1:nn,1)=2d0-1d0*sqrt((x(1:nn,1)-r%box_size(1)*0.5d0)**2)
      !q(1:nn,1+1)=q(1:nn,1)*4d0/3d0*q(1:nn,2)
   else if(r%cr_test_setup=='circular_diffusion') then

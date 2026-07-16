@@ -238,7 +238,6 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXREGION)::cr_reg_length_z=1.E10
   real(kind=8),dimension(1:MAXREGION)::cr_exp_region=2.0
   integer ,dimension(1:MAXREGION)::cr_reg_group=1
-  real(kind=8),dimension(1:MAXREGION)::cr_e_region=0.0 !  CR density
   real(kind=8),dimension(1:MAXREGION)::cr_fx_region=0.0 ! CR flux
   real(kind=8),dimension(1:MAXREGION)::cr_fy_region=0.0 ! CR flux
   real(kind=8),dimension(1:MAXREGION)::cr_fz_region=0.0 ! CR flux
@@ -380,7 +379,6 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
 #endif
 #ifdef CRS
-  real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_e_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
@@ -614,7 +612,7 @@ subroutine m_read_params(pst)
        & ,cr_reg_x_center, cr_reg_y_center, cr_reg_z_center      &
        & ,cr_reg_length_x, cr_reg_length_y, cr_reg_length_z      &
        & ,cr_exp_region, cr_reg_group                            &
-       & ,cr_e_region, cr_fx_region, cr_fy_region, cr_fz_region  &
+       & ,cr_fx_region, cr_fy_region, cr_fz_region  &
 #endif
        & ,d_region,u_region,v_region,w_region,p_region
   ! Hydro solver parameters
@@ -662,7 +660,7 @@ subroutine m_read_params(pst)
        & ,rt_n_bound,rt_u_bound,rt_v_bound,rt_w_bound &
 #endif
 #ifdef CRS
-       & ,cr_e_bound,cr_fx_bound,cr_fy_bound,cr_fz_bound &
+       & ,cr_fx_bound,cr_fy_bound,cr_fz_bound &
 #endif
        & ,d_bound,u_bound,v_bound,w_bound,p_bound
   ! Cooling / basic chemistry parameters
@@ -1515,7 +1513,6 @@ subroutine m_read_params(pst)
   s%r%cr_reg_length_z=cr_reg_length_z
   s%r%cr_exp_region=cr_exp_region
   s%r%cr_reg_group=cr_reg_group
-  s%r%cr_e_region=cr_e_region
   s%r%cr_fx_region=cr_fx_region
   s%r%cr_fy_region=cr_fy_region
   s%r%cr_fz_region=cr_fz_region
@@ -1559,7 +1556,6 @@ subroutine m_read_params(pst)
   s%r%rt_w_bound=rt_w_bound
 #endif
 #ifdef CRS
-  s%r%cr_e_bound=cr_e_bound
   s%r%cr_fx_bound=cr_fx_bound
   s%r%cr_fy_bound=cr_fy_bound
   s%r%cr_fz_bound=cr_fz_bound
