@@ -63,8 +63,8 @@ subroutine cr_source_terms(s,ilevel)
   real(kind=8)::coef_11, coef_12, coef_13, coef_14, coef_21, coef_22
   real(kind=8)::coef_31, coef_33, coef_41, coef_44
   real(kind=8)::e_coef, new_ec, old_ec, sigma_x, sigma_y, sigma_z, sigma_stream
-  real(kind=8)::Ecr, rhs2, rhs3, rhs4,v1, v2, v3, vtot1, vtot2, vtot3
-  real(kind=8)::f_decouple, g_grp, mom_change, smallp, three_gmone
+  real(kind=8)::Ecr, rhs2, rhs3, rhs4,v1, v2, v3
+  real(kind=8)::f_decouple, g_grp, smallp, three_gmone
   ! -------------------------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
   if(r%verbose.and.g%myid==1)write(*,'("   Entering cr_source_terms for level ",I2)')ilevel
@@ -133,7 +133,7 @@ subroutine cr_source_terms(s,ilevel)
             endif
           end do
 
-          ! Loop over dimensions
+         ! Loop over dimensions
           do idim=1,ndim
             ! Gather neighbouring e_cr values
             do igrp=1,ncrgrp
@@ -148,7 +148,7 @@ subroutine cr_source_terms(s,ilevel)
               dx_d   = dx+refined(2*idim)*dx*0.5
 #endif 
               gradecr_loc(i,idim,iGrp) = (pcrd-pcrg)/(dx_g+dx_d)
-              gradpcr_loc(i,idim,iGrp) = gradecr_loc(i,idim,iGrp) * (r%gamma_rad(r%iEcr-1+igrp)-1d0)
+              gradpcr_loc(i,idim,iGrp) = gradecr_loc(i,idim,iGrp) * (r%gamma_rad(r%iEcr-r%inener+igrp)-1d0)
             end do
           end do
 
@@ -178,7 +178,7 @@ subroutine cr_source_terms(s,ilevel)
             va_loc = r%cr_v_alfven
           endif
 
-          bxby = sqrt(bloc(1)**2+bloc(2)**2)
+         bxby = sqrt(bloc(1)**2+bloc(2)**2)
           if(norm.gt.1e-10) then
             sint = bxby/norm     
             cost = bloc(3)/norm
@@ -193,9 +193,8 @@ subroutine cr_source_terms(s,ilevel)
             sinp = 0d0
             cosp = 1d0
           endif
-
           do igrp=1,ncrgrp
-            g_grp = r%gamma_rad(r%iEcr-1+igrp)
+            g_grp = r%gamma_rad(r%iEcr-r%inener+igrp)
             three_gmone = 3d0*(g_grp - 1d0)
             bdotgradE_loc=0.
             ! bdotgrade is needed for eq 3 in Jiang & Oh
