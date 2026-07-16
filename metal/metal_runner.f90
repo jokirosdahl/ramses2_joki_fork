@@ -101,6 +101,8 @@ recursive subroutine r_set_grid_device(pst)
           c_loc(pst%s%m%unew(1,1,1)), &
 #ifdef MHD
           c_loc(pst%s%m%bold(1,1,1)), &
+#else
+          c_null_ptr, &
 #endif
           c_loc(pst%s%m%grid(1)),     &
           int(pst%s%m%ngridmax, c_int), &
@@ -110,9 +112,7 @@ recursive subroutine r_set_grid_device(pst)
      call mtl_set_grid_device( &
           c_null_ptr, &
           c_null_ptr, &
-#ifdef MHD
           c_null_ptr, &
-#endif
           c_loc(pst%s%m%grid(1)),     &
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
@@ -161,6 +161,8 @@ recursive subroutine r_transfer_grid_host(pst)
           c_loc(pst%s%m%uold(1,1,1)), &
 #ifdef MHD
           c_loc(pst%s%m%bold(1,1,1)), &
+#else
+          c_null_ptr, &
 #endif
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &

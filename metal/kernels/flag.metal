@@ -147,7 +147,6 @@ inline bool fl_hydro_crit(fl_primitive_t l, fl_primitive_t m, fl_primitive_t r,
     return ok;
 }
 
-#ifdef MHD
 inline bool fl_mhd_component_crit(float vl, float vm, float vr,
                                   float el, float em, float er,
                                   float threshold, float floor) {
@@ -179,7 +178,6 @@ inline bool fl_hydro_crit_mhd(float3 l, float3 m, float3 r,
     ok = ok || fl_mhd_component_crit(l.z, m.z, r.z, el, em, er, eg_C, fl_C);
     return ok;
 }
-#endif
 
 /* Helper: load conserved state from uold buffer (column-major layout). */
 inline fl_conserved_t fl_load(device const float *uold,

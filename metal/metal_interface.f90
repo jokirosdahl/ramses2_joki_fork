@@ -48,18 +48,13 @@ module metal_interface
     ! Copy host arrays into Metal buffers (H->D).
     ! Mirrors r_set_grid_device / cudaMemcpy in the CUDA path.
     ! On Apple Silicon the memcpy stays within DRAM; no PCIe transfer.
-    subroutine mtl_set_grid_device(uold, unew, &
-#ifdef MHD
-        bold, &
-#endif
+    subroutine mtl_set_grid_device(uold, unew, bold, &
         grid, ngridmax, nvar, twotondim) &
         bind(C, name="mtl_set_grid_device")
       import c_ptr, c_int
       type(c_ptr), value  :: uold   ! real(kind=4)(1:twotondim,1:nvar,1:ngridmax)
       type(c_ptr), value  :: unew   ! real(kind=4)(1:twotondim,1:nvar,1:ngridmax)
-#ifdef MHD
       type(c_ptr), value  :: bold
-#endif
       type(c_ptr), value  :: grid   ! type(oct)(1:ngridmax)
       integer(c_int), value :: ngridmax, nvar, twotondim
     end subroutine mtl_set_grid_device
@@ -74,17 +69,12 @@ module metal_interface
 
     ! Copy Metal uold buffer back to host (D->H), called before I/O.
     ! Mirrors r_transfer_grid_host / cudaMemcpy in the CUDA path.
-    subroutine mtl_transfer_grid_host(uold, &
-#ifdef MHD
-        bold, &
-#endif
+    subroutine mtl_transfer_grid_host(uold, bold, &
         ngridmax, nvar, twotondim) &
         bind(C, name="mtl_transfer_grid_host")
       import c_ptr, c_int
       type(c_ptr), value  :: uold
-#ifdef MHD
       type(c_ptr), value  :: bold
-#endif
       integer(c_int), value :: ngridmax, nvar, twotondim
     end subroutine mtl_transfer_grid_host
 

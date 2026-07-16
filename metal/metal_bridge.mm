@@ -45,10 +45,8 @@ static id<MTLCommandQueue>         s_queue        = nil;
 static id<MTLLibrary>              s_library      = nil;
 static id<MTLBuffer>               s_uold         = nil;
 static id<MTLBuffer>               s_unew         = nil;
-#ifdef MHD
 static id<MTLBuffer>               s_bold         = nil;
 static id<MTLBuffer>               s_bnew         = nil;
-#endif
 static id<MTLBuffer>               s_grid         = nil;
 static id<MTLBuffer>               s_nbor         = nil;
 static id<MTLBuffer>               s_hash_key     = nil;
@@ -86,12 +84,10 @@ static id<MTLComputePipelineState> s_pso_cmpdt    = nil;
 static id<MTLComputePipelineState> s_pso_sync_hydro = nil;
 static id<MTLComputePipelineState> s_pso_grav_hydro = nil;
 static id<MTLComputePipelineState> s_pso_godunov      = nil;
-#ifdef MHD
 static id<MTLComputePipelineState> s_pso_mhd_set_unew = nil;
 static id<MTLComputePipelineState> s_pso_mhd_set_uold = nil;
 static id<MTLComputePipelineState> s_pso_mhd_cmpdt = nil;
 static id<MTLComputePipelineState> s_pso_mhd_godunov = nil;
-#endif
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
 static id<MTLComputePipelineState> s_pso_scan_fixup        = nil;
@@ -473,9 +469,7 @@ extern "C" void mtl_alloc_amr(int ngridmax, int ncachemax,
  * allocations at different addresses.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_set_grid_device(void *uold_ptr, void *unew_ptr,
-#ifdef MHD
                                     void *bold_ptr,
-#endif
                                     void *grid_ptr,
                                     int ngridmax, int nvar, int twotondim)
 {
@@ -487,11 +481,9 @@ extern "C" void mtl_set_grid_device(void *uold_ptr, void *unew_ptr,
     if (unew_ptr && s_unew) {
         memcpy(s_unew.contents, unew_ptr, u_bytes);
     }
-#ifdef MHD
     size_t b_bytes = (size_t)ngridmax * 6 * twotondim * sizeof(float);
     if (bold_ptr && s_bold) memcpy(s_bold.contents, bold_ptr, b_bytes);
     if (bold_ptr && s_bnew) memcpy(s_bnew.contents, bold_ptr, b_bytes);
-#endif
     memcpy(s_grid.contents, grid_ptr, grid_bytes);
 }
 
@@ -513,21 +505,17 @@ extern "C" void mtl_upload_flag1(void *flag1_host, int ngridmax)
  * Called before each output dump so m%uold reflects the GPU result.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_transfer_grid_host(void *uold_ptr,
-#ifdef MHD
                                        void *bold_ptr,
-#endif
                                        int ngridmax, int nvar, int twotondim)
 {
     if (uold_ptr && s_uold) {
         size_t u_bytes = (size_t)ngridmax * nvar * twotondim * sizeof(float);
         memcpy(uold_ptr, s_uold.contents, u_bytes);
     }
-#ifdef MHD
     if (bold_ptr && s_bold) {
         size_t b_bytes = (size_t)ngridmax * 6 * twotondim * sizeof(float);
         memcpy(bold_ptr, s_bold.contents, b_bytes);
     }
-#endif
 }
 
 /* -----------------------------------------------------------------------
@@ -854,6 +842,7 @@ extern "C" void mtl_sync_hydro(int head_idx, int num_octs,
     DISPATCH_2D_8_16(enc, num_octs);
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
+
 
 extern "C" void mtl_grav_hydro(int head_idx, int num_octs,
                                float gamma, float smallr, float smallc2,
@@ -4277,4 +4266,3 @@ extern "C" void mtl_cic_part_medium(
     [enc dispatchThreadgroups:{nb,1,1} threadsPerThreadgroup:{tg,1,1}];
     [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
 }
-

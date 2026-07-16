@@ -183,7 +183,6 @@ kernel void update_father_kernel(
 #define NVAR 5
 #endif
 
-#ifdef MHD
 inline float rf_u_get(device const float *u, int oct, int ivar, int cell)
 {
     return u[(oct - 1) * NVAR * 8 + ivar * 8 + cell];
@@ -449,7 +448,6 @@ inline void rf_prolong_mhd(device const oct_t *grid, device const float *uold,
     }
     rf_interpol_mhd(u1, u2, b1, b2, b3, refined, interpol_var, interpol_type, smallr);
 }
-#endif
 
 /* ---- Hilbert state tables (NDIM=3), from gpu/gpu_hilbert.cuf ---------- */
 /* left_shift=4, right_shift=-1 → ISHFT(hkey,4) then ISHFT(hkey,-1)       */
