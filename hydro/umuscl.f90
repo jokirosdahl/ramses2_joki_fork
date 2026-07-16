@@ -1628,6 +1628,9 @@ subroutine cmp_mag_flx(qRT,irt1,irt2,jrt1,jrt2,krt1,krt2, &
   integer::i, j, k, xdim
   real(kind=8),dimension(1:nprim)::qLL,qRL,qLR,qRR
   real(kind=8)::E
+#if NENER>0
+  integer::irad
+#endif
 
   xdim = lor - 1
   riemann2d = params%riemann2d
