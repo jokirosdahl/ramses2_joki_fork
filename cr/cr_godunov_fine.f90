@@ -706,7 +706,7 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
 #ifdef CRS
                             m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild) =               &
                               & m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild)             &
-                              & +(h%crflux(i3   ,j3   ,k3   ,icr_f+1:icr_f+ndim,idim)   &
+                              & +(h%crflux(i3  ,j3   ,k3   ,icr_f+1:icr_f+ndim,idim)    &
                               & -h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim))
 #endif
                           end do
@@ -782,10 +782,9 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                           do igrp=1,ncrgrp
                              icr_u = 1+(igrp-1)*ndim
                              icr_f = 1+(igrp-1)*(ndim+1)
-                             m%unew(ind_son,iEcr+igrp-1,igrid)=                                   &
-                               & m%unew(ind_son,iEcr+igrp-1,igrid)                                &
+                             m%unew(icell,iEcr+igrp-1,igrid)=m%unew(icell,iEcr+igrp-1,igrid)      &
                                & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
-                             m%unew(ind_son,5,igrid)=m%unew(ind_son,5,igrid)                      &
+                             m%unew(icell,5,igrid)=m%unew(icell,5,igrid)                          &
                                & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
 #ifdef CRS
                              m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                          &
@@ -836,18 +835,16 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                           k3=1+2*(k1-k0-1)+k2
 #endif
                           ! Conservative update of new state variables
-                          do ivar=1,ncrvar
+                          do igrp=1,ncrgrp
                              icr_u = 1+(igrp-1)*ndim
                              icr_f = 1+(igrp-1)*(ndim+1)
-                             m%unew(ind_son,iEcr+igrp-1,igrid)=                            &
-                               & m%unew(ind_son,iEcr+igrp-1,igrid)                         &
+                             m%unew(icell,iEcr+igrp-1,igrid)=m%unew(icell,iEcr+igrp-1,igrid) &
                                & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
-                             m%unew(ind_son,5,igrid)=                                      &
-                               & m%unew(ind_son,5,igrid)                                   &
+                             m%unew(icell,5,igrid)=m%unew(icell,5,igrid)                     &
                                & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
 #ifdef CRS
-                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                   &
-                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                &
+                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                     &
+                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                  &
                                & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim) * oneontwotondim
 #endif
                           end do
