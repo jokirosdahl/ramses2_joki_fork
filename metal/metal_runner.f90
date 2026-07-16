@@ -287,7 +287,7 @@ subroutine metal_godunov(sim, ilevel)
 #ifdef MHD
   nsubgrid_l = mtl_nsubgrid()
   nsubgridtondim_l = nsubgrid_l**ndim
-  if (sim%r%riemann /= solver_uct_hlld) error stop 'Metal MHD requires riemann=uct_hlld'
+  if (sim%r%riemann /= solver_uct_hlld) error stop 'Metal MHD requires riemann=uct-hlld'
   if (mod(sim%m%head(ilevel)-1, nsubgridtondim_l) /= 0) error stop 'Metal MHD oct head is not nsubgrid aligned'
   if (mod(sim%m%noct(ilevel), nsubgridtondim_l) /= 0) error stop 'Metal MHD oct count is not divisible by nsubgrid'
   head_idx = int((sim%m%head(ilevel)-1)/nsubgridtondim_l+1, c_int)

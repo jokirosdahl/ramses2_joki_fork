@@ -615,11 +615,11 @@ extern "C" void mtl_set_unew(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
- #ifdef MHD
+#ifdef MHD
     [enc setComputePipelineState:s_pso_mhd_set_unew];
- #else
+#else
     [enc setComputePipelineState:s_pso_set_unew];
- #endif
+#endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
 #ifdef MHD
@@ -647,11 +647,11 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
- #ifdef MHD
+#ifdef MHD
     [enc setComputePipelineState:s_pso_mhd_set_uold];
- #else
+#else
     [enc setComputePipelineState:s_pso_set_uold];
- #endif
+#endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
 #ifdef MHD
@@ -708,11 +708,11 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
- #ifdef MHD
+#ifdef MHD
     [enc setComputePipelineState:s_pso_mhd_cmpdt];
- #else
+#else
     [enc setComputePipelineState:s_pso_cmpdt];
- #endif
+#endif
     [enc setBuffer:s_grid    offset:0 atIndex:0];
     [enc setBuffer:s_uold    offset:0 atIndex:1];
 #ifdef MHD
@@ -781,11 +781,11 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
- #ifdef MHD
+#ifdef MHD
     [enc setComputePipelineState:s_pso_mhd_godunov];
- #else
+#else
     [enc setComputePipelineState:s_pso_godunov];
- #endif
+#endif
     [enc setBuffer:s_grid  offset:0 atIndex:0];
     [enc setBuffer:s_uold  offset:0 atIndex:1];
     [enc setBuffer:s_unew  offset:0 atIndex:2];

@@ -222,10 +222,17 @@ ifeq ($(COMPILER),METAL)
    else
       METAL_NSUBGRID_VALUE = $(METAL_NSUBGRID)
    endif
-   DEFINES += -DNSUBGRID=$(METAL_NSUBGRID_VALUE)
-   ifeq ($(HYDRO_FASTMATH),1)
-      METAL_FASTMATH = -ffast-math -fmetal-math-mode=fast -fmetal-math-fp32-functions=fast
+   ifneq ($(METAL_NSUBGRID_VALUE),1)
+      ifneq ($(METAL_NSUBGRID_VALUE),2)
+         $(error METAL_NSUBGRID must be AUTO, 1, or 2)
+      endif
    endif
+   ifneq ($(MHD),1)
+      ifneq ($(METAL_NSUBGRID_VALUE),1)
+         $(error Metal hydro requires METAL_NSUBGRID=1)
+      endif
+   endif
+   DEFINES += -DNSUBGRID=$(METAL_NSUBGRID_VALUE)
    FFLAGS       = -cpp $(DEFINES)
    F90          = gfortran -ffree-line-length-none -fimplicit-none
    FC           = gfortran -ffree-line-length-none -fimplicit-none
@@ -239,13 +246,16 @@ ifeq ($(COMPILER),METAL)
    METAL_PATH   = ../metal
    METAL_KPATH  = ../metal/kernels
    CXX          = xcrun clang++
-   CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
+   CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH) -DNSUBGRID=$(METAL_NSUBGRID_VALUE)
+   ifeq ($(MHD),1)
+      CXXFLAGS += -DMHD
+   endif
    ifeq ($(DEBUG),1)
       CXXFLAGS  += -g -O0
    endif
    METALC       = xcrun -sdk macosx metal
    METALLIB     = xcrun -sdk macosx metallib
-   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -DNSUBGRID=$(METAL_NSUBGRID_VALUE) -I$(METAL_PATH) -I$(METAL_KPATH)
+   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
    ifeq ($(DEBUG),1)
       METALFLAGS += -gline-tables-only -frecord-sources
    endif
@@ -368,9 +378,9 @@ metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
 hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
-	$(METALC) $(METALFLAGS) -c $< -o $@
+	$(METALC) $(METALFLAGS) -DNSUBGRID=$(METAL_NSUBGRID_VALUE) -c $< -o $@
 flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
-	$(METALC) $(METALFLAGS) -c $< -o $@
+	$(METALC) $(METALFLAGS) -DNSUBGRID=$(METAL_NSUBGRID_VALUE) -c $< -o $@
 scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 rho.air: $(METAL_KPATH)/rho.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
@@ -382,7 +392,7 @@ cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
 part.air: $(METAL_KPATH)/part.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 mhd_uct.air: $(METAL_KPATH)/mhd_uct.metal $(METAL_PATH)/metal_types.h
-	$(METALC) $(METALFLAGS) $(METAL_FASTMATH) -c $< -o $@
+	$(METALC) $(METALFLAGS) -DNSUBGRID=$(METAL_NSUBGRID_VALUE) -c $< -o $@
 ifeq ($(MHD),1)
 METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air mhd_uct.air
 else
