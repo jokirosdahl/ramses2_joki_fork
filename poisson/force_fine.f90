@@ -5,6 +5,9 @@ module force_fine_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_gradient_phi, gpu_epot, gpu_rhomax
 #endif
+#ifdef _METAL
+  use metal_runner, only: metal_gradient_phi, metal_cmp_epot, metal_cmp_rhomax
+#endif
 
 contains
 #ifdef GRAV  
@@ -160,6 +163,8 @@ recursive subroutine r_gradient_phi(pst,input,input_size)
   else
 #ifdef _CUDA
      call gpu_gradient_phi(pst%s,input%ilevel)
+#elif defined(_METAL)
+     call metal_gradient_phi(pst%s,input%ilevel)
 #else
      call gradient_phi(pst%s,input%ilevel,input%icount)
 #endif
@@ -367,6 +372,8 @@ recursive subroutine r_compute_epot(pst,ilevel,input_size,epot,output_size)
   else
 #ifdef _CUDA
      call gpu_epot(pst%s,ilevel,epot)
+#elif defined(_METAL)
+     call metal_cmp_epot(pst%s,ilevel,epot)
 #else
      call compute_epot(pst%s%r,pst%s%g,pst%s%m,ilevel,epot)
 #endif
@@ -443,6 +450,8 @@ recursive subroutine r_compute_rhomax(pst,ilevel,input_size,rhomax,output_size)
   else
 #ifdef _CUDA
      call gpu_rhomax(pst%s,ilevel,rhomax)
+#elif defined(_METAL)
+     call metal_cmp_rhomax(pst%s,ilevel,rhomax)
 #else
      call compute_rhomax(pst%s%r,pst%s%g,pst%s%m,ilevel,rhomax)
 #endif

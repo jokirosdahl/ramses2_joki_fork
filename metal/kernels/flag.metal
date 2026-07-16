@@ -416,3 +416,85 @@ kernel void enforce_rules_kernel(
         for (int ic = 0; ic < 8; ic++) flag1[ic + 8 * oct_abs_0] = 0;
     }
 }
+
+/* =========================================================================
+ * poisson_flag_kernel — flag cells based on Jeans length or density threshold.
+ * 2D threadgroup: 128 threads = 8 cells (low bits) × 16 octs (high bits).
+ * ========================================================================= */
+kernel void poisson_flag_kernel(
+    device int          *flag1        [[buffer(0)]],
+    device const float  *nref         [[buffer(1)]],
+    device const float  *uold         [[buffer(2)]],
+    device const float  *bold         [[buffer(3)]],
+    constant int        &head_idx     [[buffer(4)]],
+    constant int        &num_octs     [[buffer(5)]],
+    constant float      &gamma        [[buffer(6)]],
+    constant float      &smallr       [[buffer(7)]],
+    constant float      &smallc2      [[buffer(8)]],
+    constant float      &mass_sph     [[buffer(9)]],
+    constant float      &m_refine     [[buffer(10)]],
+    constant float      &jeans_refine [[buffer(11)]],
+    constant float      &factG        [[buffer(12)]],
+    constant float      &dx_loc       [[buffer(13)]],
+    uint tid [[thread_position_in_threadgroup]],
+    uint bid [[threadgroup_position_in_grid]])
+{
+    uint cell_0  = tid % 8u;
+    uint oct_offset = bid * (uint)FLAG_TG_OCTS + tid / 8u;
+    if (int(oct_offset) >= num_octs) return;
+    int oct_0  = (head_idx - 1) + int(oct_offset);
+
+#ifndef GRAV
+    float vol_loc = dx_loc * dx_loc * dx_loc;
+    float d_scale = mass_sph / vol_loc;
+#endif
+
+    bool ok = false;
+
+#ifdef GRAV
+    /* Refine if number of particles exceeds threshold */
+    if (m_refine >= 0.0f) {
+        ok = ok || (nref[cell_0 + 8 * oct_0] >= m_refine);
+    }
+#else
+    /* Refine if gas mass exceeds threshold */
+    if (mass_sph > 0.0f && m_refine >= 0.0f) {
+        ok = ok || (uold[cell_0 + 8 * 0 + 8 * (NVAR) * oct_0] >= m_refine * d_scale);
+    }
+#endif
+
+#ifdef HYDRO
+    if (jeans_refine >= 0.0f) {
+        /* Convert to primitive variables */
+        int base = (int)cell_0 + 8 * (NVAR) * oct_0;
+        float density    = max(uold[base], smallr);
+        float momentum_x = uold[base + 8];
+        float momentum_y = uold[base + 16];
+        float momentum_z = uold[base + 24];
+        float energy     = uold[base + 32];
+        float emag       = 0.0f;
+#ifdef MHD
+        int b_base = (int)cell_0 + 8 * 6 * oct_0;
+        for (int idim = 0; idim < 3; idim++) {
+            float b_val = bold[b_base + 8 * idim] + bold[b_base + 8 * (idim + 3)];
+            emag += 0.125f * b_val * b_val;
+        }
+#endif
+        float pressure   = energy - 0.5f * (momentum_x*momentum_x + momentum_y*momentum_y + momentum_z*momentum_z) / density - emag;
+        pressure   = max((gamma - 1.0f) * pressure, smallc2 * density);
+
+        /* Compute Jeans length */
+        float c_iso = sqrt(pressure / density);
+        float t_ff = sqrt(3.1415926535f / density / factG);
+        float jeans_length = c_iso * t_ff;
+
+        /* Refine if Jeans length is not resolved enough */
+        ok = ok || (jeans_refine * dx_loc >= jeans_length);
+    }
+#endif
+
+    /* If satisfied set flag1 to 1 */
+    if (ok) {
+        flag1[cell_0 + 8 * oct_0] = 1;
+    }
+}

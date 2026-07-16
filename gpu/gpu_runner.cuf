@@ -421,6 +421,9 @@ contains
 #else
     use hydro_device, only: hydro_integrator_kernel
 #endif
+#ifdef MHD
+    use hydro_device, only: mhd_smem_t
+#endif
     use hydro_device, only: switch_llf_dmin_d, switch_llf_pmin_d
     use ramses_commons, only: ramses_t
     type(ramses_t), intent(inout)::sim
@@ -431,6 +434,11 @@ contains
     real(dp) :: dt, dx, gamma, smallr, smallc2, switch_llf_dmin, switch_llf_pmin, etamag
     integer :: slope, riemann, slope_mag, riemann2d
     logical :: induction
+#ifdef MHD
+    integer :: istat
+    integer(kind=4) :: shmem_bytes
+    type(mhd_smem_t) :: smem_probe
+#endif
 
     if(sim%r%verbose.and.sim%g%myid==1)write(*,'("   Entering gpu_godunov for level ",I2)')ilevel
 
@@ -466,11 +474,27 @@ contains
 #else
     if(nsubgrid == 1)threads_per_block = 64
     if(nsubgrid == 2)threads_per_block = 256
+#ifdef MHD
+    shmem_bytes = storage_size(smem_probe) / 8
+    istat = cudaFuncSetAttribute(hydro_integrator_kernel, &
+         & cudaFuncAttributeMaxDynamicSharedMemorySize, shmem_bytes)
+    if(istat /= cudaSuccess)then
+       write(*,*)'gpu_godunov: cudaFuncSetAttribute(MaxDynamicSharedMemorySize=',shmem_bytes, &
+            & ') failed: ',cudaGetErrorString(istat)
+       error stop
+    endif
+    call hydro_integrator_kernel<<<num_blocks, threads_per_block, shmem_bytes>>>(grid, uold, unew, bold, bnew, &
+         & f, father, nbor, &
+         & head_idx, num_subgrids, sim%m%ngridmax, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
+         & gamma, smallr, smallc2, dt, dx, slope, slope_mag, riemann, riemann2d, &
+         & switch_llf_dmin, switch_llf_pmin, induction, etamag, constant_gravity)
+#else
     call hydro_integrator_kernel<<<num_blocks, threads_per_block>>>(grid, uold, unew, bold, bnew, &
          & f, father, nbor, &
          & head_idx, num_subgrids, sim%m%ngridmax, ilevel, sim%r%levelmin, sim%r%nlevelmax, &
          & gamma, smallr, smallc2, dt, dx, slope, slope_mag, riemann, riemann2d, &
          & switch_llf_dmin, switch_llf_pmin, induction, etamag, constant_gravity)
+#endif
     call GPU_Error_Check(__FILE__, __LINE__)
 #endif
     call nvtxEndRange()
@@ -1015,7 +1039,8 @@ contains
     ! Sort remaining octs per level and per Hilbert key
 
     ! Compute kernel size and offset
-    head_idx = sim%m%head(ilevel+1)
+!    head_idx = sim%m%head(ilevel+1)
+    head_idx = sim%m%tail(ilevel)+1
     num_octs = new_ifree - head_idx
     num_threads = 128
     num_blocks = (num_octs + num_threads - 1) / num_threads
@@ -1469,8 +1494,7 @@ contains
        num_blocks = (num_octs + threadsY_per_block - 1) / threadsY_per_block
        if(num_octs > 0)then
           call nvtxStartRange("GPU user_flag", color=2)!yellow
-          call hydro_flag_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(flag1, grid, nbor, uold, bold, &
-               & head_idx, num_octs, &
+          call hydro_flag_kernel<<<num_blocks, dim3(threadsX_per_block,threadsY_per_block,1)>>>(flag1, grid, nbor, uold, bold, head_idx, num_octs, &
 #ifdef MHD
                & err_grad_b2, floor_b2, err_grad_A, floor_A, err_grad_B, floor_B, err_grad_C, floor_C, &
 #endif
@@ -2209,8 +2233,6 @@ contains
        num_octs = sim%m_mg%noct(ifine)
        head_father = sim%m%noct(ilevel) + sim%m_mg%head(ifine)
     endif
-
-
     if (num_octs == 0) return
 
     num_threads = 128

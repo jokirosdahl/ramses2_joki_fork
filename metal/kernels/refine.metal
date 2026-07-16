@@ -28,7 +28,7 @@ constant int SUBGRIDSIZE_RF = 27;   /* NSUBGRIDP2^NDIM, NDIM=3      */
  * (non-atomic) device pointers, which is safe because the insert dispatch
  * completed before this kernel is enqueued.
  * ========================================================================= */
-inline long fnv64_r(long key_signed)
+inline ulong fnv64_r(long key_signed)
 {
     ulong key = as_type<ulong>(key_signed);
     ulong h   = 14695981039346656037UL;
@@ -37,14 +37,12 @@ inline long fnv64_r(long key_signed)
         h ^= b;
         h *= 1099511628211UL;
     }
-    return as_type<long>(h);
+    return h;
 }
 
 inline int hash_bucket_r(long key, int hash_size)
 {
-    long ib = fnv64_r(key) % long(hash_size);
-    if (ib < 0) ib += long(hash_size);
-    return int(ib) + 1;
+    return int(fnv64_r(key) % ulong(hash_size)) + 1;
 }
 
 inline int hash_get(device const long* hash_key, device const int* hash_val,
@@ -305,6 +303,9 @@ kernel void refine_kernel(
     device atomic_int  *ifree_dev [[buffer(3)]],
     constant int       &head_idx [[buffer(4)]],
     constant int       &num_octs [[buffer(5)]],
+    device float       *f_grav   [[buffer(6)]],
+    device float       *phi      [[buffer(7)]],
+    device float       *phi_old  [[buffer(8)]],
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= num_octs * 8) return;
@@ -345,6 +346,19 @@ kernel void refine_kernel(
         float val = uold[cell_0 + 8 * ivar_0 + 8 * (NVAR) * oct_abs_0];
         for (int c = 0; c < 8; c++)
             uold[c + 8 * ivar_0 + 8 * (NVAR) * child_abs_0] = val;
+    }
+
+    /* Straight injection for gravity variables if active */
+    if (f_grav && phi && phi_old) {
+        int parent_abs_0 = oct_abs_0;
+        for (int c = 0; c < 8; c++) {
+            f_grav[(child_abs_0) * 24 + 0 * 8 + c] = f_grav[(parent_abs_0) * 24 + 0 * 8 + cell_0];
+            f_grav[(child_abs_0) * 24 + 1 * 8 + c] = f_grav[(parent_abs_0) * 24 + 1 * 8 + cell_0];
+            f_grav[(child_abs_0) * 24 + 2 * 8 + c] = f_grav[(parent_abs_0) * 24 + 2 * 8 + cell_0];
+
+            phi[(child_abs_0) * 8 + c] = phi[(parent_abs_0) * 8 + cell_0];
+            phi_old[(child_abs_0) * 8 + c] = phi_old[(parent_abs_0) * 8 + cell_0];
+        }
     }
 
     /* Mark parent cell as refined. */
@@ -827,6 +841,9 @@ kernel void make_cache_octs_kernel(
     constant int       &ifree_cache   [[buffer(15)]],   /* 1-based offset (host-read) */
     constant int       &new_noct      [[buffer(16)]],
     constant int       &input_ind     [[buffer(17)]],
+    device float       *f_grav        [[buffer(18)]],
+    device float       *phi           [[buffer(19)]],
+    device float       *phi_old       [[buffer(20)]],
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= new_noct) return;
@@ -896,6 +913,18 @@ kernel void make_cache_octs_kernel(
             for (int c = 0; c < 8; c++)
                 uold[c + 8 * ivar_0 + 8 * (NVAR) * cache_abs_0] = val;
         }
+
+        if (f_grav && phi && phi_old) {
+            int cell_idx_1based = cell_0 + 1;
+            for (int c = 1; c <= 8; c++) {
+                f_grav[(cache_1based - 1) * 24 + 0 * 8 + (c - 1)] = f_grav[(parent_1based - 1) * 24 + 0 * 8 + (cell_idx_1based - 1)];
+                f_grav[(cache_1based - 1) * 24 + 1 * 8 + (c - 1)] = f_grav[(parent_1based - 1) * 24 + 1 * 8 + (cell_idx_1based - 1)];
+                f_grav[(cache_1based - 1) * 24 + 2 * 8 + (c - 1)] = f_grav[(parent_1based - 1) * 24 + 2 * 8 + (cell_idx_1based - 1)];
+
+                phi[(cache_1based - 1) * 8 + (c - 1)] = phi[(parent_1based - 1) * 8 + (cell_idx_1based - 1)];
+                phi_old[(cache_1based - 1) * 8 + (c - 1)] = phi_old[(parent_1based - 1) * 8 + (cell_idx_1based - 1)];
+            }
+        }
     }
 }
 
@@ -927,4 +956,73 @@ kernel void insert_hash_cache_kernel(
     long iz  = long(grid[cache_abs_0].ckey[2]);
     long key = key_off_dev[ilevel - 1] + ix + iy * nx + iz * nx * nx;
     hash_set_r(hash_key, hash_val, hash_size, key, cache_1based);
+}
+
+/* =========================================================================
+ * Gravity/Poisson variable sorting kernels (for refinement/reordering)
+ * ========================================================================= */
+kernel void sort_gather_force_kernel(
+    device float       *scratch      [[buffer(0)]], // s_nref
+    device const float *f_grav       [[buffer(1)]], // s_f_grav
+    device const int   *swap_global  [[buffer(2)]], // s_swap_global
+    constant int       &idim         [[buffer(3)]], // 1-based dimension
+    constant int       &head_idx     [[buffer(4)]], // 1-based start
+    constant int       &num_octs     [[buffer(5)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (int(gid) >= num_octs) return;
+    int oct_idx = head_idx + int(gid);
+    int old_oct_idx = swap_global[oct_idx - 1];
+
+    for (int c = 0; c < 8; c++) {
+        scratch[(oct_idx - 1) * 8 + c] = f_grav[(old_oct_idx - 1) * 24 + (idim - 1) * 8 + c];
+    }
+}
+
+kernel void sort_scatter_force_kernel(
+    device float       *f_grav       [[buffer(0)]], // s_f_grav
+    device const float *scratch      [[buffer(1)]], // s_nref
+    constant int       &idim         [[buffer(2)]], // 1-based dimension
+    constant int       &head_idx     [[buffer(3)]], // 1-based start
+    constant int       &num_octs     [[buffer(4)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (int(gid) >= num_octs) return;
+    int oct_idx = head_idx + int(gid);
+
+    for (int c = 0; c < 8; c++) {
+        f_grav[(oct_idx - 1) * 24 + (idim - 1) * 8 + c] = scratch[(oct_idx - 1) * 8 + c];
+    }
+}
+
+kernel void sort_gather_phi_kernel(
+    device float       *scratch      [[buffer(0)]], // s_nref
+    device const float *phi          [[buffer(1)]], // s_phi or s_phi_old
+    device const int   *swap_global  [[buffer(2)]], // s_swap_global
+    constant int       &head_idx     [[buffer(3)]], // 1-based start
+    constant int       &num_octs     [[buffer(4)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (int(gid) >= num_octs) return;
+    int oct_idx = head_idx + int(gid);
+    int old_oct_idx = swap_global[oct_idx - 1];
+
+    for (int c = 0; c < 8; c++) {
+        scratch[(oct_idx - 1) * 8 + c] = phi[(old_oct_idx - 1) * 8 + c];
+    }
+}
+
+kernel void sort_scatter_phi_kernel(
+    device float       *phi          [[buffer(0)]], // s_phi or s_phi_old
+    device const float *scratch      [[buffer(1)]], // s_nref
+    constant int       &head_idx     [[buffer(2)]], // 1-based start
+    constant int       &num_octs     [[buffer(3)]],
+    uint gid [[thread_position_in_grid]])
+{
+    if (int(gid) >= num_octs) return;
+    int oct_idx = head_idx + int(gid);
+
+    for (int c = 0; c < 8; c++) {
+        phi[(oct_idx - 1) * 8 + c] = scratch[(oct_idx - 1) * 8 + c];
+    }
 }

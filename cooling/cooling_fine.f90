@@ -3,6 +3,8 @@ module cooling_fine_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_cooling
   use cooling_device, only: gpu_upload_cooling_table
+#elif defined(_METAL)
+  use metal_runner, only: metal_cooling, metal_upload_cooling_table
 #endif
 contains
 !###########################################################
@@ -27,6 +29,8 @@ recursive subroutine r_cooling_fine(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_cooling(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_cooling(pst%s, ilevel)
 #else
      call cooling_fine(pst%s%r,pst%s%g,pst%s%m,pst%s%cool,pst%s%tables,ilevel)
 #endif
@@ -39,6 +43,8 @@ recursive subroutine r_cooling_fine(pst,ilevel,input_size)
            call set_table(pst%s%cool,dble(pst%s%g%aexp))
 #ifdef _CUDA
            call gpu_upload_cooling_table(pst%s%cool)
+#elif defined(_METAL)
+           call metal_upload_cooling_table(pst%s%cool)
 #endif
         endif
      endif
@@ -509,4 +515,5 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
 #endif
 
 end subroutine cooling_fine
+
 end module cooling_fine_module
