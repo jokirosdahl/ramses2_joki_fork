@@ -2,7 +2,7 @@
  * metal/kernels/refine.metal
  *
  * Metal port of gpu/gpu_refine.cuf — AMR neighbour-array construction.
- * Scope: PoC (levelmin==levelmax, NDIM=3, NSUBGRID=1).
+ * Scope: NDIM=3; AMR supports NSUBGRID=1 or 2.
  *
  * Hash table layout (set by insert_hash_kernel in hash.metal):
  *   hash_key : device long[hash_size]   (64-bit Hilbert key; 0 == empty)
@@ -11,16 +11,18 @@
  * has already completed (waitUntilCompleted in metal_bridge.mm).
  *
  * Kernel:
- *   build_nbor_kernel — replaces the 27-launch update_nbor_array loop;
- *                       each thread handles all 27 neighbours of one subgrid.
+ *   build_nbor_kernel computes all neighbours for one subgrid.
  */
 
 #include <metal_stdlib>
 #include "../metal_types.h"
+#include "../metal_config.h"
 using namespace metal;
 
-constant int NSUBGRIDP2_RF  = 3;    /* nsubgrid + 2 (nsubgrid == 1) */
-constant int SUBGRIDSIZE_RF = 27;   /* NSUBGRIDP2^NDIM, NDIM=3      */
+constant int NSUBGRID_RF       = NSUBGRID;
+constant int NSUBGRIDP2_RF     = NSUBGRID_RF + 2;
+constant int NSUBGRIDTONDIM_RF = NSUBGRID_RF * NSUBGRID_RF * NSUBGRID_RF;
+constant int SUBGRIDSIZE_RF    = NSUBGRIDP2_RF * NSUBGRIDP2_RF * NSUBGRIDP2_RF;
 
 /* =========================================================================
  * fnv64 / hash_bucket / hash_get — read-only hash helpers.
@@ -58,18 +60,17 @@ inline int hash_get(device const long* hash_key, device const int* hash_val,
 }
 
 /* =========================================================================
- * build_nbor_kernel — replaces the 27-launch update_nbor_array loop from
+ * build_nbor_kernel — replaces the multi-launch update_nbor_array loop from
  *                     r_set_grid_device in gpu_manager.cuf.
  *
- * Each thread handles one subgrid (= one oct for nsubgrid=1) and computes
- * all 27 neighbour indices.  The inner loop body mirrors update_nbor_array
- * for nsubgrid=1 (gpu_refine.cuf lines 1908-1939):
+ * Each thread handles one subgrid and computes all neighbour indices.  The
+ * inner loop body mirrors update_nbor_array:
  *
- *   ind = 1 + i_off + j_off*nsubgridp2 + k_off*nsubgridp2^2   (1..27)
- *   ckey_n[d] = ckey[d] + off - 1    (nsubgrid=1)
+ *   ind = 1 + i_off + j_off*nsubgridp2 + k_off*nsubgridp2^2
+ *   ckey_n[d] = (ckey[d]/nsubgrid)*nsubgrid + off - 1
  *   if periodic: wrap when ckey_n < box_min or ckey_n >= box_max
  *   key = key_off + ix + iy*nx + iz*nx*nx
- *   nbor[(subgrid_idx-1)*27 + (ind-1)] = hash_get(key)
+ *   nbor[(subgrid_idx-1)*subgridsize + (ind-1)] = hash_get(key)
  *
  * Thread layout: 128 threads/threadgroup.
  * ========================================================================= */
@@ -90,6 +91,7 @@ kernel void build_nbor_kernel(
 {
     if (int(thread_idx) >= num_subgrids) return;
     int subgrid_idx = head_idx + int(thread_idx);   /* 1-based */
+    int oct_idx = (subgrid_idx - 1) * NSUBGRIDTONDIM_RF + 1;
 
     long nx = long(ckey_max_l);
 
@@ -98,12 +100,12 @@ kernel void build_nbor_kernel(
             for (int i_off = 0; i_off < NSUBGRIDP2_RF; i_off++) {
                 int ind = 1 + i_off
                             + NSUBGRIDP2_RF * j_off
-                            + NSUBGRIDP2_RF * NSUBGRIDP2_RF * k_off;   /* 1..27 */
+                            + NSUBGRIDP2_RF * NSUBGRIDP2_RF * k_off;
 
                 int ckey_n[3];
-                ckey_n[0] = grid[subgrid_idx - 1].ckey[0] + i_off - 1;
-                ckey_n[1] = grid[subgrid_idx - 1].ckey[1] + j_off - 1;
-                ckey_n[2] = grid[subgrid_idx - 1].ckey[2] + k_off - 1;
+                ckey_n[0] = (grid[oct_idx - 1].ckey[0] / NSUBGRID_RF) * NSUBGRID_RF + i_off - 1;
+                ckey_n[1] = (grid[oct_idx - 1].ckey[1] / NSUBGRID_RF) * NSUBGRID_RF + j_off - 1;
+                ckey_n[2] = (grid[oct_idx - 1].ckey[2] / NSUBGRID_RF) * NSUBGRID_RF + k_off - 1;
 
                 for (int d = 0; d < 3; d++) {
                     if (periodic[d]) {
@@ -158,12 +160,12 @@ kernel void update_father_kernel(
 
 /* =========================================================================
  * AMR refinement kernels — port of gpu/gpu_refine.cuf
- * Scope: HYDRO=1, GRAV=0, MHD=0, NDIM=3, NSUBGRID=1, no CUB.
+ * Scope: HYDRO=1, NDIM=3, NSUBGRID=1 or 2, no CUB.
  *
  * Memory layout (0-based):
  *   uold    : float[8*(NVAR)*ntotal]  cell_0 + 8*ivar_0 + 8*(NVAR)*oct_abs_0
  *   flag1/2 : int[8*ntotal]           cell_0 + 8*oct_abs_0
- *   nbor    : int[27*ntotal]          (subgrid_abs_0)*27 + (ind_0)   row-major
+ *   nbor    : int[subgridsize*ntotal] (subgrid_abs_0)*subgridsize + ind_0
  *   grid    : oct_t[ntotal]           0-based oct index
  *   father  : int[ntotal]             1-based parent oct index per oct
  *   swap_*  : int[ntotal]             1-based oct index
@@ -180,6 +182,272 @@ kernel void update_father_kernel(
 #ifndef NVAR
 #define NVAR 5
 #endif
+
+inline float rf_u_get(device const float *u, int oct, int ivar, int cell)
+{
+    return u[(oct - 1) * NVAR * 8 + ivar * 8 + cell];
+}
+
+inline void rf_u_set(device float *u, int oct, int ivar, int cell, float value)
+{
+    u[(oct - 1) * NVAR * 8 + ivar * 8 + cell] = value;
+}
+
+inline float rf_b_get(device const float *b, int oct, int ivar, int cell)
+{
+    return b[(oct - 1) * 6 * 8 + ivar * 8 + cell];
+}
+
+inline void rf_b_set(device float *b, int oct, int ivar, int cell, float value)
+{
+    b[(oct - 1) * 6 * 8 + ivar * 8 + cell] = value;
+}
+
+inline void rf_limiter(thread const float *a, thread float *w, int interpol_type)
+{
+    if (interpol_type == 1) {
+        for (int d = 0; d < 3; d++) {
+            float dl = 0.5f * (a[2*d + 2] - a[0]);
+            float dr = 0.5f * (a[0] - a[2*d + 1]);
+            w[d] = dl * dr <= 0.0f ? 0.0f : copysign(min(abs(dl), abs(dr)), dl);
+        }
+        return;
+    }
+
+    for (int d = 0; d < 3; d++) w[d] = 0.25f * (a[2*d + 2] - a[2*d + 1]);
+    if (interpol_type == 3) return;
+
+    float corner_max = -INFINITY;
+    float corner_min = INFINITY;
+    for (int c = 0; c < 8; c++) {
+        float value = a[0];
+        for (int d = 0; d < 3; d++) value += 2.0f * w[d] * (float((c >> d) & 1) - 0.5f);
+        corner_max = max(corner_max, value);
+        corner_min = min(corner_min, value);
+    }
+    float kernel_max = a[1];
+    float kernel_min = a[1];
+    for (int n = 2; n <= 6; n++) {
+        kernel_max = max(kernel_max, a[n]);
+        kernel_min = min(kernel_min, a[n]);
+    }
+    float max_limiter = 0.0f;
+    float min_limiter = 0.0f;
+    float dk = a[0] - kernel_max;
+    float dc = a[0] - corner_max;
+    if (dk * dc > 0.0f) max_limiter = min(1.0f, dk / dc);
+    dk = a[0] - kernel_min;
+    dc = a[0] - corner_min;
+    if (dk * dc > 0.0f) min_limiter = min(1.0f, dk / dc);
+    float limiter = min(min_limiter, max_limiter);
+    for (int d = 0; d < 3; d++) w[d] *= limiter;
+}
+
+inline void rf_tvd2(thread const float *b, thread float *s, int interpol_type)
+{
+    if (interpol_type == 3) {
+        s[0] = 0.5f * (b[0] - b[1]) + 0.5f * (b[2] - b[0]);
+        s[1] = 0.5f * (b[0] - b[3]) + 0.5f * (b[4] - b[0]);
+        return;
+    }
+    float r = float(interpol_type);
+    float dl = r * (b[0] - b[1]);
+    float dr = r * (b[2] - b[0]);
+    float dc = 0.5f * (dl + dr) / r;
+    float limit = dl * dr <= 0.0f ? 0.0f : min(min(abs(dl), abs(dr)), abs(dc));
+    s[0] = copysign(limit, dc);
+    dl = r * (b[0] - b[3]);
+    dr = r * (b[4] - b[0]);
+    dc = 0.5f * (dl + dr) / r;
+    limit = dl * dr <= 0.0f ? 0.0f : min(min(abs(dl), abs(dr)), abs(dc));
+    s[1] = copysign(limit, dc);
+}
+
+inline int rf_uface(int x, int y, int z) { return ((x + 1) * 2 + y) * 2 + z; }
+inline int rf_vface(int x, int y, int z) { return (x * 3 + y + 1) * 2 + z; }
+inline int rf_wface(int x, int y, int z) { return (x * 2 + y) * 3 + z + 1; }
+
+inline void rf_interpol_mhd(thread float *u1, thread float *u2,
+                            thread float *b1, thread float *b2,
+                            thread float *b3, thread bool *refined,
+                            int interpol_var, int interpol_type, float smallr)
+{
+    if (interpol_var == 1) {
+        for (int n = 0; n <= 6; n++) {
+            float rho = max(u1[n*NVAR], smallr);
+            float ekin = 0.0f;
+            float emag = 0.0f;
+            for (int d = 0; d < 3; d++) {
+                float mom = u1[n*NVAR + d + 1];
+                float bc = 0.5f * (b1[n*6 + d] + b1[n*6 + d + 3]);
+                ekin += 0.5f * mom * mom / rho;
+                emag += 0.5f * bc * bc;
+            }
+            u1[n*NVAR + 4] -= ekin + emag;
+        }
+    }
+
+    for (int ivar = 0; ivar < NVAR; ivar++) {
+        float a[7];
+        float w[3] = {0.0f, 0.0f, 0.0f};
+        for (int n = 0; n <= 6; n++) a[n] = u1[n*NVAR + ivar];
+        if (interpol_type > 0) rf_limiter(a, w, interpol_type);
+        for (int c = 0; c < 8; c++) {
+            float value = a[0];
+            for (int d = 0; d < 3; d++) value += w[d] * (float((c >> d) & 1) - 0.5f);
+            u2[c*NVAR + ivar] = value;
+        }
+    }
+
+    float uf[12];
+    float vf[12];
+    float wf[12];
+    float b[5];
+    float s[2];
+
+    for (int side = 0; side < 2; side++) {
+        int comp = side == 0 ? 0 : 3;
+        b[0] = b1[comp];
+        b[1] = b1[3*6 + comp]; b[2] = b1[4*6 + comp];
+        b[3] = b1[5*6 + comp]; b[4] = b1[6*6 + comp];
+        s[0] = s[1] = 0.0f;
+        if (interpol_type > 0) rf_tvd2(b, s, interpol_type);
+        int x = side == 0 ? -1 : 1;
+        for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++)
+            uf[rf_uface(x,j,k)] = b[0] + 0.5f*s[0]*(float(j)-0.5f) + 0.5f*s[1]*(float(k)-0.5f);
+    }
+    for (int side = 0; side < 2; side++) {
+        int comp = side == 0 ? 1 : 4;
+        b[0] = b1[comp];
+        b[1] = b1[1*6 + comp]; b[2] = b1[2*6 + comp];
+        b[3] = b1[5*6 + comp]; b[4] = b1[6*6 + comp];
+        s[0] = s[1] = 0.0f;
+        if (interpol_type > 0) rf_tvd2(b, s, interpol_type);
+        int y = side == 0 ? -1 : 1;
+        for (int i = 0; i < 2; i++) for (int k = 0; k < 2; k++)
+            vf[rf_vface(i,y,k)] = b[0] + 0.5f*s[0]*(float(i)-0.5f) + 0.5f*s[1]*(float(k)-0.5f);
+    }
+    for (int side = 0; side < 2; side++) {
+        int comp = side == 0 ? 2 : 5;
+        b[0] = b1[comp];
+        b[1] = b1[1*6 + comp]; b[2] = b1[2*6 + comp];
+        b[3] = b1[3*6 + comp]; b[4] = b1[4*6 + comp];
+        s[0] = s[1] = 0.0f;
+        if (interpol_type > 0) rf_tvd2(b, s, interpol_type);
+        int z = side == 0 ? -1 : 1;
+        for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++)
+            wf[rf_wface(i,j,z)] = b[0] + 0.5f*s[0]*(float(i)-0.5f) + 0.5f*s[1]*(float(j)-0.5f);
+    }
+
+    for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++) {
+        if (refined[0]) uf[rf_uface(-1,j,k)] = b3[(0*8 + 1 + 2*j + 4*k)*6 + 3];
+        if (refined[1]) uf[rf_uface( 1,j,k)] = b3[(1*8 +     2*j + 4*k)*6    ];
+    }
+    for (int i = 0; i < 2; i++) for (int k = 0; k < 2; k++) {
+        if (refined[2]) vf[rf_vface(i,-1,k)] = b3[(2*8 + i + 2 + 4*k)*6 + 4];
+        if (refined[3]) vf[rf_vface(i, 1,k)] = b3[(3*8 + i     + 4*k)*6 + 1];
+    }
+    for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) {
+        if (refined[4]) wf[rf_wface(i,j,-1)] = b3[(4*8 + i + 2*j + 4)*6 + 5];
+        if (refined[5]) wf[rf_wface(i,j, 1)] = b3[(5*8 + i + 2*j    )*6 + 2];
+    }
+
+    float uxx = 0.0f, vyy = 0.0f, wzz = 0.0f;
+    float uxyz = 0.0f, vxyz = 0.0f, wxyz = 0.0f;
+    for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++) {
+        float ii = float(2*i - 1), jj = float(2*j - 1), kk = float(2*k - 1);
+        uxx += 0.125f * (ii*jj*vf[rf_vface(i,2*j-1,k)] + ii*kk*wf[rf_wface(i,j,2*k-1)]);
+        vyy += 0.125f * (jj*kk*wf[rf_wface(i,j,2*k-1)] + ii*jj*uf[rf_uface(2*i-1,j,k)]);
+        wzz += 0.125f * (ii*kk*uf[rf_uface(2*i-1,j,k)] + jj*kk*vf[rf_vface(i,2*j-1,k)]);
+        uxyz += 0.125f * ii*jj*kk*uf[rf_uface(2*i-1,j,k)];
+        vxyz += 0.125f * ii*jj*kk*vf[rf_vface(i,2*j-1,k)];
+        wxyz += 0.125f * ii*jj*kk*wf[rf_wface(i,j,2*k-1)];
+    }
+    for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++)
+        uf[rf_uface(0,j,k)] = 0.5f*(uf[rf_uface(-1,j,k)] + uf[rf_uface(1,j,k)]) + uxx
+                              + (float(k)-0.5f)*vxyz + (float(j)-0.5f)*wxyz;
+    for (int i = 0; i < 2; i++) for (int k = 0; k < 2; k++)
+        vf[rf_vface(i,0,k)] = 0.5f*(vf[rf_vface(i,-1,k)] + vf[rf_vface(i,1,k)]) + vyy
+                              + (float(i)-0.5f)*wxyz + (float(k)-0.5f)*uxyz;
+    for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++)
+        wf[rf_wface(i,j,0)] = 0.5f*(wf[rf_wface(i,j,-1)] + wf[rf_wface(i,j,1)]) + wzz
+                              + (float(j)-0.5f)*uxyz + (float(i)-0.5f)*vxyz;
+
+    for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) for (int k = 0; k < 2; k++) {
+        int c = i + 2*j + 4*k;
+        b2[c*6    ] = uf[rf_uface(i-1,j,k)]; b2[c*6 + 3] = uf[rf_uface(i,j,k)];
+        b2[c*6 + 1] = vf[rf_vface(i,j-1,k)]; b2[c*6 + 4] = vf[rf_vface(i,j,k)];
+        b2[c*6 + 2] = wf[rf_wface(i,j,k-1)]; b2[c*6 + 5] = wf[rf_wface(i,j,k)];
+    }
+
+    if (interpol_var == 1) {
+        for (int c = 0; c < 8; c++) {
+            float rho = max(u2[c*NVAR], smallr);
+            float ekin = 0.0f;
+            float emag = 0.0f;
+            for (int d = 0; d < 3; d++) {
+                float mom = u2[c*NVAR + d + 1];
+                float bc = 0.5f * (b2[c*6 + d] + b2[c*6 + d + 3]);
+                ekin += 0.5f * mom * mom / rho;
+                emag += 0.5f * bc * bc;
+            }
+            u2[c*NVAR + 4] += ekin + emag;
+        }
+    }
+}
+
+inline void rf_prolong_mhd(device const oct_t *grid, device const float *uold,
+                           device const float *bold, device const long *hash_key,
+                           device const int *hash_val, int hash_size,
+                           device const int *ckey_max_dev, device const long *key_off_dev,
+                           device const int *box_ckey_min, device const int *box_ckey_max,
+                           device const int *periodic, int ilevel, thread const int *chkey,
+                           int central_oct, int central_cell, int interpol_var,
+                           int interpol_type, float smallr, thread float *u2, thread float *b2)
+{
+    float u1[7*NVAR];
+    float b1[7*6];
+    float b3[6*8*6];
+    bool refined[6];
+    for (int ivar = 0; ivar < NVAR; ivar++) u1[ivar] = rf_u_get(uold, central_oct, ivar, central_cell);
+    for (int ib = 0; ib < 6; ib++) b1[ib] = rf_b_get(bold, central_oct, ib, central_cell);
+
+    for (int n = 0; n < 6; n++) {
+        refined[n] = false;
+        int nkey[3] = {chkey[0], chkey[1], chkey[2]};
+        int d = n / 2;
+        nkey[d] += (n & 1) == 0 ? -1 : 1;
+        for (int q = 0; q < 3; q++) if (periodic[q]) {
+            int bmin = box_ckey_min[3*(ilevel-1) + q];
+            int bmax = box_ckey_max[3*(ilevel-1) + q];
+            if (nkey[q] < bmin) nkey[q] = bmax - 1;
+            if (nkey[q] >= bmax) nkey[q] = bmin;
+        }
+        int fkey[3] = {nkey[0]/2, nkey[1]/2, nkey[2]/2};
+        int cell = (nkey[0] - 2*fkey[0]) + 2*(nkey[1] - 2*fkey[1]) + 4*(nkey[2] - 2*fkey[2]);
+        long nx = long(ckey_max_dev[ilevel-2]);
+        long key = key_off_dev[ilevel-2] + long(fkey[0]) + long(fkey[1])*nx + long(fkey[2])*nx*nx;
+        int parent = hash_get(hash_key, hash_val, hash_size, key);
+        if (parent > 0) {
+            for (int ivar = 0; ivar < NVAR; ivar++) u1[(n+1)*NVAR + ivar] = rf_u_get(uold, parent, ivar, cell);
+            for (int ib = 0; ib < 6; ib++) b1[(n+1)*6 + ib] = rf_b_get(bold, parent, ib, cell);
+            if (grid[parent-1].refined[cell]) {
+                nx = long(ckey_max_dev[ilevel-1]);
+                key = key_off_dev[ilevel-1] + long(nkey[0]) + long(nkey[1])*nx + long(nkey[2])*nx*nx;
+                int child = hash_get(hash_key, hash_val, hash_size, key);
+                if (child > 0) {
+                    refined[n] = true;
+                    for (int c = 0; c < 8; c++) for (int ib = 0; ib < 6; ib++)
+                        b3[(n*8 + c)*6 + ib] = rf_b_get(bold, child, ib, c);
+                }
+            }
+        } else {
+            for (int ivar = 0; ivar < NVAR; ivar++) u1[(n+1)*NVAR + ivar] = u1[ivar];
+            for (int ib = 0; ib < 6; ib++) b1[(n+1)*6 + ib] = b1[ib];
+        }
+    }
+    rf_interpol_mhd(u1, u2, b1, b2, b3, refined, interpol_var, interpol_type, smallr);
+}
 
 /* ---- Hilbert state tables (NDIM=3), from gpu/gpu_hilbert.cuf ---------- */
 /* left_shift=4, right_shift=-1 → ISHFT(hkey,4) then ISHFT(hkey,-1)       */
@@ -289,7 +557,7 @@ inline void hash_update_r(device long* hash_key, device int* hash_val,
 /* =========================================================================
  * refine_kernel — create new child octs for flagged, unrefined cells.
  * Mirrors refine_kernel + make_new_oct (gpu_refine.cuf).
- * HYDRO=1, GRAV=0, MHD=0 — straight injection only.
+ * Uses MHD interpolation when MHD is enabled and straight injection otherwise.
  *
  * 1D thread layout: gid = oct_offset * 8 + cell_0 (< 8 * num_octs).
  * Each thread independently creates ONE child oct if flag1[cell_0, oct] is
@@ -300,12 +568,38 @@ kernel void refine_kernel(
     device oct_t       *grid     [[buffer(0)]],
     device int         *flag1    [[buffer(1)]],
     device float       *uold     [[buffer(2)]],
+#ifdef MHD
+    device float       *bold     [[buffer(3)]],
+    device atomic_int  *ifree_dev [[buffer(4)]],
+    device const long  *hash_key [[buffer(5)]],
+    device const int   *hash_val [[buffer(6)]],
+    device const int   *ckey_max_dev [[buffer(7)]],
+    device const long  *key_off_dev [[buffer(8)]],
+    device const int   *box_ckey_min [[buffer(9)]],
+    device const int   *box_ckey_max [[buffer(10)]],
+    device const int   *periodic [[buffer(11)]],
+    constant int       &hash_size [[buffer(12)]],
+    constant int       &interpol_var [[buffer(13)]],
+    constant int       &interpol_type [[buffer(14)]],
+    constant float     &smallr [[buffer(15)]],
+    constant int       &head_idx [[buffer(16)]],
+    constant int       &num_octs [[buffer(17)]],
+#else
     device atomic_int  *ifree_dev [[buffer(3)]],
     constant int       &head_idx [[buffer(4)]],
     constant int       &num_octs [[buffer(5)]],
+#endif
+#ifdef GRAV
+#ifdef MHD
+    device float       *f_grav   [[buffer(18)]],
+    device float       *phi      [[buffer(19)]],
+    device float       *phi_old  [[buffer(20)]],
+#else
     device float       *f_grav   [[buffer(6)]],
     device float       *phi      [[buffer(7)]],
     device float       *phi_old  [[buffer(8)]],
+#endif
+#endif
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= num_octs * 8) return;
@@ -341,13 +635,28 @@ kernel void refine_kernel(
     for (int c = 0; c < 8; c++) flag1[c + 8 * child_abs_0] = 0;
     grid[child_abs_0].hkey = hilbert_key_rf(cckey, ilevel - 1);
 
-    /* Straight injection: copy parent cell into all 8 child cells. */
+#ifdef MHD
+    float u2[8*NVAR];
+    float b2[8*6];
+    rf_prolong_mhd(grid, uold, bold, hash_key, hash_val, hash_size,
+                   ckey_max_dev, key_off_dev, box_ckey_min, box_ckey_max,
+                   periodic, ilevel, cckey, oct_abs_0 + 1, cell_0,
+                   interpol_var, interpol_type, smallr, u2, b2);
+    for (int c = 0; c < 8; c++) {
+        for (int ivar_0 = 0; ivar_0 < NVAR; ivar_0++)
+            rf_u_set(uold, child_1based, ivar_0, c, u2[c*NVAR + ivar_0]);
+        for (int ib = 0; ib < 6; ib++)
+            rf_b_set(bold, child_1based, ib, c, b2[c*6 + ib]);
+    }
+#else
     for (int ivar_0 = 0; ivar_0 < (NVAR); ivar_0++) {
         float val = uold[cell_0 + 8 * ivar_0 + 8 * (NVAR) * oct_abs_0];
         for (int c = 0; c < 8; c++)
             uold[c + 8 * ivar_0 + 8 * (NVAR) * child_abs_0] = val;
     }
+#endif
 
+#ifdef GRAV
     /* Straight injection for gravity variables if active */
     if (f_grav && phi && phi_old) {
         int parent_abs_0 = oct_abs_0;
@@ -360,6 +669,7 @@ kernel void refine_kernel(
             phi_old[(child_abs_0) * 8 + c] = phi_old[(parent_abs_0) * 8 + cell_0];
         }
     }
+#endif
 
     /* Mark parent cell as refined. */
     grid[oct_abs_0].refined[cell_0] = 1;
@@ -710,16 +1020,24 @@ kernel void sort_scatter_flag_kernel(
 }
 
 /* =========================================================================
- * sort_gather_hydro_kernel — unew[cell,ivar,oct] = uold[cell,ivar,swap_global[oct]-1].
- * Mirrors sort_gather_hydro_impl (HYDRO=1, no MHD).
+ * sort_gather_hydro_kernel — gather hydro and optional magnetic state.
+ * Mirrors sort_gather_hydro_impl.
  * 1D gid = oct_offset * 8 + cell_0; inner loop over NVAR variables.
  * ========================================================================= */
 kernel void sort_gather_hydro_kernel(
     device float     *unew        [[buffer(0)]],
     device const float *uold      [[buffer(1)]],
+#ifdef MHD
+    device float     *bnew        [[buffer(2)]],
+    device const float *bold      [[buffer(3)]],
+    device const int *swap_global [[buffer(4)]],
+    constant int     &head_idx    [[buffer(5)]],
+    constant int     &num_octs    [[buffer(6)]],
+#else
     device const int *swap_global [[buffer(2)]],
     constant int     &head_idx    [[buffer(3)]],
     constant int     &num_octs    [[buffer(4)]],
+#endif
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= num_octs * 8) return;
@@ -731,13 +1049,17 @@ kernel void sort_gather_hydro_kernel(
     for (int ivar_0 = 0; ivar_0 < (NVAR); ivar_0++)
         unew[cell_0 + 8 * ivar_0 + 8 * (NVAR) * oct_abs_0] =
             uold[cell_0 + 8 * ivar_0 + 8 * (NVAR) * old_abs_0];
+#ifdef MHD
+    for (int ib = 0; ib < 6; ib++)
+        bnew[cell_0 + 8 * ib + 8 * 6 * oct_abs_0] =
+            bold[cell_0 + 8 * ib + 8 * 6 * old_abs_0];
+#endif
 }
 
 /* =========================================================================
  * update_nbor_prefix_kernel — compute nbor[input_ind, subgrid] and set
  * prefix_sum[subgrid] = 1 if missing, 0 if found.
  * Mirrors update_nbor_array(..., prefix_sum=prefix_sum) in gpu_refine.cuf.
- * NSUBGRID=1 → subgrid_idx == oct_idx; nsubgridp2=3, nsubgridp2sq=9.
  * 1 thread/subgrid.
  * ========================================================================= */
 kernel void update_nbor_prefix_kernel(
@@ -759,20 +1081,18 @@ kernel void update_nbor_prefix_kernel(
 {
     if (int(gid) >= num_subgrids) return;
     int subgrid_abs_0 = (head_idx - 1) + int(gid);
-    int oct_abs_0     = subgrid_abs_0;   /* nsubgrid=1 */
+    int oct_abs_0     = subgrid_abs_0 * NSUBGRIDTONDIM_RF;
 
-    /* Decode 3D offset from input_ind (1-based, 1..27). */
     int ind0 = input_ind - 1;
-    int k_off = ind0 / 9;
-    int j_off = (ind0 - k_off * 9) / 3;
-    int i_off = ind0 - k_off * 9 - j_off * 3;
+    int k_off = ind0 / (NSUBGRIDP2_RF * NSUBGRIDP2_RF);
+    int j_off = (ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF) / NSUBGRIDP2_RF;
+    int i_off = ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF - j_off * NSUBGRIDP2_RF;
 
     int ilevel = grid[oct_abs_0].lev;
-    /* nsubgrid=1 → ckey/nsubgrid = ckey; offset = (ckey/1)*1 + i_off - 1 */
     int ckey_n[3];
-    ckey_n[0] = grid[oct_abs_0].ckey[0] + i_off - 1;
-    ckey_n[1] = grid[oct_abs_0].ckey[1] + j_off - 1;
-    ckey_n[2] = grid[oct_abs_0].ckey[2] + k_off - 1;
+    ckey_n[0] = (grid[oct_abs_0].ckey[0] / NSUBGRID_RF) * NSUBGRID_RF + i_off - 1;
+    ckey_n[1] = (grid[oct_abs_0].ckey[1] / NSUBGRID_RF) * NSUBGRID_RF + j_off - 1;
+    ckey_n[2] = (grid[oct_abs_0].ckey[2] / NSUBGRID_RF) * NSUBGRID_RF + k_off - 1;
 
     /* Periodic boundary conditions (level-specific box bounds). */
     for (int d = 0; d < 3; d++) {
@@ -791,7 +1111,7 @@ kernel void update_nbor_prefix_kernel(
                + long(ckey_n[2]) * nx * nx;
 
     int nbor_val = hash_get(hash_key, hash_val, hash_size, key);
-    nbor[subgrid_abs_0 * 27 + (input_ind - 1)] = nbor_val;
+    nbor[subgrid_abs_0 * SUBGRIDSIZE_RF + (input_ind - 1)] = nbor_val;
     prefix_sum[subgrid_abs_0] = (nbor_val == 0) ? 1 : 0;
 }
 
@@ -818,14 +1138,34 @@ kernel void compute_cache_swap_table_kernel(
 
 /* =========================================================================
  * make_cache_octs_kernel — create ghost octs in the cache region.
- * Mirrors make_cache_octs_impl (HYDRO=1, no GRAV, no MHD).
- * NSUBGRID=1 → oct_abs_0 = subgrid_abs_0.
+ * Mirrors make_cache_octs_impl.
  * 1 thread per new cache oct (gid < new_noct).
  * ========================================================================= */
 kernel void make_cache_octs_kernel(
     device oct_t       *grid          [[buffer(0)]],
     device int         *flag1         [[buffer(1)]],
     device float       *uold          [[buffer(2)]],
+#ifdef MHD
+    device float       *bold          [[buffer(3)]],
+    device const int   *swap_local    [[buffer(4)]],
+    device int         *father        [[buffer(5)]],
+    device int         *nbor          [[buffer(6)]],
+    device const long  *hash_key      [[buffer(7)]],
+    device const int   *hash_val      [[buffer(8)]],
+    device const int   *ckey_max_dev  [[buffer(9)]],
+    device const long  *key_off_dev   [[buffer(10)]],
+    device const int   *box_ckey_min  [[buffer(11)]],
+    device const int   *box_ckey_max  [[buffer(12)]],
+    device const int   *periodic      [[buffer(13)]],
+    constant int       &hash_size     [[buffer(14)]],
+    constant int       &ngridmax      [[buffer(15)]],
+    constant int       &ifree_cache   [[buffer(16)]],
+    constant int       &new_noct      [[buffer(17)]],
+    constant int       &input_ind     [[buffer(18)]],
+    constant int       &interpol_var  [[buffer(19)]],
+    constant int       &interpol_type [[buffer(20)]],
+    constant float     &smallr        [[buffer(21)]],
+#else
     device const int   *swap_local    [[buffer(3)]],
     device int         *father        [[buffer(4)]],
     device int         *nbor          [[buffer(5)]],
@@ -841,9 +1181,18 @@ kernel void make_cache_octs_kernel(
     constant int       &ifree_cache   [[buffer(15)]],   /* 1-based offset (host-read) */
     constant int       &new_noct      [[buffer(16)]],
     constant int       &input_ind     [[buffer(17)]],
+#endif
+#ifdef GRAV
+#ifdef MHD
+    device float       *f_grav        [[buffer(22)]],
+    device float       *phi           [[buffer(23)]],
+    device float       *phi_old       [[buffer(24)]],
+#else
     device float       *f_grav        [[buffer(18)]],
     device float       *phi           [[buffer(19)]],
     device float       *phi_old       [[buffer(20)]],
+#endif
+#endif
     uint gid [[thread_position_in_grid]])
 {
     if (int(gid) >= new_noct) return;
@@ -851,26 +1200,25 @@ kernel void make_cache_octs_kernel(
     /* swap_local[gid] holds the 1-based subgrid idx (set by compute_cache_swap_table). */
     int subgrid_1based = swap_local[int(gid)];
     int subgrid_abs_0  = subgrid_1based - 1;
-    int oct_abs_0      = subgrid_abs_0;   /* nsubgrid=1 */
+    int oct_abs_0      = subgrid_abs_0 * NSUBGRIDTONDIM_RF;
 
     /* Cache grid slot: 1-based = ngridmax + ifree_cache + gid */
     int cache_1based = ngridmax + ifree_cache + int(gid);
     int cache_abs_0  = cache_1based - 1;
 
-    /* Update nbor for this subgrid (mirrors make_cache_octs_impl line 2192). */
-    nbor[subgrid_abs_0 * 27 + (input_ind - 1)] = cache_1based;
+    nbor[subgrid_abs_0 * SUBGRIDSIZE_RF + (input_ind - 1)] = cache_1based;
 
     /* Decode 3D offset for the neighbour direction. */
     int ind0  = input_ind - 1;
-    int k_off = ind0 / 9;
-    int j_off = (ind0 - k_off * 9) / 3;
-    int i_off = ind0 - k_off * 9 - j_off * 3;
+    int k_off = ind0 / (NSUBGRIDP2_RF * NSUBGRIDP2_RF);
+    int j_off = (ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF) / NSUBGRIDP2_RF;
+    int i_off = ind0 - k_off * NSUBGRIDP2_RF * NSUBGRIDP2_RF - j_off * NSUBGRIDP2_RF;
 
     int ilevel = grid[oct_abs_0].lev;
     int ckey[3];
-    ckey[0] = grid[oct_abs_0].ckey[0] + i_off - 1;
-    ckey[1] = grid[oct_abs_0].ckey[1] + j_off - 1;
-    ckey[2] = grid[oct_abs_0].ckey[2] + k_off - 1;
+    ckey[0] = (grid[oct_abs_0].ckey[0] / NSUBGRID_RF) * NSUBGRID_RF + i_off - 1;
+    ckey[1] = (grid[oct_abs_0].ckey[1] / NSUBGRID_RF) * NSUBGRID_RF + j_off - 1;
+    ckey[2] = (grid[oct_abs_0].ckey[2] / NSUBGRID_RF) * NSUBGRID_RF + k_off - 1;
 
     for (int d = 0; d < 3; d++) {
         if (periodic[d]) {
@@ -901,19 +1249,32 @@ kernel void make_cache_octs_kernel(
     int parent_1based = hash_get(hash_key, hash_val, hash_size, parent_key);
     father[cache_abs_0] = parent_1based;
 
-    /* Straight injection: copy parent cell data into all 8 cache cells. */
     if (parent_1based > 0) {
-        int parent_abs_0 = parent_1based - 1;
         int pi = int(long(ckey[0]) - 2L * pix);
         int pj = int(long(ckey[1]) - 2L * piy);
         int pk = int(long(ckey[2]) - 2L * piz);
         int cell_0 = pi + 2 * pj + 4 * pk;
+#ifdef MHD
+        float u2[8*NVAR];
+        float b2[8*6];
+        rf_prolong_mhd(grid, uold, bold, hash_key, hash_val, hash_size,
+                       ckey_max_dev, key_off_dev, box_ckey_min, box_ckey_max,
+                       periodic, ilevel, ckey, parent_1based, cell_0,
+                       interpol_var, interpol_type, smallr, u2, b2);
+        for (int c = 0; c < 8; c++) {
+            for (int ivar_0 = 0; ivar_0 < NVAR; ivar_0++)
+                rf_u_set(uold, cache_1based, ivar_0, c, u2[c*NVAR + ivar_0]);
+            for (int ib = 0; ib < 6; ib++)
+                rf_b_set(bold, cache_1based, ib, c, b2[c*6 + ib]);
+        }
+#else
+        int parent_abs_0 = parent_1based - 1;
         for (int ivar_0 = 0; ivar_0 < (NVAR); ivar_0++) {
             float val = uold[cell_0 + 8 * ivar_0 + 8 * (NVAR) * parent_abs_0];
             for (int c = 0; c < 8; c++)
                 uold[c + 8 * ivar_0 + 8 * (NVAR) * cache_abs_0] = val;
         }
-
+#ifdef GRAV
         if (f_grav && phi && phi_old) {
             int cell_idx_1based = cell_0 + 1;
             for (int c = 1; c <= 8; c++) {
@@ -925,6 +1286,8 @@ kernel void make_cache_octs_kernel(
                 phi_old[(cache_1based - 1) * 8 + (c - 1)] = phi_old[(parent_1based - 1) * 8 + (cell_idx_1based - 1)];
             }
         }
+#endif
+#endif
     }
 }
 
