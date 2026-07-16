@@ -627,13 +627,15 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                        k3=1+2*(k1-1)+k2
 #endif
                        ! Update conservative variables new state vector
-                       do ivar=1,nrtvar
+                       if(.not. h%okloc(i3,j3,k3)) then
+                        do ivar=1,nrtvar
 #ifdef RT
                           m%rtunew(ind_son,ivar,ichild)=m%rtunew(ind_son,ivar,ichild)+ &
                                & (h%rtflux(i3   ,j3   ,k3   ,ivar,idim) &
                                & -h%rtflux(i3+i0,j3+j0,k3+k0,ivar,idim))
 #endif
-                       end do
+                        end do
+                       endif
                     end do
                  end do
               end do
