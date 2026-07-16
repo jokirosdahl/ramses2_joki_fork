@@ -31,7 +31,7 @@ N_IRON_IONS = 0
 NION = 0
 NPSCAL = 0
 NRTGRP = 0
-NCRGRP = 1
+NCRGRP=1
 NHILBERT = 1
 NVECTOR = 32
 NPRE = 8
@@ -40,6 +40,7 @@ DEBUG = 0
 HDF5 = 0
 MPIF90 = mpif90
 EXEC = ramses
+DEFINES =
 EXTRA_DEFINES =
 #############################################################################
 # Compute NVAR
@@ -50,6 +51,10 @@ NION := $(NION)+$(N_NEON_IONS)+$(N_MAGNESIUM_IONS)+$(N_SILICON_IONS)
 NION := $(NION)+$(N_SULFUR_IONS)+$(N_IRON_IONS)
 NION := $(NION)+$(N_HYDROGEN_IONS)+$(N_H2)+$(N_HELIUM_IONS)
 endif
+ifeq ($(CRS),1)
+   NENER := $(NENER)+$(NCRGRP)
+   DEFINES += -DMHD -DCRS -DNCRGRP=$(NCRGRP)
+endif
 NVAR := $(NHYDRO)+$(NENER)+$(NPSCAL)+$(NMETAL)+$(NION)
 #############################################################################
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
@@ -57,7 +62,7 @@ GITHASH = $(shell git log --pretty=format:'%H' -n 1)
 GITREPO = $(shell git config --get remote.origin.url)
 BUILDDATE = $(shell date +"%D-%T")
 BUILDCOMMAND = ${MAKE} ${MAKEFLAGS}
-DEFINES = -DNDIM=$(NDIM) -DNVAR=$(NVAR)
+DEFINES += -DNDIM=$(NDIM) -DNVAR=$(NVAR)
 DEFINES += $(EXTRA_DEFINES)
 ifeq ($(RTZ),1)
 DEFINES += -DN_HYDROGEN_IONS=$(N_HYDROGEN_IONS)
@@ -98,9 +103,6 @@ ifeq ($(RT),1)
 endif
 ifeq ($(RTZ),1)
    DEFINES += -DRTZ
-endif
-ifeq ($(CRS),1)
-   DEFINES += -DMHD -DCRS -DNCRGRP=$(NCRGRP)
 endif
 ifneq ($(NVECTOR),32)
    DEFINES += -DNVECTOR=$(NVECTOR)
