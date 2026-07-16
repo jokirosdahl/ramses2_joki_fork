@@ -38,7 +38,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   !------------------------------------------------------------------------
   associate(iu1=>kcr%iu1, ju1=>kcr%ju1, ku1=>kcr%ku1 &
            ,iu2=>kcr%iu2, ju2=>kcr%ju2, ku2=>kcr%ku2 &
-           ,iecr=>r%iecr)
+           ,iecr=>r%iecr, inener=>r%inener)
 
   cr_c2=cr_c**2
 
@@ -63,7 +63,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
      if(r%cr_isotropic_pressure) then
         kcr%cflx(i,j,k,2:ndim+1,1:ndim) = 0d0
         do idim = 1, ndim
-           kcr%cflx(i,j,k,idim+1,idim) = Ecr*cr_c2*(r%gamma_rad(iEcr+igrp-1)-1.0)
+           kcr%cflx(i,j,k,idim+1,idim) = Ecr*cr_c2*(r%gamma_rad(iEcr-inener+igrp)-1.0)
         enddo
      else
         ! M1 closure
@@ -120,7 +120,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   real(kind=8)::norm,bdotgradp,cosp,sinp,cost,sint,bxby,Dcr_dir
   !------------------------------------------------------------------------
   associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
-  gmone_div_twodx_inv=(r%gamma_rad(r%iEcr+igrp-1)-1.0)/(2d0*dx)
+  gmone_div_twodx_inv=(r%gamma_rad(r%iEcr-r%inener+igrp)-1.0)/(2d0*dx)
   iEgrp = r%iEcr+(iGrp-1)
 
   ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
@@ -190,7 +190,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
                   r%cr_d_code(igrp)*r%cr_d_perp_factors(iGrp) /)
      if(r%cr_streaming_diffusion) &
           Dcr_vec(1) = Dcr_vec(1) + &
-          min(r%cr_dmax_code, 3./max(abs(bdotgradp),1d-50) * va * r%gamma_rad(r%iEcr-1+iGrp) * max(Ecr,smallecr))
+          min(r%cr_dmax_code, 3./max(abs(bdotgradp),1d-50) * va * r%gamma_rad(r%iEcr-r%inener+iGrp) * max(Ecr,smallecr))
 
      ! Rotate Dcr_vec so it is parallel with B, hence
      ! describing Dcr in the simulation coordinate system
@@ -200,18 +200,18 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
      ! Calculate wavespeeds
      Dcr_dir = abs(Dcr_vec(1)) ! x component of rotated Dcr
      kcr%lmax(i,j,k,1) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr-r%inener+igrp), cr_c, dt)
 
 #if NDIM>1
      Dcr_dir = abs(Dcr_vec(2)) ! y component of rotated Dcr
      kcr%lmax(i,j,k,2) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr-r%inener+igrp), cr_c, dt)
 #endif
 
 #if NDIM>2
      Dcr_dir = abs(Dcr_vec(3)) ! z component of rotated Dcr
      kcr%lmax(i,j,k,3) = &
-          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr+igrp-1), cr_c, dt)
+          cmp_cr_lmax(r, dx, Dcr_dir, r%gamma_rad(r%iEcr-r%inener+igrp), cr_c, dt)
 #endif
 
   end do
@@ -362,9 +362,9 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      meandiffv = 0.5*( lmax(i-1,j,k,1) + lmax(i,j,k,1) )
      a2 = min(-meandiffv, lmax(i-1,j,k,1))
-     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,1))
-     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
 
      lminus = min(a2,0.)
      lplus = max(a3,0.)
@@ -423,9 +423,9 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      meandiffv = 0.5*( lmax(i,j-1,k,2) + lmax(i,j,k,2) )
      a2 = min(meandiffv, lmax(i,j-1,k,2))
-     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,2))
-     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      lminus = min(a2,0.)
      lplus = max(a3,0.)
 
@@ -483,9 +483,9 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
      meandiffv = 0.5*( lmax(i,j,k-1,3) + lmax(i,j,k,3) )
      a2 = min(meandiffv, lmax(i,j,k-1,3))
-     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,3))
-     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr+igrp-1)-1.0))
+     a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      lminus = min(a2,0.)
      lplus  = max(a2,0.)
 
