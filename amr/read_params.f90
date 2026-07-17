@@ -1400,6 +1400,9 @@ subroutine m_read_params(pst)
   if(riemann=='hlld')s%r%riemann=solver_hlld
   if(riemann=='roe')s%r%riemann=solver_roe
   if(riemann=='upwind')s%r%riemann=solver_upwind
+#ifdef _METAL
+  if(riemann=='uct-hlld')s%r%riemann=solver_uct_hlld
+#endif
 #endif
 #ifdef MHD
   if(riemann2d=='none')riemann2d=riemann

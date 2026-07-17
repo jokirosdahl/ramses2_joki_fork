@@ -5,6 +5,10 @@ module metal_runner
 
 contains
 
+integer function metal_nsubgrid()
+  metal_nsubgrid = int(mtl_nsubgrid())
+end function metal_nsubgrid
+
 !###########################################################
 !###########################################################
 !###########################################################
@@ -95,12 +99,18 @@ recursive subroutine r_set_grid_device(pst)
      call mtl_set_grid_device( &
           c_loc(pst%s%m%uold(1,1,1)), &
           c_loc(pst%s%m%unew(1,1,1)), &
+#ifdef MHD
+          c_loc(pst%s%m%bold(1,1,1)), &
+#else
+          c_null_ptr, &
+#endif
           c_loc(pst%s%m%grid(1)),     &
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
 #else
      call mtl_set_grid_device( &
+          c_null_ptr, &
           c_null_ptr, &
           c_null_ptr, &
           c_loc(pst%s%m%grid(1)),     &
@@ -149,6 +159,11 @@ recursive subroutine r_transfer_grid_host(pst)
 #ifdef HYDRO
      call mtl_transfer_grid_host( &
           c_loc(pst%s%m%uold(1,1,1)), &
+#ifdef MHD
+          c_loc(pst%s%m%bold(1,1,1)), &
+#else
+          c_null_ptr, &
+#endif
           int(pst%s%m%ngridmax, c_int), &
           int(nvar,             c_int), &
           int(twotondim,        c_int))
@@ -211,6 +226,9 @@ subroutine metal_cmpdt(sim, ilevel, mass, ekin, eint, emag, dt)
   real(c_float) :: dx, gamma, smallr, smallc2, courant_factor
   real(c_float) :: constant_gravity(3)
   real(c_float) :: mass_f, ekin_f, eint_f, emag_f, dt_f
+#ifdef MHD
+  integer(c_int) :: induction
+#endif
 
   dx               = real(sim%r%boxlen / 2**ilevel, c_float)
   gamma            = real(sim%r%gamma,              c_float)
@@ -218,12 +236,18 @@ subroutine metal_cmpdt(sim, ilevel, mass, ekin, eint, emag, dt)
   smallc2          = real(sim%r%smallc**2,          c_float)
   courant_factor   = real(sim%r%courant_factor,     c_float)
   constant_gravity = real(sim%r%constant_gravity,   c_float)
+#ifdef MHD
+  induction = merge(int(1, c_int), int(0, c_int), sim%r%induction)
+#endif
 
   call mtl_cmpdt(                      &
        int(sim%m%head(ilevel), c_int), &
        int(sim%m%noct(ilevel), c_int), &
        dx, gamma, smallr, smallc2,     &
        courant_factor,                 &
+#ifdef MHD
+       induction,                      &
+#endif
        constant_gravity,               &
        mass_f, ekin_f, eint_f, emag_f, dt_f)
 
@@ -241,12 +265,19 @@ end subroutine metal_cmpdt
 !###########################################################
 subroutine metal_godunov(sim, ilevel)
   use ramses_commons, only: ramses_t
+#ifdef MHD
+  use amr_parameters, only: ndim
+  use hydro_parameters, only: solver_uct_hlld
+#endif
   implicit none
   type(ramses_t), intent(inout) :: sim
   integer,        intent(in)    :: ilevel
 
   real(c_float) :: gamma, smallr, smallc2, dt, dx
   real(c_float) :: constant_gravity(3)
+#ifdef MHD
+  integer(c_int) :: head_idx, num_subgrids, nsubgrid_l, nsubgridtondim_l, induction
+#endif
 
   gamma            = real(sim%r%gamma,              c_float)
   smallr           = real(sim%r%smallr,             c_float)
@@ -255,12 +286,27 @@ subroutine metal_godunov(sim, ilevel)
   dx               = real(sim%r%boxlen / 2**ilevel, c_float)
   constant_gravity = real(sim%r%constant_gravity,   c_float)
 
+#ifdef MHD
+  nsubgrid_l = mtl_nsubgrid()
+  nsubgridtondim_l = nsubgrid_l**ndim
+  if (sim%r%riemann /= solver_uct_hlld) error stop 'Metal MHD requires riemann=uct-hlld'
+  if (mod(sim%m%head(ilevel)-1, nsubgridtondim_l) /= 0) error stop 'Metal MHD oct head is not nsubgrid aligned'
+  if (mod(sim%m%noct(ilevel), nsubgridtondim_l) /= 0) error stop 'Metal MHD oct count is not divisible by nsubgrid'
+  head_idx = int((sim%m%head(ilevel)-1)/nsubgridtondim_l+1, c_int)
+  num_subgrids = int(sim%m%noct(ilevel)/nsubgridtondim_l, c_int)
+  induction = merge(int(1, c_int), int(0, c_int), sim%r%induction)
+#endif
+
   if(sim%r%verbose .and. sim%g%myid==1) &
        write(*,'("   Entering metal_godunov for level ",I2)') ilevel
 
   call mtl_godunov(                    &
+#ifdef MHD
+       head_idx, num_subgrids,          &
+#else
        int(sim%m%head(ilevel), c_int), &
        int(sim%m%noct(ilevel), c_int), &
+#endif
        int(sim%m%ngridmax,     c_int), &
        int(ilevel,             c_int), &
        int(sim%r%levelmin,     c_int), &
@@ -268,7 +314,14 @@ subroutine metal_godunov(sim, ilevel)
        gamma, smallr, smallc2,         &
        dt, dx,                         &
        int(sim%r%slope_type,   c_int), &
+#ifdef MHD
+       int(sim%r%slope_mag_type, c_int), &
+       real(sim%r%switch_llf_dmin, c_float), &
+       real(sim%r%switch_llf_pmin, c_float), &
+       induction, real(sim%r%etamag, c_float), &
+#else
        int(sim%r%riemann,      c_int), &
+#endif
        constant_gravity)
 
 end subroutine metal_godunov
@@ -291,6 +344,9 @@ subroutine metal_set_nbor(sim, ilevel)
   integer(c_int)  :: hash_size_l, ckey_max_l
   integer(c_long) :: key_off_l
   integer(c_int)  :: bmin(3), bmax(3), periodic_i(3)
+#ifdef MHD
+  integer(c_int) :: head_idx, num_subgrids, nsubgrid_l, nsubgridtondim_l
+#endif
 
   hash_size_l = int(sim%m%hash_size,                   c_int)
   ckey_max_l  = int(sim%m%ckey_max(ilevel),            c_int)
@@ -298,6 +354,14 @@ subroutine metal_set_nbor(sim, ilevel)
   bmin        = int(sim%m%box_ckey_min(1:ndim,ilevel), c_int)
   bmax        = int(sim%m%box_ckey_max(1:ndim,ilevel), c_int)
   periodic_i  = merge(int(1, c_int), int(0, c_int), sim%r%periodic)
+#ifdef MHD
+  nsubgrid_l = mtl_nsubgrid()
+  nsubgridtondim_l = nsubgrid_l**ndim
+  if (mod(sim%m%head(ilevel)-1, nsubgridtondim_l) /= 0) error stop 'Metal MHD oct head is not nsubgrid aligned'
+  if (mod(sim%m%noct(ilevel), nsubgridtondim_l) /= 0) error stop 'Metal MHD oct count is not divisible by nsubgrid'
+  head_idx = int((sim%m%head(ilevel)-1)/nsubgridtondim_l+1, c_int)
+  num_subgrids = int(sim%m%noct(ilevel)/nsubgridtondim_l, c_int)
+#endif
 
   ! Step 1: insert all allocated octs into the hash table (1 .. ifree-1).
   ! Use insert_hash_all (reads grid[].lev per oct) so fine octs get their own
@@ -309,8 +373,12 @@ subroutine metal_set_nbor(sim, ilevel)
 
   ! Step 2: build nbor for octs at ilevel
   call mtl_build_nbor( &
+#ifdef MHD
+       head_idx, num_subgrids, &
+#else
        int(sim%m%head(ilevel), c_int), &
        int(sim%m%noct(ilevel), c_int), &
+#endif
        hash_size_l, ckey_max_l, key_off_l, &
        bmin, bmax, periodic_i)
 
@@ -359,6 +427,10 @@ subroutine metal_user_flag(sim, ilevel, nflag)
 
   real(c_float) :: gamma, smallr, smallc2
   real(c_float) :: err_grad_d, err_grad_p, floor_d, floor_p
+#ifdef MHD
+  real(c_float) :: err_grad_b2, floor_b2, err_grad_A, floor_A
+  real(c_float) :: err_grad_B, floor_B, err_grad_C, floor_C
+#endif
   real(kind=8)  :: dx, factG
 
   dx = sim%r%boxlen/2**ilevel
@@ -372,6 +444,16 @@ subroutine metal_user_flag(sim, ilevel, nflag)
   err_grad_p = real(sim%r%err_grad_p, c_float)
   floor_d    = real(sim%r%floor_d,    c_float)
   floor_p    = real(sim%r%floor_p,    c_float)
+#ifdef MHD
+  err_grad_b2 = real(sim%r%err_grad_b2, c_float)
+  floor_b2 = real(sim%r%floor_b2, c_float)
+  err_grad_A = real(sim%r%err_grad_A, c_float)
+  floor_A = real(sim%r%floor_A, c_float)
+  err_grad_B = real(sim%r%err_grad_B, c_float)
+  floor_B = real(sim%r%floor_B, c_float)
+  err_grad_C = real(sim%r%err_grad_C, c_float)
+  floor_C = real(sim%r%floor_C, c_float)
+#endif
 
   nflag = int(mtl_user_flag_batch( &
        int(sim%m%head(ilevel), c_int), &
@@ -382,9 +464,24 @@ subroutine metal_user_flag(sim, ilevel, nflag)
        real(sim%r%m_refine(ilevel), c_float), &
        real(sim%r%jeans_refine(ilevel), c_float), &
        real(factG, c_float), &
-       real(dx, c_float)))
+       real(dx, c_float) &
+#ifdef MHD
+       , err_grad_b2, floor_b2, err_grad_A, floor_A, &
+       err_grad_B, floor_B, err_grad_C, floor_C &
+#endif
+       ))
 
 end subroutine metal_user_flag
+
+subroutine metal_enforce_subgrid(sim, ilevel)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  if (sim%m%noct(ilevel) > 0 .and. mtl_nsubgrid() > 1) then
+     call mtl_enforce_subgrid(int(sim%m%head(ilevel), c_int), int(sim%m%noct(ilevel), c_int))
+  end if
+end subroutine metal_enforce_subgrid
 
 !###########################################################
 !###########################################################
@@ -465,6 +562,10 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   integer(c_int) :: cache_noct_lev
   integer(c_int) :: new_head, new_tail
   integer(c_int) :: head_cache, head_idx, num_octs
+#ifdef MHD
+  integer(c_int) :: nsubgrid_l, nsubgridtondim_l, subgridsize_l
+  integer(c_int) :: head_subgrid, num_subgrids
+#endif
 
   hash_size_l = int(sim%m%hash_size, c_int)
 
@@ -488,7 +589,9 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
 
   call mtl_refine_cells( &
        int(sim%m%head(ilevel),        c_int), &
-       old_ifree - int(sim%m%head(ilevel), c_int))
+       old_ifree - int(sim%m%head(ilevel), c_int), &
+       hash_size_l, int(sim%r%interpol_var, c_int), &
+       int(sim%r%interpol_type, c_int), real(sim%r%smallr, c_float))
 
   new_ifree = mtl_get_ifree()
   nmake     = int(new_ifree - old_ifree)
@@ -602,26 +705,47 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   ! For each direction, find subgrids missing that nbor, create cache octs.
   ! ifree_cache_now is 1-based: starts at the tail of level ilevel's cache + 1.
   ifree_cache_now = int(sim%m%tail_cache(ilevel) + 1, c_int)
+#ifdef MHD
+  nsubgrid_l = mtl_nsubgrid()
+  nsubgridtondim_l = nsubgrid_l**ndim
+  subgridsize_l = (nsubgrid_l + 2)**ndim
+#endif
 
   do ilev = int(ilevel + 1, c_int), int(sim%r%nlevelmax, c_int)
      if (sim%m%noct(ilev) <= 0) cycle
 
      new_head = ifree_cache_now
+#ifdef MHD
+     head_subgrid = int((sim%m%head(ilev) - 1) / nsubgridtondim_l + 1, c_int)
+     num_subgrids = int(sim%m%noct(ilev) / nsubgridtondim_l, c_int)
+     do ind = 1_c_int, subgridsize_l
+#else
      do ind = 1_c_int, 27_c_int
+#endif
         ! nbor_prefix + scan in one command buffer; returns missing-nbor count.
         cache_noct_lev = mtl_nbor_scan( &
+#ifdef MHD
+             head_subgrid, num_subgrids, &
+#else
              int(sim%m%head(ilev), c_int), &
              int(sim%m%noct(ilev), c_int), &
+#endif
              hash_size_l, ind)
         if (cache_noct_lev <= 0) cycle
 
         ! cache_swap + make_cache_octs + insert_hash in one command buffer.
         call mtl_cache_fill( &
+#ifdef MHD
+             head_subgrid, num_subgrids, &
+#else
              int(sim%m%head(ilev), c_int), &
              int(sim%m%noct(ilev), c_int), &
+#endif
              hash_size_l, ind, &
              int(sim%m%ngridmax, c_int), &
-             ifree_cache_now, cache_noct_lev)
+             ifree_cache_now, cache_noct_lev, &
+             int(sim%r%interpol_var, c_int), int(sim%r%interpol_type, c_int), &
+             real(sim%r%smallr, c_float))
 
         call mtl_advance_ifree_cache(cache_noct_lev)
         ifree_cache_now = ifree_cache_now + cache_noct_lev

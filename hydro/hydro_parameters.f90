@@ -33,6 +33,9 @@ module hydro_parameters
   integer,parameter::solver_hlld=4
   integer,parameter::solver_roe=5
   integer,parameter::solver_upwind=6
+#ifdef _METAL
+  integer,parameter::solver_uct_hlld=7
+#endif
 
   integer,parameter::solver2d_llf=1
   integer,parameter::solver2d_hllf=2

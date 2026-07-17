@@ -226,6 +226,9 @@ ifeq ($(COMPILER),METAL)
    METAL_KPATH  = ../metal/kernels
    CXX          = xcrun clang++
    CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
+   ifeq ($(MHD),1)
+      CXXFLAGS += -DMHD
+   endif
    ifeq ($(DEBUG),1)
       CXXFLAGS  += -g -O0
    endif
@@ -349,13 +352,13 @@ cub_module_radix_sort_f.o: cub_module_radix_sort.cuf cub_module_radix_sort_c.o
 	$(C) $(CFLAGS) -c $< -o $@
 #############################################################################
 # Metal-specific build rules
-metal_bridge.o: $(METAL_PATH)/metal_bridge.mm
+metal_bridge.o: $(METAL_PATH)/metal_bridge.mm $(METAL_PATH)/metal_config.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 hydro.air: $(METAL_KPATH)/hydro.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_PATH)/metal_config.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_PATH)/metal_config.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
@@ -367,7 +370,14 @@ cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
 part.air: $(METAL_KPATH)/part.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
 	$(METALC) $(METALFLAGS) -c $< -o $@
-ramses_kernels.metallib: hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
+mhd_uct.air: $(METAL_KPATH)/mhd_uct.metal $(METAL_PATH)/metal_types.h $(METAL_PATH)/metal_config.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+ifeq ($(MHD),1)
+METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air mhd_uct.air
+else
+METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
+endif
+ramses_kernels.metallib: $(METAL_AIR)
 	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################

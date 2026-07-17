@@ -7,7 +7,8 @@ module flag_utils
   use gpu_utils, only: nsubgrid
   use gpu_runner, only: gpu_init_flag, gpu_enforce_rules, gpu_user_flag, gpu_enforce_subgrid
 #elif defined(_METAL)
-  use metal_runner, only: metal_init_flag, metal_user_flag, metal_enforce_rules
+  use metal_runner, only: metal_init_flag, metal_user_flag, metal_enforce_rules, &
+       metal_enforce_subgrid, metal_nsubgrid
 #endif
 contains
 
@@ -54,6 +55,10 @@ subroutine m_flag_fine(pst,ilevel,icount)
   ! In case of GPU and nsubgrid > 1, force refine the entire oct,
 #ifdef _CUDA
   if (nsubgrid > 1)then
+     call r_ensure_subgrid(pst,ilevel,1)
+  endif
+#elif defined(_METAL)
+  if (metal_nsubgrid() > 1)then
      call r_ensure_subgrid(pst,ilevel,1)
   endif
 #endif
@@ -199,6 +204,12 @@ recursive subroutine r_ensure_subgrid(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_enforce_subgrid(pst%s, ilevel)
+     else
+        call ensure_subgrid(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_enforce_subgrid(pst%s, ilevel)
      else
         call ensure_subgrid(pst%s,ilevel)
      endif

@@ -568,12 +568,17 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
 endif()
 
 # =============================================================================
-# Metal sources (Apple Silicon, HYDRO=1 GRAV=0 MHD=0, NPRE=4, no MPI)
+# Metal sources (Apple Silicon, NPRE=4, no MPI)
 # =============================================================================
 if(COMPILER STREQUAL "METAL")
     list(APPEND fortran_files
         metal/metal_interface.f90
         metal/metal_runner.f90)
+
+    set(_metal_bridge_flags)
+    if(MHD)
+        list(APPEND _metal_bridge_flags -DMHD)
+    endif()
 
     # ObjC++ bridge: compiled explicitly with xcrun clang++, same pattern as
     # the CUB wrappers in the NVHPC block — avoids relying on CMake's CXX
@@ -583,10 +588,12 @@ if(COMPILER STREQUAL "METAL")
         OUTPUT  ${_metal_bridge_o}
         COMMAND xcrun clang++ -std=c++17 -ObjC++ -fobjc-arc -O2
                 -I${CMAKE_SOURCE_DIR}/metal
+                ${_metal_bridge_flags}
                 -c ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
                 -o ${_metal_bridge_o}
         DEPENDS ${CMAKE_SOURCE_DIR}/metal/metal_bridge.mm
                 ${CMAKE_SOURCE_DIR}/metal/metal_types.h
+                ${CMAKE_SOURCE_DIR}/metal/metal_config.h
         COMMENT "Compiling metal_bridge.mm (xcrun clang++)"
         VERBATIM
     )
@@ -615,7 +622,13 @@ if(COMPILER STREQUAL "METAL")
         list(APPEND _metalflags -gline-tables-only -frecord-sources)
     endif()
 
-    foreach(_kernel hydro refine flag scan rho mg cooling part)
+    set(_metal_kernels hydro refine flag scan rho mg cooling part)
+    if(MHD)
+        list(APPEND _metal_kernels mhd_uct)
+    endif()
+    set(_metal_air)
+    foreach(_kernel IN LISTS _metal_kernels)
+        list(APPEND _metal_air ${CMAKE_BINARY_DIR}/${_kernel}.air)
         add_custom_command(
             OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
             COMMAND ${_metalc} ${_metalflags}
@@ -623,6 +636,7 @@ if(COMPILER STREQUAL "METAL")
                     -o ${CMAKE_BINARY_DIR}/${_kernel}.air
             DEPENDS ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
                     ${CMAKE_SOURCE_DIR}/metal/metal_types.h
+                    ${CMAKE_SOURCE_DIR}/metal/metal_config.h
                     ${CMAKE_SOURCE_DIR}/metal/kernels/metal_utils.h
             COMMENT "Compiling ${_kernel}.metal"
             VERBATIM
@@ -631,24 +645,9 @@ if(COMPILER STREQUAL "METAL")
 
     add_custom_command(
         OUTPUT  ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
-        COMMAND ${_metallib}
-                ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/refine.air
-                ${CMAKE_BINARY_DIR}/flag.air
-                ${CMAKE_BINARY_DIR}/scan.air
-                ${CMAKE_BINARY_DIR}/rho.air
-                ${CMAKE_BINARY_DIR}/mg.air
-                ${CMAKE_BINARY_DIR}/cooling.air
-                ${CMAKE_BINARY_DIR}/part.air
+        COMMAND ${_metallib} ${_metal_air}
                 -o ${CMAKE_BINARY_DIR}/ramses_kernels.metallib
-        DEPENDS ${CMAKE_BINARY_DIR}/hydro.air
-                ${CMAKE_BINARY_DIR}/refine.air
-                ${CMAKE_BINARY_DIR}/flag.air
-                ${CMAKE_BINARY_DIR}/scan.air
-                ${CMAKE_BINARY_DIR}/rho.air
-                ${CMAKE_BINARY_DIR}/mg.air
-                ${CMAKE_BINARY_DIR}/cooling.air
-                ${CMAKE_BINARY_DIR}/part.air
+        DEPENDS ${_metal_air}
         COMMENT "Linking ramses_kernels.metallib"
         VERBATIM
     )
