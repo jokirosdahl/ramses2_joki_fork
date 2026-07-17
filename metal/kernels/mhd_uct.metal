@@ -985,10 +985,10 @@ inline mr_edge_pair_t mr_reconstruct_velocity(float qm, float q0, float qp, floa
     return pair;
 }
 
-inline mr_edge_pair_t mr_reconstruct_b(float qm, float q0, float qp, float qpp) {
+inline mr_edge_pair_t mr_reconstruct_b(float qm, float q0, float qp, float qpp, int slope_mag) {
     mr_edge_pair_t pair;
-    pair.left = q0 + 0.5f * mr_face_b_slope(qm, q0, qp, 2);
-    pair.right = qp - 0.5f * mr_face_b_slope(q0, qp, qpp, 2);
+    pair.left = q0 + 0.5f * mr_face_b_slope(qm, q0, qp, slope_mag);
+    pair.right = qp - 0.5f * mr_face_b_slope(q0, qp, qpp, slope_mag);
     return pair;
 }
 
@@ -1012,7 +1012,7 @@ inline mr_edge_pair_t mr_staged_velocity_pair(device const float *velocity, devi
     return mr_reconstruct_velocity(qm, q0, qp, qpp, has_m, has_p);
 }
 
-inline mr_edge_pair_t mr_face_b_pair(threadgroup const float *s, int orientation, int normal, int edge, int fixed, bool vary_t1) {
+inline mr_edge_pair_t mr_face_b_pair(threadgroup const float *s, int orientation, int normal, int edge, int fixed, bool vary_t1, int slope_mag) {
     int t1 = vary_t1 ? edge - 2 : fixed;
     int t2 = vary_t1 ? fixed : edge - 2;
     float qm = mr_face_b_get(s, orientation, normal, t1, t2);
@@ -1025,7 +1025,7 @@ inline mr_edge_pair_t mr_face_b_pair(threadgroup const float *s, int orientation
     t1 = vary_t1 ? edge + 1 : fixed;
     t2 = vary_t1 ? fixed : edge + 1;
     float qpp = mr_face_b_get(s, orientation, normal, t1, t2);
-    return mr_reconstruct_b(qm, q0, qp, qpp);
+    return mr_reconstruct_b(qm, q0, qp, qpp, slope_mag);
 }
 
 inline void mr_load_stencil(device const oct_t *grid, device const float *uold, device const float *bold, device const float *f, device const int *nbor, constant float *constant_gravity, int subgrid_idx, float gamma, float smallr, float smallc2, float dt, threadgroup float *s, threadgroup bool *refined, int tid, int threads_per_group) {
@@ -1628,9 +1628,9 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f2lo = mr_get_record(smem, 1, J, I - 1, K);
             mr_uct_record_t f2hi = mr_get_record(smem, 1, J, I, K);
             mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 1, J, I, K, true, 0, f2lo.vt1, f2hi.vt1);
-            mr_edge_pair_t b2 = mr_face_b_pair(smem, 1, J, I, K, true);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 1, J, I, K, true, slope_mag);
             mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 0, I, J, K, true, 0, f1lo.vt1, f1hi.vt1);
-            mr_edge_pair_t b1 = mr_face_b_pair(smem, 0, I, J, K, true);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 0, I, J, K, true, slope_mag);
             emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 0;
             if (etamag > 0.0f) {
@@ -1652,9 +1652,9 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f2lo = mr_get_record(smem, 0, I, J, K - 1);
             mr_uct_record_t f2hi = mr_get_record(smem, 0, I, J, K);
             mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 0, I, K, J, false, 1, f2lo.vt2, f2hi.vt2);
-            mr_edge_pair_t b2 = mr_face_b_pair(smem, 0, I, K, J, false);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 0, I, K, J, false, slope_mag);
             mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 2, K, I, J, true, 0, f1lo.vt1, f1hi.vt1);
-            mr_edge_pair_t b1 = mr_face_b_pair(smem, 2, K, I, J, true);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 2, K, I, J, true, slope_mag);
             emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 1;
             if (etamag > 0.0f) {
@@ -1676,9 +1676,9 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f2lo = mr_get_record(smem, 2, K, I, J - 1);
             mr_uct_record_t f2hi = mr_get_record(smem, 2, K, I, J);
             mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 2, K, J, I, false, 1, f2lo.vt2, f2hi.vt2);
-            mr_edge_pair_t b2 = mr_face_b_pair(smem, 2, K, J, I, false);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 2, K, J, I, false, slope_mag);
             mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 1, J, K, I, false, 1, f1lo.vt2, f1hi.vt2);
-            mr_edge_pair_t b1 = mr_face_b_pair(smem, 1, J, K, I, false);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 1, J, K, I, false, slope_mag);
             emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 2;
             if (etamag > 0.0f) {
