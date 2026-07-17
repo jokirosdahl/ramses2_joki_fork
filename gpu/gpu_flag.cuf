@@ -257,26 +257,46 @@ contains
     integer(kind=4), intent(in), value :: num_octs
 
     integer :: tid, bid, oct_idx
-    integer :: ind
-    logical :: ok
+    integer :: ind, tx, nskip, group_start
+    logical :: ok, any_ok
+
+    integer, shared :: shared_ok(512)
 
     ! Thread and block id
-    tid = threadIdx%x - 1
+    tx = threadIdx%x
+    tid = tx - 1
     bid = blockIdx%x - 1
 
     ! Compute the oct idx
     oct_idx = tid + bid * blockDim%x
-    if (oct_idx >= num_octs) return
-    oct_idx = head_idx + oct_idx
 
     ! If any cell is flagged then flag entire oct
     ok = .false.
-    do ind = 1, twotondim
-       ok = ok .or. (flag1(ind, oct_idx) == 1)
-    end do
-    if (ok) then
+    if (oct_idx < num_octs) then
        do ind = 1, twotondim
-          flag1(ind, oct_idx) = 1
+          ok = ok .or. (flag1(ind, head_idx + oct_idx) == 1)
+       end do
+    end if
+
+    nskip = (nsubgrid/2)**ndim
+    if (nskip > 1) then
+       shared_ok(tx) = 0
+       if (ok) shared_ok(tx) = 1
+
+       call syncthreads()
+
+       group_start = ((tx - 1) / nskip) * nskip + 1
+       any_ok = .false.
+       do ind = 0, nskip - 1
+          any_ok = any_ok .or. (shared_ok(group_start + ind) == 1)
+       end do
+    else
+       any_ok = ok
+    end if
+
+    if (any_ok .and. oct_idx < num_octs) then
+       do ind = 1, twotondim
+          flag1(ind, head_idx + oct_idx) = 1
        end do
     end if
 

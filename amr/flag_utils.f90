@@ -236,19 +236,31 @@ subroutine ensure_subgrid(s,ilevel)
   ! This routine forces flag = 1 in the entire
   ! oct if one cell is flagged.
   !-------------------------------------------
-  integer :: igrid, ind
+  integer :: igrid, ind, iskip, nskip
   logical :: ok
 
   associate(g=>s%g, m=>s%m, mdl=>s%mdl)
 
-  do igrid = m%head(ilevel), m%tail(ilevel)
+#ifdef _CUDA
+  nskip = (nsubgrid/2) ** ndim
+#elif defined(_METAL)
+  nskip = metal_nsubgrid()
+  nskip = (nskip/2) ** ndim
+#else
+  nskip = 1
+#endif
+  do igrid = m%head(ilevel), m%tail(ilevel), nskip
      ok = .false.
-     do ind = 1, twotondim
-        ok = ok .or. (m%flag1(ind, igrid) == 1)
+     do iskip = 0, nskip - 1
+        do ind = 1, twotondim
+           ok = ok .or. (m%flag1(ind, igrid + iskip) == 1)
+        end do
      end do
      if (ok) then
-        do ind = 1, twotondim
-           m%flag1(ind, igrid) = 1
+        do iskip = 0, nskip - 1
+           do ind = 1, twotondim
+              m%flag1(ind, igrid + iskip) = 1
+           end do
         end do
      end if
   end do
