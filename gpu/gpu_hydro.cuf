@@ -183,6 +183,18 @@ module hydro_device
   end type mhd_smem_t
 
 #endif
+
+#ifndef MHD
+  type, public :: hydro_smem_t
+     type(subgrid_6x6x6cell_primitive)  :: local_subgrid
+#if NVAR>5+NENER
+     real(kind=dp) :: scalar_subgrid(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3, 1:nscalar)
+#endif
+     type(subgrid_3x2x2cell_primitive)  :: left_interfaces_x, right_interfaces_x
+     type(subgrid_2x3x2cell_primitive)  :: left_interfaces_y, right_interfaces_y
+     type(subgrid_2x2x3cell_primitive)  :: left_interfaces_z, right_interfaces_z
+  end type hydro_smem_t
+#endif
   real(kind=dp), device :: switch_llf_dmin_d
   real(kind=dp), device :: switch_llf_pmin_d
 
@@ -3573,13 +3585,7 @@ contains
 #ifdef MHD
     type(mhd_smem_t), shared :: smem(*)
 #else
-    type(subgrid_3x2x2cell_primitive), shared :: left_interfaces_x, right_interfaces_x
-    type(subgrid_2x3x2cell_primitive), shared :: left_interfaces_y, right_interfaces_y
-    type(subgrid_2x2x3cell_primitive), shared :: left_interfaces_z, right_interfaces_z
-    type(subgrid_6x6x6cell_primitive), shared :: local_subgrid
-#if NVAR>5+NENER
-    real(kind=dp), shared :: scalar_subgrid(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3, 1:nscalar)
-#endif
+    type(hydro_smem_t), shared :: smem(*)
 #endif
     real(kind=dp) :: dtdx
     integer :: block_idx  ! The index of this block, corresponds to the subgrid to load
@@ -3607,6 +3613,14 @@ contains
             & left_interfaces_z => smem(1)%left_interfaces_z, right_interfaces_z => smem(1)%right_interfaces_z, &
             & bf => smem(1)%bf, emfx => smem(1)%emfx, emfy => smem(1)%emfy, emfz => smem(1)%emfz, &
             & corner_x => smem(1)%corner_x, corner_y => smem(1)%corner_y, corner_z => smem(1)%corner_z)
+#else
+    associate(local_subgrid => smem(1)%local_subgrid, &
+#if NVAR>5+NENER
+            & scalar_subgrid => smem(1)%scalar_subgrid, &
+#endif
+            & left_interfaces_x => smem(1)%left_interfaces_x, right_interfaces_x => smem(1)%right_interfaces_x, &
+            & left_interfaces_y => smem(1)%left_interfaces_y, right_interfaces_y => smem(1)%right_interfaces_y, &
+            & left_interfaces_z => smem(1)%left_interfaces_z, right_interfaces_z => smem(1)%right_interfaces_z)
 #endif
 
     ! =======================================================================
@@ -3693,9 +3707,7 @@ contains
             & head_idx, block_idx, thread_idx, ngridmax, dtdx)
     endif
 
-#ifdef MHD
     end associate
-#endif
 
   end subroutine hydro_integrator_kernel
 
