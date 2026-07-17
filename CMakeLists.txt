@@ -626,18 +626,19 @@ if(COMPILER STREQUAL "METAL")
     endif()
 
     set(_metal_kernels hydro refine flag scan rho mg cooling part)
-    if(MHD)
-        list(APPEND _metal_kernels mhd_uct)
-    endif()
     set(_metal_air)
     foreach(_kernel IN LISTS _metal_kernels)
         list(APPEND _metal_air ${CMAKE_BINARY_DIR}/${_kernel}.air)
+        set(_kernel_depends ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal)
+        if(MHD AND _kernel STREQUAL "hydro")
+            list(APPEND _kernel_depends ${CMAKE_SOURCE_DIR}/metal/kernels/mhd_uct.metal)
+        endif()
         add_custom_command(
             OUTPUT  ${CMAKE_BINARY_DIR}/${_kernel}.air
             COMMAND ${_metalc} ${_metalflags}
                     -c ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
                     -o ${CMAKE_BINARY_DIR}/${_kernel}.air
-            DEPENDS ${CMAKE_SOURCE_DIR}/metal/kernels/${_kernel}.metal
+            DEPENDS ${_kernel_depends}
                     ${CMAKE_SOURCE_DIR}/metal/metal_types.h
                     ${CMAKE_SOURCE_DIR}/metal/metal_config.h
                     ${CMAKE_SOURCE_DIR}/metal/kernels/metal_utils.h
