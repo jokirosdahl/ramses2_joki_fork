@@ -30,8 +30,10 @@ using namespace metal;
 #define MR_EDGE_CELLS (MR_M * (MR_M + 1) * (MR_M + 1))
 #define MR_ALL_EDGES (3 * MR_EDGE_CELLS)
 #define MR_INTERIOR_CELLS (MR_M * MR_M * MR_M)
+#define MR_NSUBGRID_CELLS (MR_NSUBGRID * MR_NSUBGRID * MR_NSUBGRID)
 #define MR_LOCAL_BASE 0
 #define MR_BF_BASE (5 * MR_LOCAL_CELLS)
+#define MR_STATE_FLOATS (MR_BF_BASE + 3 * MR_BF_COMPONENT)
 #define MR_FACE_BASE (MR_BF_BASE + 3 * MR_BF_COMPONENT)
 #define MR_FACE_BUFFER (8 * MR_FACE_CELLS)
 #define MR_FLUX_FLOATS (5 * MR_ALL_FACES)
@@ -85,6 +87,11 @@ struct mr_trace_t {
     float BR;
     float CL;
     float CR;
+};
+
+struct mr_edge_pair_t {
+    float left;
+    float right;
 };
 
 inline int mr_u_flat(int oct_idx, int ivar, int cell_idx) {
@@ -625,6 +632,22 @@ inline mr_conserved_t mr_hlld_mhd_flux(mr_primitive_t left, mr_primitive_t right
     float sqrrstarr = sqrt(rstarr);
     float SAR = ustar + abs(A) / sqrrstarr;
     mr_set_uct_record(uct, ul, ur, vl, vr, wl, wr, A, SL, SR, ustar, SAL, SAR);
+    bool use_hllc = SL < 0.0f && SR > 0.0f && (SAL - SL < 1.0e-4f * (ustar - SL) || SAR - SR > -1.0e-4f * (SR - ustar));
+    if (use_hllc) {
+        float inv_span = 1.0f / (SR - SL);
+        Bstarl = Bstarr = (SR * Br - SL * Bl + Bl * ul - A * vl - Br * ur + A * vr) * inv_span;
+        Cstarl = Cstarr = (SR * Cr - SL * Cl + Cl * ul - A * wl - Cr * ur + A * wr) * inv_span;
+        vstarl = vl - A * (Bstarl - Bl) / (rl * (SL - ul));
+        wstarl = wl - A * (Cstarl - Cl) / (rl * (SL - ul));
+        vstarr = vr - A * (Bstarr - Br) / (rr * (SR - ur));
+        wstarr = wr - A * (Cstarr - Cr) / (rr * (SR - ur));
+        vdotBstarl = ustar * A + vstarl * Bstarl + wstarl * Cstarl;
+        vdotBstarr = ustar * A + vstarr * Bstarr + wstarr * Cstarr;
+        etotstarl = ((SL - ul) * etotl - Ptotl * ul + Ptotstar * ustar + A * (vdotBl - vdotBstarl)) / (SL - ustar);
+        etotstarr = ((SR - ur) * etotr - Ptotr * ur + Ptotstar * ustar + A * (vdotBr - vdotBstarr)) / (SR - ustar);
+        SAL = ustar;
+        SAR = ustar;
+    }
     float denom = sqrrstarl + sqrrstarr;
     float vstarstar = (sqrrstarl * vstarl + sqrrstarr * vstarr + sgnm * (Bstarr - Bstarl)) / denom;
     float wstarstar = (sqrrstarl * wstarl + sqrrstarr * wstarr + sgnm * (Cstarr - Cstarl)) / denom;
@@ -642,7 +665,11 @@ inline mr_conserved_t mr_hlld_mhd_flux(mr_primitive_t left, mr_primitive_t right
     float Ptoto;
     float etoto;
     float vdotBo;
-    if (SL > 0.0f) {
+    if (use_hllc && ustar >= 0.0f) {
+        ro = rstarl; uo = ustar; vo = vstarl; wo = wstarl; Bo = Bstarl; Co = Cstarl; Ptoto = Ptotstar; etoto = etotstarl; vdotBo = vdotBstarl;
+    } else if (use_hllc) {
+        ro = rstarr; uo = ustar; vo = vstarr; wo = wstarr; Bo = Bstarr; Co = Cstarr; Ptoto = Ptotstar; etoto = etotstarr; vdotBo = vdotBstarr;
+    } else if (SL > 0.0f) {
         ro = rl; uo = ul; vo = vl; wo = wl; Bo = Bl; Co = Cl; Ptoto = Ptotl; etoto = etotl; vdotBo = vdotBl;
     } else if (SAL > 0.0f) {
         ro = rstarl; uo = ustar; vo = vstarl; wo = wstarl; Bo = Bstarl; Co = Cstarl; Ptoto = Ptotstar; etoto = etotstarl; vdotBo = vdotBstarl;
@@ -869,7 +896,7 @@ inline mr_uct_record_t mr_get_record(threadgroup const float *s, int orientation
     return mr_shell_record_load(s, mr_shell_index(orientation, normal, t1, t2));
 }
 
-inline float mr_uct_edge(mr_uct_record_t f1lo, mr_uct_record_t f1hi, mr_uct_record_t f2lo, mr_uct_record_t f2hi, int slot1, int slot2) {
+inline float mr_uct_edge(mr_uct_record_t f1lo, mr_uct_record_t f1hi, mr_uct_record_t f2lo, mr_uct_record_t f2hi, mr_edge_pair_t v1, mr_edge_pair_t b2, mr_edge_pair_t v2, mr_edge_pair_t b1) {
     float a1L = 0.5f * (f1lo.aL + f1hi.aL);
     float a1R = 1.0f - a1L;
     float d1L = 0.5f * (f1lo.dL + f1hi.dL);
@@ -878,11 +905,7 @@ inline float mr_uct_edge(mr_uct_record_t f1lo, mr_uct_record_t f1hi, mr_uct_reco
     float a2R = 1.0f - a2L;
     float d2L = 0.5f * (f2lo.dL + f2hi.dL);
     float d2R = 0.5f * (f2lo.dR + f2hi.dR);
-    float v1L = slot2 == 1 ? f2lo.vt1 : f2lo.vt2;
-    float v1R = slot2 == 1 ? f2hi.vt1 : f2hi.vt2;
-    float v2L = slot1 == 1 ? f1lo.vt1 : f1lo.vt2;
-    float v2R = slot1 == 1 ? f1hi.vt1 : f1hi.vt2;
-    return a1L * v1L * f2lo.Bn + a1R * v1R * f2hi.Bn - a2L * v2L * f1lo.Bn - a2R * v2R * f1hi.Bn + d1L * f2lo.Bn - d1R * f2hi.Bn - d2L * f1lo.Bn + d2R * f1hi.Bn;
+    return a1L * v1.left * b2.left + a1R * v1.right * b2.right - a2L * v2.left * b1.left - a2R * v2.right * b1.right + d1L * b2.left - d1R * b2.right - d2L * b1.left + d2R * b1.right;
 }
 
 inline mr_uct_record_t mr_shell_solve(threadgroup const float *s, int shell, float gamma, float smallr, float smallc2, float dtdx, int slope, int slope_mag, int induction, float switch_dmin, float switch_pmin) {
@@ -913,6 +936,159 @@ inline mr_uct_record_t mr_shell_solve(threadgroup const float *s, int shell, flo
     mr_primitive_t right = mr_rotate_face(mr_traced_face(s, tr, orientation, -1, ir, jr, kr, smallr, smallc2), orientation);
     bool use_llf = (switch_dmin > 0.0f && min(left.density, right.density) < switch_dmin) || (switch_pmin > 0.0f && min(left.pressure, right.pressure) < switch_pmin);
     return use_llf ? mr_llf_record(left, right, gamma, smallr, smallc2) : mr_hlld_record(left, right, gamma, smallr, smallc2);
+}
+
+inline int mr_staged_velocity_index(int oct_idx, int orientation, int cell_idx, int slot) {
+    return (((oct_idx - 1) * 3 + orientation) * MR_TWOTONDIM + cell_idx - 1) * 2 + slot;
+}
+
+inline void mr_staged_velocity_set(device float *velocity, int oct_idx, int orientation, int cell_idx, mr_uct_record_t record) {
+    int index = mr_staged_velocity_index(oct_idx, orientation, cell_idx, 0);
+    velocity[index] = record.vt1;
+    velocity[index + 1] = record.vt2;
+}
+
+inline bool mr_staged_velocity_get(device const float *velocity, device const int *nbor, int subgrid_idx, int first_oct, int num_octs, int orientation, int normal, int t1, int t2, int slot, thread float &value) {
+    int i = orientation == 0 ? normal : t1;
+    int j = orientation == 1 ? normal : orientation == 0 ? t1 : t2;
+    int k = orientation == 2 ? normal : t2;
+    i += 2;
+    j += 2;
+    k += 2;
+    int i_sg = i / 2;
+    int j_sg = j / 2;
+    int k_sg = k / 2;
+    int source_idx = mr_nbor_get(nbor, subgrid_idx, 1 + i_sg + MR_NSUBGRIDP2 * j_sg + MR_NSUBGRIDP2 * MR_NSUBGRIDP2 * k_sg);
+    if (source_idx < first_oct || source_idx >= first_oct + num_octs) return false;
+    int cell_idx = 1 + i % 2 + 2 * (j % 2) + 4 * (k % 2);
+    value = velocity[mr_staged_velocity_index(source_idx, orientation, cell_idx, slot)];
+    return true;
+}
+
+inline float mr_face_b_get(threadgroup const float *s, int orientation, int normal, int t1, int t2) {
+    int i = orientation == 0 ? normal : t1;
+    int j = orientation == 1 ? normal : orientation == 0 ? t1 : t2;
+    int k = orientation == 2 ? normal : t2;
+    return mr_bf_get(s, orientation, i + 2, j + 2, k + 2);
+}
+
+inline float mr_vanleer_slope(float qm, float q0, float qp) {
+    float dl = q0 - qm;
+    float dr = qp - q0;
+    return dl * dr > 0.0f ? 2.0f * dl * dr / (dl + dr) : 0.0f;
+}
+
+inline mr_edge_pair_t mr_reconstruct_velocity(float qm, float q0, float qp, float qpp, bool has_m, bool has_p) {
+    mr_edge_pair_t pair;
+    pair.left = q0 + 0.5f * (has_m ? mr_vanleer_slope(qm, q0, qp) : 0.0f);
+    pair.right = qp - 0.5f * (has_p ? mr_vanleer_slope(q0, qp, qpp) : 0.0f);
+    return pair;
+}
+
+inline mr_edge_pair_t mr_reconstruct_b(float qm, float q0, float qp, float qpp) {
+    mr_edge_pair_t pair;
+    pair.left = q0 + 0.5f * mr_face_b_slope(qm, q0, qp, 2);
+    pair.right = qp - 0.5f * mr_face_b_slope(q0, qp, qpp, 2);
+    return pair;
+}
+
+inline mr_edge_pair_t mr_staged_velocity_pair(device const float *velocity, device const int *nbor, int subgrid_idx, int first_oct, int num_octs, int orientation, int normal, int edge, int fixed, bool vary_t1, int slot, float raw_left, float raw_right) {
+    float qm = raw_left;
+    float q0 = raw_left;
+    float qp = raw_right;
+    float qpp = raw_right;
+    int t1 = vary_t1 ? edge - 2 : fixed;
+    int t2 = vary_t1 ? fixed : edge - 2;
+    bool has_m = mr_staged_velocity_get(velocity, nbor, subgrid_idx, first_oct, num_octs, orientation, normal, t1, t2, slot, qm);
+    t1 = vary_t1 ? edge - 1 : fixed;
+    t2 = vary_t1 ? fixed : edge - 1;
+    mr_staged_velocity_get(velocity, nbor, subgrid_idx, first_oct, num_octs, orientation, normal, t1, t2, slot, q0);
+    t1 = vary_t1 ? edge : fixed;
+    t2 = vary_t1 ? fixed : edge;
+    mr_staged_velocity_get(velocity, nbor, subgrid_idx, first_oct, num_octs, orientation, normal, t1, t2, slot, qp);
+    t1 = vary_t1 ? edge + 1 : fixed;
+    t2 = vary_t1 ? fixed : edge + 1;
+    bool has_p = mr_staged_velocity_get(velocity, nbor, subgrid_idx, first_oct, num_octs, orientation, normal, t1, t2, slot, qpp);
+    return mr_reconstruct_velocity(qm, q0, qp, qpp, has_m, has_p);
+}
+
+inline mr_edge_pair_t mr_face_b_pair(threadgroup const float *s, int orientation, int normal, int edge, int fixed, bool vary_t1) {
+    int t1 = vary_t1 ? edge - 2 : fixed;
+    int t2 = vary_t1 ? fixed : edge - 2;
+    float qm = mr_face_b_get(s, orientation, normal, t1, t2);
+    t1 = vary_t1 ? edge - 1 : fixed;
+    t2 = vary_t1 ? fixed : edge - 1;
+    float q0 = mr_face_b_get(s, orientation, normal, t1, t2);
+    t1 = vary_t1 ? edge : fixed;
+    t2 = vary_t1 ? fixed : edge;
+    float qp = mr_face_b_get(s, orientation, normal, t1, t2);
+    t1 = vary_t1 ? edge + 1 : fixed;
+    t2 = vary_t1 ? fixed : edge + 1;
+    float qpp = mr_face_b_get(s, orientation, normal, t1, t2);
+    return mr_reconstruct_b(qm, q0, qp, qpp);
+}
+
+inline void mr_load_stencil(device const oct_t *grid, device const float *uold, device const float *bold, device const float *f, device const int *nbor, constant float *constant_gravity, int subgrid_idx, float gamma, float smallr, float smallc2, float dt, threadgroup float *s, threadgroup bool *refined, int tid, int threads_per_group) {
+    for (int work = tid; work < MR_LOCAL_CELLS; work += threads_per_group) {
+        int oct_lattice = work / MR_TWOTONDIM;
+        int i_sg;
+        int j_sg;
+        int k_sg;
+        mr_index3(oct_lattice, MR_NSUBGRIDP2, MR_NSUBGRIDP2, i_sg, j_sg, k_sg);
+        int ind_nbor = oct_lattice + 1;
+        int source_idx = mr_nbor_get(nbor, subgrid_idx, ind_nbor);
+        int cell_idx = work % MR_TWOTONDIM + 1;
+        int ib;
+        int jb;
+        int kb;
+        mr_index3(cell_idx - 1, 2, 2, ib, jb, kb);
+        int i = ib + 2 * i_sg;
+        int j = jb + 2 * j_sg;
+        int k = kb + 2 * k_sg;
+        float b0[6];
+        for (int component = 0; component < 6; ++component) b0[component] = mr_b_get(bold, source_idx, component + 1, cell_idx);
+        if (i >= 1) {
+            int face_source = ib == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - 1) : source_idx;
+            int face_cell = cell_idx + 1 - 2 * ib;
+            mr_bf_set(s, 0, i, j, k, 0.5f * (b0[0] + mr_b_get(bold, face_source, 4, face_cell)));
+        }
+        if (j >= 1) {
+            int face_source = jb == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - MR_NSUBGRIDP2) : source_idx;
+            int face_cell = cell_idx + 2 * (1 - 2 * jb);
+            mr_bf_set(s, 1, i, j, k, 0.5f * (b0[1] + mr_b_get(bold, face_source, 5, face_cell)));
+        }
+        if (k >= 1) {
+            int face_source = kb == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - MR_NSUBGRIDP2 * MR_NSUBGRIDP2) : source_idx;
+            int face_cell = cell_idx + 4 * (1 - 2 * kb);
+            mr_bf_set(s, 2, i, j, k, 0.5f * (b0[2] + mr_b_get(bold, face_source, 6, face_cell)));
+        }
+        mr_conserved_t u;
+        u.density = mr_u_get(uold, source_idx, 1, cell_idx);
+        u.momentum_x = mr_u_get(uold, source_idx, 2, cell_idx);
+        u.momentum_y = mr_u_get(uold, source_idx, 3, cell_idx);
+        u.momentum_z = mr_u_get(uold, source_idx, 4, cell_idx);
+        u.energy = mr_u_get(uold, source_idx, 5, cell_idx);
+        u.Bx = 0.5f * (b0[0] + b0[3]);
+        u.By = 0.5f * (b0[1] + b0[4]);
+        u.Bz = 0.5f * (b0[2] + b0[5]);
+        mr_primitive_t q = mr_conserved_to_primitive(u, gamma, smallr, smallc2);
+#ifdef GRAV
+        int grav_base = (source_idx - 1) * 3 * MR_TWOTONDIM + cell_idx - 1;
+        q.velocity_x += 0.5f * dt * f[grav_base];
+        q.velocity_y += 0.5f * dt * f[grav_base + MR_TWOTONDIM];
+        q.velocity_z += 0.5f * dt * f[grav_base + 2 * MR_TWOTONDIM];
+#else
+        q.velocity_x += 0.5f * dt * constant_gravity[0];
+        q.velocity_y += 0.5f * dt * constant_gravity[1];
+        q.velocity_z += 0.5f * dt * constant_gravity[2];
+#endif
+        mr_local_set(s, 0, i, j, k, q.density);
+        mr_local_set(s, 1, i, j, k, q.velocity_x);
+        mr_local_set(s, 2, i, j, k, q.velocity_y);
+        mr_local_set(s, 3, i, j, k, q.velocity_z);
+        mr_local_set(s, 4, i, j, k, q.pressure);
+        if (i >= 1 && i <= MR_TRACE && j >= 1 && j <= MR_TRACE && k >= 1 && k <= MR_TRACE) mr_refined_set(refined, i, j, k, grid[source_idx - 1].refined[cell_idx - 1] != 0);
+    }
 }
 
 inline void mr_atomic_add(device atomic_uint *value, float addend) {
@@ -1164,6 +1340,7 @@ kernel void mhd_cmpdt_kernel(
     constant float &courant_factor [[buffer(10)]],
     constant int &induction [[buffer(11)]],
     constant float *constant_gravity [[buffer(12)]],
+    device const float *f [[buffer(13)]],
     uint tid [[thread_position_in_threadgroup]],
     uint bid [[threadgroup_position_in_grid]],
     uint lane [[thread_index_in_simdgroup]],
@@ -1212,7 +1389,12 @@ kernel void mhd_cmpdt_kernel(
                 float cfz = sqrt(c2v + sqrt(max(c2v * c2v - a2 * q.Bz * q.Bz * rinv, 0.0f)));
                 ctot = abs(q.velocity_x) + cfx + abs(q.velocity_y) + cfy + abs(q.velocity_z) + cfz;
             }
+#ifdef GRAV
+            int grav_base = (oct_idx - 1) * 3 * MR_TWOTONDIM + cell_idx - 1;
+            float grav = abs(f[grav_base]) + abs(f[grav_base + MR_TWOTONDIM]) + abs(f[grav_base + 2 * MR_TWOTONDIM]);
+#else
             float grav = abs(constant_gravity[0]) + abs(constant_gravity[1]) + abs(constant_gravity[2]);
+#endif
             grav = max(grav * dx / (ctot * ctot), 0.0001f);
             dtloc = dx / ctot * (sqrt(1.0f + 2.0f * courant_factor * grav) - 1.0f) / grav;
         }
@@ -1257,6 +1439,64 @@ kernel void mhd_cmpdt_kernel(
     }
 }
 
+kernel void mhd_uct_velocity_kernel(
+    device const oct_t *grid [[buffer(0)]],
+    device const float *uold [[buffer(1)]],
+    device const float *bold [[buffer(2)]],
+    device const int *nbor [[buffer(3)]],
+    constant int &head_idx [[buffer(4)]],
+    constant int &num_subgrids [[buffer(5)]],
+    constant float &gamma [[buffer(6)]],
+    constant float &smallr [[buffer(7)]],
+    constant float &smallc2 [[buffer(8)]],
+    constant float &dt [[buffer(9)]],
+    constant float &dx [[buffer(10)]],
+    constant int &slope [[buffer(11)]],
+    constant int &slope_mag [[buffer(12)]],
+    constant float &switch_llf_dmin [[buffer(13)]],
+    constant float &switch_llf_pmin [[buffer(14)]],
+    constant int &induction [[buffer(15)]],
+    constant float *constant_gravity [[buffer(16)]],
+    device const float *f [[buffer(17)]],
+    device float *velocity [[buffer(18)]],
+    uint block_idx [[threadgroup_position_in_grid]],
+    uint tid [[thread_position_in_threadgroup]],
+    uint threads_per_group [[threads_per_threadgroup]])
+{
+    if (int(block_idx) >= num_subgrids) return;
+    threadgroup float state[MR_STATE_FLOATS];
+    threadgroup bool refined[MR_REFINED_CELLS];
+    int subgrid_idx = head_idx + int(block_idx);
+    float dtdx = dt / dx;
+    mr_load_stencil(grid, uold, bold, f, nbor, constant_gravity, subgrid_idx, gamma, smallr, smallc2, dt, state, refined, int(tid), int(threads_per_group));
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (int work = int(tid); work < 3 * MR_INTERIOR_CELLS; work += int(threads_per_group)) {
+        int orientation = work / MR_INTERIOR_CELLS;
+        int i;
+        int j;
+        int k;
+        mr_index3(work % MR_INTERIOR_CELLS, MR_M, MR_M, i, j, k);
+        int ir = i + 2;
+        int jr = j + 2;
+        int kr = k + 2;
+        int il = ir;
+        int jl = jr;
+        int kl = kr;
+        if (orientation == 0) --il;
+        else if (orientation == 1) --jl;
+        else --kl;
+        mr_trace_t tl = mr_predict_cell(state, il, jl, kl, gamma, dtdx, slope, slope_mag, induction);
+        mr_trace_t tr = mr_predict_cell(state, ir, jr, kr, gamma, dtdx, slope, slope_mag, induction);
+        mr_primitive_t left = mr_rotate_face(mr_traced_face(state, tl, orientation, 1, il, jl, kl, smallr, smallc2), orientation);
+        mr_primitive_t right = mr_rotate_face(mr_traced_face(state, tr, orientation, -1, ir, jr, kr, smallr, smallc2), orientation);
+        bool use_llf = (switch_llf_dmin > 0.0f && min(left.density, right.density) < switch_llf_dmin) || (switch_llf_pmin > 0.0f && min(left.pressure, right.pressure) < switch_llf_pmin);
+        mr_uct_record_t record = use_llf ? mr_llf_record(left, right, gamma, smallr, smallc2) : mr_hlld_record(left, right, gamma, smallr, smallc2);
+        int source_idx = mr_nbor_get(nbor, subgrid_idx, 1 + 1 + i / 2 + MR_NSUBGRIDP2 * (1 + j / 2) + MR_NSUBGRIDP2 * MR_NSUBGRIDP2 * (1 + k / 2));
+        int cell_idx = 1 + i % 2 + 2 * (j % 2) + 4 * (k % 2);
+        mr_staged_velocity_set(velocity, source_idx, orientation, cell_idx, record);
+    }
+}
+
 kernel void hydro_integrator_uct_kernel(
     device const oct_t *grid [[buffer(0)]],
     device const float *uold [[buffer(1)]],
@@ -1283,6 +1523,8 @@ kernel void hydro_integrator_uct_kernel(
     constant int &induction [[buffer(22)]],
     constant float &etamag [[buffer(23)]],
     constant float *constant_gravity [[buffer(24)]],
+    device const float *f [[buffer(25)]],
+    device const float *velocity [[buffer(26)]],
     uint block_idx [[threadgroup_position_in_grid]],
     uint tid [[thread_position_in_threadgroup]],
     uint threads_per_group [[threads_per_threadgroup]])
@@ -1292,59 +1534,7 @@ kernel void hydro_integrator_uct_kernel(
     threadgroup bool refined[MR_REFINED_CELLS];
     int subgrid_idx = head_idx + int(block_idx);
     float dtdx = dt / dx;
-    for (int work = int(tid); work < MR_LOCAL_CELLS; work += int(threads_per_group)) {
-        int oct_lattice = work / MR_TWOTONDIM;
-        int i_sg;
-        int j_sg;
-        int k_sg;
-        mr_index3(oct_lattice, MR_NSUBGRIDP2, MR_NSUBGRIDP2, i_sg, j_sg, k_sg);
-        int ind_nbor = oct_lattice + 1;
-        int source_idx = mr_nbor_get(nbor, subgrid_idx, ind_nbor);
-        int cell_idx = work % MR_TWOTONDIM + 1;
-        int ib;
-        int jb;
-        int kb;
-        mr_index3(cell_idx - 1, 2, 2, ib, jb, kb);
-        int i = ib + 2 * i_sg;
-        int j = jb + 2 * j_sg;
-        int k = kb + 2 * k_sg;
-        float b0[6];
-        for (int component = 0; component < 6; ++component) b0[component] = mr_b_get(bold, source_idx, component + 1, cell_idx);
-        if (i >= 1) {
-            int face_source = ib == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - 1) : source_idx;
-            int face_cell = cell_idx + 1 - 2 * ib;
-            mr_bf_set(smem, 0, i, j, k, 0.5f * (b0[0] + mr_b_get(bold, face_source, 4, face_cell)));
-        }
-        if (j >= 1) {
-            int face_source = jb == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - MR_NSUBGRIDP2) : source_idx;
-            int face_cell = cell_idx + 2 * (1 - 2 * jb);
-            mr_bf_set(smem, 1, i, j, k, 0.5f * (b0[1] + mr_b_get(bold, face_source, 5, face_cell)));
-        }
-        if (k >= 1) {
-            int face_source = kb == 0 ? mr_nbor_get(nbor, subgrid_idx, ind_nbor - MR_NSUBGRIDP2 * MR_NSUBGRIDP2) : source_idx;
-            int face_cell = cell_idx + 4 * (1 - 2 * kb);
-            mr_bf_set(smem, 2, i, j, k, 0.5f * (b0[2] + mr_b_get(bold, face_source, 6, face_cell)));
-        }
-        mr_conserved_t u;
-        u.density = mr_u_get(uold, source_idx, 1, cell_idx);
-        u.momentum_x = mr_u_get(uold, source_idx, 2, cell_idx);
-        u.momentum_y = mr_u_get(uold, source_idx, 3, cell_idx);
-        u.momentum_z = mr_u_get(uold, source_idx, 4, cell_idx);
-        u.energy = mr_u_get(uold, source_idx, 5, cell_idx);
-        u.Bx = 0.5f * (b0[0] + b0[3]);
-        u.By = 0.5f * (b0[1] + b0[4]);
-        u.Bz = 0.5f * (b0[2] + b0[5]);
-        mr_primitive_t q = mr_conserved_to_primitive(u, gamma, smallr, smallc2);
-        q.velocity_x += 0.5f * dt * constant_gravity[0];
-        q.velocity_y += 0.5f * dt * constant_gravity[1];
-        q.velocity_z += 0.5f * dt * constant_gravity[2];
-        mr_local_set(smem, 0, i, j, k, q.density);
-        mr_local_set(smem, 1, i, j, k, q.velocity_x);
-        mr_local_set(smem, 2, i, j, k, q.velocity_y);
-        mr_local_set(smem, 3, i, j, k, q.velocity_z);
-        mr_local_set(smem, 4, i, j, k, q.pressure);
-        if (i >= 1 && i <= MR_TRACE && j >= 1 && j <= MR_TRACE && k >= 1 && k <= MR_TRACE) mr_refined_set(refined, i, j, k, grid[source_idx - 1].refined[cell_idx - 1] != 0);
-    }
+    mr_load_stencil(grid, uold, bold, f, nbor, constant_gravity, subgrid_idx, gamma, smallr, smallc2, dt, smem, refined, int(tid), int(threads_per_group));
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (tid < MR_REFINED_CELLS) {
         int i;
@@ -1423,6 +1613,8 @@ kernel void hydro_integrator_uct_kernel(
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (tid < MR_ALL_SHELLS) mr_shell_record_store(smem, int(tid), shell_record);
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    int first_oct = (head_idx - 1) * MR_NSUBGRID_CELLS + 1;
+    int num_octs = num_subgrids * MR_NSUBGRID_CELLS;
     for (int edge = int(tid); edge < MR_ALL_EDGES; edge += int(threads_per_group)) {
         int I;
         int J;
@@ -1435,7 +1627,11 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f1hi = mr_get_record(smem, 0, I, J, K);
             mr_uct_record_t f2lo = mr_get_record(smem, 1, J, I - 1, K);
             mr_uct_record_t f2hi = mr_get_record(smem, 1, J, I, K);
-            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, 1, 1);
+            mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 1, J, I, K, true, 0, f2lo.vt1, f2hi.vt1);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 1, J, I, K, true);
+            mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 0, I, J, K, true, 0, f1lo.vt1, f1hi.vt1);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 0, I, J, K, true);
+            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 0;
             if (etamag > 0.0f) {
                 int X = I + 2;
@@ -1455,7 +1651,11 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f1hi = mr_get_record(smem, 2, K, I, J);
             mr_uct_record_t f2lo = mr_get_record(smem, 0, I, J, K - 1);
             mr_uct_record_t f2hi = mr_get_record(smem, 0, I, J, K);
-            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, 1, 2);
+            mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 0, I, K, J, false, 1, f2lo.vt2, f2hi.vt2);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 0, I, K, J, false);
+            mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 2, K, I, J, true, 0, f1lo.vt1, f1hi.vt1);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 2, K, I, J, true);
+            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 1;
             if (etamag > 0.0f) {
                 int X = I + 2;
@@ -1475,7 +1675,11 @@ kernel void hydro_integrator_uct_kernel(
             mr_uct_record_t f1hi = mr_get_record(smem, 1, J, I, K);
             mr_uct_record_t f2lo = mr_get_record(smem, 2, K, I, J - 1);
             mr_uct_record_t f2hi = mr_get_record(smem, 2, K, I, J);
-            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, 2, 2);
+            mr_edge_pair_t v1 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 2, K, J, I, false, 1, f2lo.vt2, f2hi.vt2);
+            mr_edge_pair_t b2 = mr_face_b_pair(smem, 2, K, J, I, false);
+            mr_edge_pair_t v2 = mr_staged_velocity_pair(velocity, nbor, subgrid_idx, first_oct, num_octs, 1, J, K, I, false, 1, f1lo.vt2, f1hi.vt2);
+            mr_edge_pair_t b1 = mr_face_b_pair(smem, 1, J, K, I, false);
+            emf = mr_uct_edge(f1lo, f1hi, f2lo, f2hi, v1, b2, v2, b1);
             edge_orientation = 2;
             if (etamag > 0.0f) {
                 int X = I + 2;

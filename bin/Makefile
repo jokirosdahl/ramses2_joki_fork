@@ -229,6 +229,9 @@ ifeq ($(COMPILER),METAL)
    ifeq ($(MHD),1)
       CXXFLAGS += -DMHD
    endif
+   ifeq ($(GRAV),1)
+      CXXFLAGS += -DGRAV
+   endif
    ifeq ($(DEBUG),1)
       CXXFLAGS  += -g -O0
    endif
