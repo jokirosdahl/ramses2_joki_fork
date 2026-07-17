@@ -241,7 +241,14 @@ subroutine ensure_subgrid(s,ilevel)
 
   associate(g=>s%g, m=>s%m, mdl=>s%mdl)
 
+#ifdef _CUDA
   nskip = (nsubgrid/2) ** ndim
+#elif defined(_METAL)
+  nskip = metal_nsubgrid()
+  nskip = (nskip/2) ** ndim
+#else
+  nskip = 1
+#endif
   do igrid = m%head(ilevel), m%tail(ilevel), nskip
      ok = .false.
      do iskip = 0, nskip - 1
