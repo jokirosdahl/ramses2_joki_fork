@@ -579,6 +579,9 @@ if(COMPILER STREQUAL "METAL")
     if(MHD)
         list(APPEND _metal_bridge_flags -DMHD)
     endif()
+    if(GRAV)
+        list(APPEND _metal_bridge_flags -DGRAV)
+    endif()
 
     # ObjC++ bridge: compiled explicitly with xcrun clang++, same pattern as
     # the CUB wrappers in the NVHPC block — avoids relying on CMake's CXX

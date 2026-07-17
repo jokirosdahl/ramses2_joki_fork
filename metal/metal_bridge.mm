@@ -47,6 +47,7 @@ static id<MTLBuffer>               s_uold         = nil;
 static id<MTLBuffer>               s_unew         = nil;
 static id<MTLBuffer>               s_bold         = nil;
 static id<MTLBuffer>               s_bnew         = nil;
+static id<MTLBuffer>               s_uct_velocity = nil;
 static id<MTLBuffer>               s_grid         = nil;
 static id<MTLBuffer>               s_nbor         = nil;
 static id<MTLBuffer>               s_hash_key     = nil;
@@ -87,6 +88,7 @@ static id<MTLComputePipelineState> s_pso_godunov      = nil;
 static id<MTLComputePipelineState> s_pso_mhd_set_unew = nil;
 static id<MTLComputePipelineState> s_pso_mhd_set_uold = nil;
 static id<MTLComputePipelineState> s_pso_mhd_cmpdt = nil;
+static id<MTLComputePipelineState> s_pso_mhd_uct_velocity = nil;
 static id<MTLComputePipelineState> s_pso_mhd_godunov = nil;
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
@@ -297,6 +299,7 @@ extern "C" void mtl_init(void)
     s_pso_mhd_set_unew = make_pso(@"mhd_set_unew_kernel");
     s_pso_mhd_set_uold = make_pso(@"mhd_set_uold_kernel");
     s_pso_mhd_cmpdt = make_pso(@"mhd_cmpdt_kernel");
+    s_pso_mhd_uct_velocity = make_pso(@"mhd_uct_velocity_kernel");
     s_pso_mhd_godunov = make_pso(@"hydro_integrator_uct_kernel");
 #else
     s_pso_set_unew     = make_pso(@"set_unew_kernel");
@@ -450,6 +453,7 @@ extern "C" void mtl_alloc_amr(int ngridmax, int ncachemax,
     NSUInteger b_bytes = (NSUInteger)ntotal * 6 * twotondim * sizeof(float);
     s_bold = [s_device newBufferWithLength:b_bytes options:MTLResourceStorageModeShared];
     s_bnew = [s_device newBufferWithLength:b_bytes options:MTLResourceStorageModeShared];
+    s_uct_velocity = [s_device newBufferWithLength:(NSUInteger)ngridmax * 3 * twotondim * 2 * sizeof(float) options:MTLResourceStorageModePrivate];
 #endif
     s_grid     = [s_device newBufferWithLength:grid_bytes
                                        options:MTLResourceStorageModeShared];
@@ -712,6 +716,7 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
     [enc setBytes:&courant_factor length:sizeof(float)     atIndex:10];
     [enc setBytes:&induction      length:sizeof(int)       atIndex:11];
     [enc setBytes:cg              length:3 * sizeof(float) atIndex:12];
+    [enc setBuffer:s_f_grav       offset:0                 atIndex:13];
 #else
     [enc setBuffer:data_buf  offset:0 atIndex:2];
     [enc setBytes:&head_idx       length:sizeof(int)       atIndex:3];
@@ -763,11 +768,36 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
 #endif
     MTLSize grid_size = {(NSUInteger)num_subgrids, 1, 1};
 
-    id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
-    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc;
 #ifdef MHD
+    enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_mhd_uct_velocity];
+    [enc setBuffer:s_grid         offset:0 atIndex:0];
+    [enc setBuffer:s_uold         offset:0 atIndex:1];
+    [enc setBuffer:s_bold         offset:0 atIndex:2];
+    [enc setBuffer:s_nbor         offset:0 atIndex:3];
+    [enc setBytes:&head_idx       length:sizeof(int)       atIndex:4];
+    [enc setBytes:&num_subgrids   length:sizeof(int)       atIndex:5];
+    [enc setBytes:&gamma          length:sizeof(float)     atIndex:6];
+    [enc setBytes:&smallr         length:sizeof(float)     atIndex:7];
+    [enc setBytes:&smallc2        length:sizeof(float)     atIndex:8];
+    [enc setBytes:&dt             length:sizeof(float)     atIndex:9];
+    [enc setBytes:&dx             length:sizeof(float)     atIndex:10];
+    [enc setBytes:&slope          length:sizeof(int)       atIndex:11];
+    [enc setBytes:&slope_mag      length:sizeof(int)       atIndex:12];
+    [enc setBytes:&switch_llf_dmin length:sizeof(float)    atIndex:13];
+    [enc setBytes:&switch_llf_pmin length:sizeof(float)    atIndex:14];
+    [enc setBytes:&induction      length:sizeof(int)       atIndex:15];
+    [enc setBytes:cg              length:3 * sizeof(float) atIndex:16];
+    [enc setBuffer:s_f_grav       offset:0                 atIndex:17];
+    [enc setBuffer:s_uct_velocity offset:0                 atIndex:18];
+    [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
+    [enc endEncoding];
+    enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:s_pso_mhd_godunov];
 #else
+    enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:s_pso_godunov];
 #endif
     [enc setBuffer:s_grid  offset:0 atIndex:0];
@@ -796,6 +826,8 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
     [enc setBytes:&induction    length:sizeof(int)       atIndex:22];
     [enc setBytes:&etamag       length:sizeof(float)     atIndex:23];
     [enc setBytes:cg            length:3 * sizeof(float) atIndex:24];
+    [enc setBuffer:s_f_grav     offset:0                 atIndex:25];
+    [enc setBuffer:s_uct_velocity offset:0               atIndex:26];
 #else
     [enc setBuffer:s_nbor  offset:0 atIndex:3];
     [enc setBytes:&head_idx     length:sizeof(int)       atIndex:4];
