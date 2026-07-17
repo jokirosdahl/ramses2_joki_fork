@@ -1422,15 +1422,18 @@ contains
     use nvtx
     use flag_device, only: enforce_subgrid_kernel
     use ramses_commons, only: ramses_t
+    use gpu_utils, only: nsubgrid
+    use amr_parameters, only: ndim
     type(ramses_t), intent(inout) :: sim
     integer, intent(in) :: ilevel
 
     integer(kind=4) :: head_idx, num_octs
-    integer :: num_threads, num_blocks
+    integer :: num_threads, num_blocks, nskip
 
     head_idx = sim%m%head(ilevel)
     num_octs = sim%m%noct(ilevel)
-    num_threads = 128
+    nskip = (nsubgrid/2)**ndim
+    num_threads = max(128, nskip)
     num_blocks = (num_octs + num_threads - 1) / num_threads
     if (num_octs > 0) then
        call nvtxStartRange("GPU enforce_subgrid", color=2)!yellow
