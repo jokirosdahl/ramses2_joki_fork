@@ -1160,10 +1160,17 @@ kernel void upload_kernel(
         u_set(uold, father_idx, ivar, cell_idx, avg * inv8);
     }
 #ifdef MHD
-    for (int ivar = 1; ivar <= 6; ivar++) {
-        float avg = 0.0f;
-        for (int ind = 1; ind <= 8; ind++) avg += bold[(oct_idx - 1) * 48 + (ivar - 1) * 8 + ind - 1];
-        bold[(father_idx - 1) * 48 + (ivar - 1) * 8 + cell_idx - 1] = avg * inv8;
+    for (int idim = 0; idim < 3; idim++) {
+        float low = 0.0f;
+        float high = 0.0f;
+        for (int ind = 0; ind < 8; ind++) {
+            if (((ind >> idim) & 1) == 0)
+                low += bold[(oct_idx - 1) * 48 + idim * 8 + ind];
+            else
+                high += bold[(oct_idx - 1) * 48 + (idim + 3) * 8 + ind];
+        }
+        bold[(father_idx - 1) * 48 + idim * 8 + cell_idx - 1] = 0.25f * low;
+        bold[(father_idx - 1) * 48 + (idim + 3) * 8 + cell_idx - 1] = 0.25f * high;
     }
 #endif
 
