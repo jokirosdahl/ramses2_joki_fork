@@ -2739,6 +2739,46 @@ contains
   end subroutine gpu_residual_norm2
 
   !> @brief
+  !> This routine computes the norm2 of the RHS on the GPU.
+  !>
+  subroutine gpu_rhs_norm2(sim, ilevel, norm)
+    use nvtx
+    use mg_device
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t), intent(inout) :: sim
+    integer, intent(in) :: ilevel
+    real(kind=8), intent(out) :: norm
+    !
+    integer(kind=4) :: head_idx
+    integer(kind=4) :: num_octs, num_blocks, num_threads
+    real(kind=8), device :: norm_tot
+    real(kind=8) :: norm_tot_host
+    real(kind=8) :: dx2
+
+    dx2  = (sim%r%boxlen/2**ilevel)**2
+    norm = 0d0
+
+    ! host to device
+    norm_tot = 0d0
+
+    head_idx = sim%m%head(ilevel)
+    num_octs = sim%m%noct(ilevel)
+    num_threads = 256
+    num_blocks = (num_octs * twotondim + num_threads - 1 ) / num_threads
+
+    ! Compute RHS norm
+    if (num_octs > 0) then
+       call nvtxStartRange("GPU rhs_norm2", color=1)!blue
+       call rhs_norm<<<num_blocks, num_threads>>>(f, head_idx, num_octs, norm_tot)
+       norm_tot_host = norm_tot ! device to host
+       call nvtxEndRange()
+       norm = dx2 * norm_tot_host
+    end if
+
+  end subroutine gpu_rhs_norm2
+
+  !> @brief
   !> This routine computes the gradient of the potential ans stores it in the force.
   !>
   !> @detail

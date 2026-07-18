@@ -871,6 +871,36 @@ kernel void residual_norm_kernel(
 }
 
 /* ===========================================================================
+ * rhs_norm_kernel — sum squares of RHS over inner cells.
+ * Thread layout: 1D 256.
+ * ========================================================================= */
+kernel void rhs_norm_kernel(
+    device const float *f        [[buffer(0)]],
+    device float       *norm_tot [[buffer(1)]],
+    constant int       &head_idx [[buffer(2)]],
+    constant int       &num_octs [[buffer(3)]],
+    uint tid  [[thread_position_in_grid]],
+    uint ltid [[thread_position_in_threadgroup]])
+{
+    threadgroup float tg_sums[8];
+
+    int oct_local = (int)(tid / 8u);
+    int cell_idx  = (int)(tid % 8u) + 1;
+
+    float norm_loc = 0.0f;
+    if (oct_local < num_octs) {
+        int oct_idx = head_idx + oct_local;
+        float r = f_get_mg(f, oct_idx, 2, cell_idx);
+        float d = f_get_mg(f, oct_idx, 3, cell_idx);
+        if (d > 0.0f) norm_loc = r * r;
+    }
+
+    norm_loc = tg_reduce_sum_f(norm_loc, ltid, tg_sums);
+    if (ltid == 0u)
+        atomic_add_float((device atomic_uint*)norm_tot, norm_loc);
+}
+
+/* ===========================================================================
  * Kernel 18: cmp_epot_kernel — potential energy (sum of |f|^2 at leaves).
  * Thread layout: 1D 256.
  * ========================================================================= */

@@ -782,6 +782,13 @@ module metal_interface
       real(c_float), intent(out) :: norm_out
     end subroutine mtl_residual_norm_fine
 
+    subroutine mtl_rhs_norm_fine(head_idx, num_octs, norm_out) &
+        bind(C, name="mtl_rhs_norm_fine")
+      import c_int, c_float
+      integer(c_int), value    :: head_idx, num_octs
+      real(c_float), intent(out) :: norm_out
+    end subroutine mtl_rhs_norm_fine
+
     subroutine mtl_residual_norm_mg(head_idx, num_octs, norm_out) &
         bind(C, name="mtl_residual_norm_mg")
       import c_int, c_float

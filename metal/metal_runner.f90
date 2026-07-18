@@ -1364,6 +1364,26 @@ end subroutine metal_residual_norm2
 
 !###########################################################
 !###########################################################
+subroutine metal_rhs_norm2(sim, ilevel, norm)
+  use ramses_commons, only: ramses_t
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(out) :: norm
+  real(c_float) :: norm_f
+  real(kind=8) :: dx2
+  norm = 0.0d0
+  if (sim%m%noct(ilevel) <= 0) return
+  dx2 = (sim%r%boxlen / 2**ilevel)**2
+  call mtl_rhs_norm_fine( &
+       int(sim%m%head(ilevel), c_int), &
+       int(sim%m%noct(ilevel), c_int), &
+       norm_f)
+  norm = dx2 * real(norm_f, kind=8)
+end subroutine metal_rhs_norm2
+
+!###########################################################
+!###########################################################
 subroutine metal_upload_cooling_table(c)
   use cooling_module, only: cooling_t
   implicit none

@@ -998,6 +998,53 @@ contains
   ! =========================================================================
 
   ! =========================================================================
+  attributes(global) subroutine rhs_norm(f, head_idx, num_octs, norm_tot)
+    real(kind=dp), device :: f(1:twotondim,1:ndim,*)
+    integer(kind=4), intent(in), value :: head_idx
+    integer(kind=4), intent(in), value :: num_octs
+    real(kind=8), device, intent(inout) :: norm_tot
+
+    integer :: tid, bid, cell_idx, oct_idx, info
+    real(kind=8) :: norm_loc
+
+    ! Thread and block id
+    tid = threadIdx%x - 1
+    bid = blockIdx%x - 1
+
+    ! Compute oct idx
+    oct_idx = ( tid + bid * blockDim%x ) / twotondim
+
+    ! If not in block
+    if (oct_idx >= num_octs) then
+
+       norm_loc = 0d0
+
+    else
+
+       oct_idx = head_idx + oct_idx
+
+       ! Compute the cell idx
+       cell_idx = mod(tid, twotondim) + 1
+
+       ! Add RHS square to norm only if in domain (using component 2)
+       if (f(cell_idx, 3, oct_idx) <= 0d0) then
+          norm_loc = 0d0
+       else
+          norm_loc = real(f(cell_idx, 2, oct_idx), kind=8)*real(f(cell_idx, 2, oct_idx), kind=8)
+       endif
+
+    endif
+
+    norm_loc = block_reduce_sum(norm_loc)
+
+    if (tid == 0) then
+       info = atomicadd(norm_tot, norm_loc)
+    endif
+
+  end subroutine rhs_norm
+  ! =========================================================================
+
+  ! =========================================================================
   attributes(global) subroutine cmp_epot(grid, f, head_idx, num_octs, epot_tot)
     type(oct), device :: grid(*)
     real(kind=dp), device :: f(1:twotondim,1:ndim,*)

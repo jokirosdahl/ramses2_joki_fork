@@ -113,6 +113,7 @@ module mdl_parameters
      enumerator::MDL_INTERPOLATE_AND_CORRECT
      enumerator::MDL_SET_SCAN_FLAG
      enumerator::MDL_CMP_RESIDUAL_NORM2
+     enumerator::MDL_CMP_RHS_NORM2
      enumerator::MDL_OUTPUT_FRAME
      enumerator::MDL_CLUMP_FINDER
      enumerator::MDL_OUTPUT_LIGHTCONE

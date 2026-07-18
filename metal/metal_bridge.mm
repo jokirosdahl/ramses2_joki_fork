@@ -152,6 +152,7 @@ static id<MTLComputePipelineState> s_pso_reset_phi_val          = nil;
 static id<MTLComputePipelineState> s_pso_restrict_residual      = nil;
 static id<MTLComputePipelineState> s_pso_interpolate_correct    = nil;
 static id<MTLComputePipelineState> s_pso_residual_norm          = nil;
+static id<MTLComputePipelineState> s_pso_rhs_norm               = nil;
 static id<MTLComputePipelineState> s_pso_cmp_epot               = nil;
 static id<MTLComputePipelineState> s_pso_cmp_rhomax             = nil;
 static id<MTLComputePipelineState> s_pso_gradient_phi           = nil;
@@ -365,6 +366,7 @@ extern "C" void mtl_init(void)
     s_pso_restrict_residual      = make_pso(@"restrict_residual_kernel");
     s_pso_interpolate_correct    = make_pso(@"interpolate_correct_kernel");
     s_pso_residual_norm          = make_pso(@"residual_norm_kernel");
+    s_pso_rhs_norm               = make_pso(@"rhs_norm_kernel");
     s_pso_cmp_epot               = make_pso(@"cmp_epot_kernel");
     s_pso_cmp_rhomax             = make_pso(@"cmp_rhomax_kernel");
     s_pso_gradient_phi           = make_pso(@"gradient_phi_kernel");
@@ -3270,6 +3272,23 @@ extern "C" void mtl_residual_norm_fine(int head_idx, int num_octs, float *norm_o
     id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:s_pso_residual_norm];
+    [enc setBuffer:s_f_grav     offset:0 atIndex:0];
+    [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
+    [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];
+    [enc setBytes:&num_octs     length:sizeof(int) atIndex:3];
+    DISPATCH_1D_256_OCT(enc, num_octs);
+    [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
+    memcpy(norm_out, s_scalar_buf.contents, sizeof(float));
+}
+
+extern "C" void mtl_rhs_norm_fine(int head_idx, int num_octs, float *norm_out)
+{
+    *norm_out = 0.0f;
+    if (num_octs <= 0) return;
+    memset(s_scalar_buf.contents, 0, sizeof(float));
+    id<MTLCommandBuffer>         cmd = [s_queue commandBuffer];
+    id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+    [enc setComputePipelineState:s_pso_rhs_norm];
     [enc setBuffer:s_f_grav     offset:0 atIndex:0];
     [enc setBuffer:s_scalar_buf offset:0 atIndex:1];
     [enc setBytes:&head_idx     length:sizeof(int) atIndex:2];

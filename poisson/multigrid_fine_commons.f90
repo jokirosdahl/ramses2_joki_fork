@@ -7,10 +7,10 @@ module multigrid_fine_commons
 #endif
 
 #ifdef _CUDA
-  use gpu_runner, only: gpu_make_mask, gpu_make_rhs, gpu_build_mg, gpu_clean_mg
+  use gpu_runner, only: gpu_make_mask, gpu_make_rhs, gpu_build_mg, gpu_clean_mg, gpu_rhs_norm2
 #endif
 #ifdef _METAL
-  use metal_runner, only: metal_make_mask, metal_make_rhs, metal_build_mg, metal_clean_mg
+  use metal_runner, only: metal_make_mask, metal_make_rhs, metal_build_mg, metal_clean_mg, metal_rhs_norm2
 #endif
 
 contains
@@ -58,7 +58,7 @@ subroutine multigrid(pst,ilevel,icount)
 
   integer :: igrid, ifine, i, iter, allmasked
   integer,dimension(1:4) :: output_array
-  real(kind=8) :: res_norm2, i_res_norm2
+  real(kind=8) :: res_norm2, i_res_norm2, rhs_norm2
   real(kind=8) :: err, last_err
   real(kind=8) :: i_res_norm2_tot, res_norm2_tot
   type(double_level_t)::double_level
@@ -78,8 +78,10 @@ subroutine multigrid(pst,ilevel,icount)
   call r_make_initial_phi(pst,level_count,storage_size(level_count)/32) ! Initial guess
   call r_make_mask(pst,ilevel,1) ! Fill the fine level mask
   call r_make_bc_rhs(pst,level_count,storage_size(level_count)/32) ! Fill BC-modified RHS
+  call r_cmp_rhs_norm2(pst,ilevel,1,rhs_norm2,2) ! Compute RHS norm
 
   if(pst%s%r%verbose) print '(A)','Initial guess done '
+  if(pst%s%r%verbose) print '(A,1pE10.3)','RHS norm2=',rhs_norm2
 
   ! ---------------------------------------------------------------------
   ! Initialize Domain Decomposition and Hash Table for Multigrid
@@ -155,10 +157,10 @@ subroutine multigrid(pst,ilevel,icount)
      double_level%ifine=ilevel
      call r_cmp_residual_mg(pst,double_level,storage_size(double_level)/32)
 
-     ! Compute initial residual norm
-     if(iter==1) then
-        call r_cmp_residual_norm2(pst,ilevel,1,i_res_norm2,2)
-     end if
+!!$     ! Compute initial residual norm
+!!$     if(iter==1) then
+!!$        call r_cmp_residual_norm2(pst,ilevel,1,i_res_norm2,2)
+!!$     end if
 
      if(ilevel>1) then
 
@@ -193,7 +195,8 @@ subroutine multigrid(pst,ilevel,icount)
      call r_cmp_residual_norm2(pst,ilevel,1,res_norm2,2)
 
      last_err = err
-     err = sqrt(res_norm2/(i_res_norm2+1d-20*pst%s%g%rho_tot**2))
+!     err = sqrt(res_norm2/(i_res_norm2+1d-20*pst%s%g%rho_tot**2))
+     err = sqrt(res_norm2/(rhs_norm2+1d-20*pst%s%g%rho_tot**2))
 
      ! Verbosity
      if(pst%s%r%verbose) print '(A,I0,A,1pE10.3)','   ==> Step ',iter,' Error=',err
@@ -777,6 +780,69 @@ recursive subroutine r_make_bc_rhs(pst,input,input_size)
   endif
 
 end subroutine r_make_bc_rhs
+
+recursive subroutine r_cmp_rhs_norm2(pst,ilevel,input_size,norm2,output_size)
+  use mdl_module
+  use ramses_commons, only: pst_t
+  use mdl_parameters
+  implicit none
+  type(pst_t)::pst
+  integer,VALUE::input_size
+  integer::output_size
+  integer::ilevel
+  real(kind=8)::norm2,next_norm2
+
+  integer::rID
+
+  if(pst%nLower>0)then
+     rID = mdl_send_request(pst%s%mdl,MDL_CMP_RHS_NORM2,pst%iUpper+1,input_size,output_size,ilevel)
+     call r_cmp_rhs_norm2(pst%pLower,ilevel,input_size,norm2,output_size)
+     call mdl_get_reply(pst%s%mdl,rID,output_size,next_norm2)
+     norm2=norm2+next_norm2
+  else
+#ifdef _CUDA
+     call gpu_rhs_norm2(pst%s, ilevel, norm2)
+#elif defined(_METAL)
+     call metal_rhs_norm2(pst%s, ilevel, norm2)
+#else
+     call cmp_rhs_norm2(pst%s%r,pst%s%m,ilevel,norm2)
+#endif
+  endif
+
+end subroutine r_cmp_rhs_norm2
+
+subroutine cmp_rhs_norm2(r,m,ilevel, norm2)
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: run_t, mesh_t
+  implicit none
+  type(run_t)::r
+  type(mesh_t)::m
+  integer,  intent(in)  :: ilevel
+  real(kind=8), intent(out) :: norm2
+
+  real(kind=8) :: dx2
+  integer  :: ind, igrid
+
+  ! Set constants
+  dx2  = (r%boxlen/2**ilevel)**2
+  norm2 = 0.0d0
+
+  ! Loop over grids
+  do igrid=m%head(ilevel),m%tail(ilevel)
+
+     ! Loop over cells
+     do ind=1,twotondim
+        if(m%f(ind,3,igrid)<=0.0)cycle      ! Do not count masked cells
+        norm2 = norm2 + m%f(ind,2,igrid)**2
+     end do
+     ! End loop over cells
+
+  end do
+  ! End loop over grids
+
+  norm2 = dx2*norm2
+
+end subroutine cmp_rhs_norm2
 
 subroutine make_bc_rhs(s,ilevel,icount)
   use mdl_module
