@@ -85,11 +85,7 @@ static id<MTLComputePipelineState> s_pso_cmpdt    = nil;
 static id<MTLComputePipelineState> s_pso_sync_hydro = nil;
 static id<MTLComputePipelineState> s_pso_grav_hydro = nil;
 static id<MTLComputePipelineState> s_pso_godunov      = nil;
-static id<MTLComputePipelineState> s_pso_mhd_set_unew = nil;
-static id<MTLComputePipelineState> s_pso_mhd_set_uold = nil;
-static id<MTLComputePipelineState> s_pso_mhd_cmpdt = nil;
-static id<MTLComputePipelineState> s_pso_mhd_uct_velocity = nil;
-static id<MTLComputePipelineState> s_pso_mhd_godunov = nil;
+static id<MTLComputePipelineState> s_pso_uct_velocity = nil;
 static id<MTLComputePipelineState> s_pso_build_nbor   = nil;
 static id<MTLComputePipelineState> s_pso_scan_block        = nil;
 static id<MTLComputePipelineState> s_pso_scan_fixup        = nil;
@@ -295,22 +291,15 @@ extern "C" void mtl_init(void)
         exit(1);
     }
 
-#ifdef MHD
-    s_pso_mhd_set_unew = make_pso(@"mhd_set_unew_kernel");
-    s_pso_mhd_set_uold = make_pso(@"mhd_set_uold_kernel");
-    s_pso_mhd_cmpdt = make_pso(@"mhd_cmpdt_kernel");
-    s_pso_mhd_uct_velocity = make_pso(@"mhd_uct_velocity_kernel");
-    s_pso_mhd_godunov = make_pso(@"hydro_integrator_uct_kernel");
-#else
     s_pso_set_unew     = make_pso(@"set_unew_kernel");
     s_pso_set_uold     = make_pso(@"set_uold_kernel");
     s_pso_cmpdt        = make_pso(@"cmpdt_kernel");
+    s_pso_godunov      = make_pso(@"hydro_integrator_kernel");
+#ifdef MHD
+    s_pso_uct_velocity = make_pso(@"uct_velocity_kernel");
 #endif
     s_pso_sync_hydro   = make_pso(@"sync_hydro_kernel");
     s_pso_grav_hydro   = make_pso(@"grav_hydro_kernel");
-#ifndef MHD
-    s_pso_godunov      = make_pso(@"hydro_integrator_kernel");
-#endif
     s_pso_build_nbor   = make_pso(@"build_nbor_kernel");
     s_pso_scan_block        = make_pso(@"scan_block_kernel");
     s_pso_scan_fixup        = make_pso(@"scan_fixup_kernel");
@@ -604,11 +593,7 @@ extern "C" void mtl_set_unew(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-#ifdef MHD
-    [enc setComputePipelineState:s_pso_mhd_set_unew];
-#else
     [enc setComputePipelineState:s_pso_set_unew];
-#endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
 #ifdef MHD
@@ -636,11 +621,7 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-#ifdef MHD
-    [enc setComputePipelineState:s_pso_mhd_set_uold];
-#else
     [enc setComputePipelineState:s_pso_set_uold];
-#endif
     [enc setBuffer:s_uold   offset:0 atIndex:0];
     [enc setBuffer:s_unew   offset:0 atIndex:1];
 #ifdef MHD
@@ -665,9 +646,9 @@ extern "C" void mtl_set_uold(int head_idx, int num_octs)
  *   [0..3] fp32 accumulated via CAS atomic_add_float
  *   [4]    fp32 min via uint bit-cast atomic_min_float_bits
  *
- * 256 threads/threadgroup; SIMD reduction inside the kernel collapses to
+ * 1024 threads/threadgroup; SIMD reduction inside the kernel collapses to
  * one atomic write per threadgroup.  dispatchThreadgroups with
- * ceil(num_octs*8 / 256) threadgroups.
+ * ceil(num_octs*8 / 1024) threadgroups.
  * ----------------------------------------------------------------------- */
 extern "C" void mtl_cmpdt(int head_idx, int num_octs,
                            float dx, float gamma, float smallr, float smallc2,
@@ -697,11 +678,7 @@ extern "C" void mtl_cmpdt(int head_idx, int num_octs,
 
     id<MTLCommandBuffer>        cmd = [s_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
-#ifdef MHD
-    [enc setComputePipelineState:s_pso_mhd_cmpdt];
-#else
     [enc setComputePipelineState:s_pso_cmpdt];
-#endif
     [enc setBuffer:s_grid    offset:0 atIndex:0];
     [enc setBuffer:s_uold    offset:0 atIndex:1];
 #ifdef MHD
@@ -772,7 +749,7 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
     id<MTLComputeCommandEncoder> enc;
 #ifdef MHD
     enc = [cmd computeCommandEncoder];
-    [enc setComputePipelineState:s_pso_mhd_uct_velocity];
+    [enc setComputePipelineState:s_pso_uct_velocity];
     [enc setBuffer:s_grid         offset:0 atIndex:0];
     [enc setBuffer:s_uold         offset:0 atIndex:1];
     [enc setBuffer:s_bold         offset:0 atIndex:2];
@@ -794,12 +771,9 @@ extern "C" void mtl_godunov(int head_idx, int num_subgrids, int ngridmax,
     [enc setBuffer:s_uct_velocity offset:0                 atIndex:18];
     [enc dispatchThreadgroups:grid_size threadsPerThreadgroup:tg_size];
     [enc endEncoding];
-    enc = [cmd computeCommandEncoder];
-    [enc setComputePipelineState:s_pso_mhd_godunov];
-#else
+#endif
     enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:s_pso_godunov];
-#endif
     [enc setBuffer:s_grid  offset:0 atIndex:0];
     [enc setBuffer:s_uold  offset:0 atIndex:1];
     [enc setBuffer:s_unew  offset:0 atIndex:2];

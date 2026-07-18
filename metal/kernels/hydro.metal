@@ -2,13 +2,13 @@
  * metal/kernels/hydro.metal
  *
  * Metal Shading Language port of gpu/gpu_hydro.cuf.
- * Scope: HYDRO=1, MHD=0, GRAV=0, NDIM=3, NSUBGRID=1, NPRE=4 (float32 throughout).
+ * Scope: HYDRO=1, NDIM=3, NPRE=4 (float32 throughout); MHD extends this file below.
  *
  * Structure intentionally mirrors gpu_hydro.cuf so the CUDA and Metal kernels
  * are recognisable side-by-side.  Each device function corresponds 1:1 to its
  * attributes(device) counterpart and each kernel to an attributes(global) one.
  *
- * Global buffer layout (all kernels):
+ * Global buffer layout (hydro kernels):
  *   set_unew / set_uold:  [0]=uold  [1]=unew  [2]=head_idx  [3]=num_octs
  *   cmpdt:  [0]=grid [1]=uold [2]=data_buf [3]=head_idx [4]=num_octs
  *           [5]=dx [6]=gamma [7]=smallr [8]=smallc2 [9]=courant_factor
@@ -48,8 +48,18 @@ constant int SOLVER_HLLC = 3;
  * Types — mirror gpu_hydro.cuf
  * ========================================================================= */
 
-struct conserved_t { float density, momentum_x, momentum_y, momentum_z, energy; };
-struct primitive_t { float density, velocity_x, velocity_y, velocity_z, pressure; };
+struct conserved_t {
+    float density, momentum_x, momentum_y, momentum_z, energy;
+#ifdef MHD
+    float Bx, By, Bz;
+#endif
+};
+struct primitive_t {
+    float density, velocity_x, velocity_y, velocity_z, pressure;
+#ifdef MHD
+    float Bx, By, Bz;
+#endif
+};
 
 /* 6×6×6 stencil subgrid (nsubgrid=1 → indices 0..5 per axis).
  * Matches subgrid_6x6x6cell_primitive in gpu_utils.cuf.
@@ -110,6 +120,17 @@ inline void u_set(device float *u, int oct_1, int ivar_1, int cell_1, float v) {
 inline int u_flat(int oct_1, int ivar_1, int cell_1) {
     return (oct_1-1)*(NVAR)*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1);
 }
+#ifdef MHD
+inline float b_get(device const float *b, int oct_1, int ivar_1, int cell_1) {
+    return b[(oct_1-1)*6*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1)];
+}
+inline void b_set(device float *b, int oct_1, int ivar_1, int cell_1, float v) {
+    b[(oct_1-1)*6*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1)] = v;
+}
+inline int b_flat(int oct_1, int ivar_1, int cell_1) {
+    return (oct_1-1)*6*TWOTONDIM + (ivar_1-1)*TWOTONDIM + (cell_1-1);
+}
+#endif
 
 /* ===========================================================================
  * Scalar helpers — mirror gpu_hydro.cuf
@@ -120,11 +141,18 @@ float compute_pressure(conserved_t c, float gamma, float smallr, float smallc2) 
     float smallp = smallc2 / gamma;
     float density = max(c.density, smallr);
     float eint    = c.energy - 0.5f * magnitude_squared(c.momentum_x, c.momentum_y, c.momentum_z) / density;
+#ifdef MHD
+    eint -= 0.5f * magnitude_squared(c.Bx, c.By, c.Bz);
+#endif
     return max((gamma - 1.0f) * eint, density * smallp);
 }
 
 float compute_energy(primitive_t p, float gamma) {
-    return p.pressure / (gamma - 1.0f) + 0.5f * p.density * magnitude_squared(p.velocity_x, p.velocity_y, p.velocity_z);
+    float energy = p.pressure / (gamma - 1.0f) + 0.5f * p.density * magnitude_squared(p.velocity_x, p.velocity_y, p.velocity_z);
+#ifdef MHD
+    energy += 0.5f * magnitude_squared(p.Bx, p.By, p.Bz);
+#endif
+    return energy;
 }
 
 float sound_speed(primitive_t p, float gamma) {
@@ -138,6 +166,11 @@ primitive_t conserved_2_primitive(conserved_t c, float gamma, float smallr, floa
     p.velocity_y = c.momentum_y / p.density;
     p.velocity_z = c.momentum_z / p.density;
     p.pressure   = compute_pressure(c, gamma, smallr, smallc2);
+#ifdef MHD
+    p.Bx = c.Bx;
+    p.By = c.By;
+    p.Bz = c.Bz;
+#endif
     return p;
 }
 
@@ -148,6 +181,11 @@ conserved_t primitive_2_conserved(primitive_t p, float gamma) {
     c.momentum_y = p.velocity_y * p.density;
     c.momentum_z = p.velocity_z * p.density;
     c.energy     = compute_energy(p, gamma);
+#ifdef MHD
+    c.Bx = p.Bx;
+    c.By = p.By;
+    c.Bz = p.Bz;
+#endif
     return c;
 }
 
@@ -856,8 +894,15 @@ void conservative_update(
 kernel void set_uold_kernel(
     device float        *uold      [[buffer(0)]],
     device const float  *unew      [[buffer(1)]],
+#ifdef MHD
+    device float        *bold      [[buffer(2)]],
+    device const float  *bnew      [[buffer(3)]],
+    constant int        &head_idx  [[buffer(4)]],
+    constant int        &num_octs  [[buffer(5)]],
+#else
     constant int        &head_idx  [[buffer(2)]],
     constant int        &num_octs  [[buffer(3)]],
+#endif
     uint2 tptg  [[thread_position_in_threadgroup]],
     uint2 blk   [[threadgroup_position_in_grid]])
 {
@@ -866,16 +911,10 @@ kernel void set_uold_kernel(
     int oct_idx  = head_idx + oct_offset; /* 1-based */
     int cell_idx = int(tptg.x) + 1;      /* 1-based (1..8) */
 
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 0*TWOTONDIM + (cell_idx-1)] =
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 0*TWOTONDIM + (cell_idx-1)];
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 1*TWOTONDIM + (cell_idx-1)] =
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 1*TWOTONDIM + (cell_idx-1)];
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 2*TWOTONDIM + (cell_idx-1)] =
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 2*TWOTONDIM + (cell_idx-1)];
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 3*TWOTONDIM + (cell_idx-1)] =
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 3*TWOTONDIM + (cell_idx-1)];
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 4*TWOTONDIM + (cell_idx-1)] =
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 4*TWOTONDIM + (cell_idx-1)];
+    for (int ivar = 1; ivar <= NVAR; ++ivar) u_set(uold, oct_idx, ivar, cell_idx, u_get(unew, oct_idx, ivar, cell_idx));
+#ifdef MHD
+    for (int ivar = 1; ivar <= 6; ++ivar) b_set(bold, oct_idx, ivar, cell_idx, b_get(bnew, oct_idx, ivar, cell_idx));
+#endif
 }
 
 /* ===========================================================================
@@ -886,8 +925,15 @@ kernel void set_uold_kernel(
 kernel void set_unew_kernel(
     device const float  *uold      [[buffer(0)]],
     device float        *unew      [[buffer(1)]],
+#ifdef MHD
+    device const float  *bold      [[buffer(2)]],
+    device float        *bnew      [[buffer(3)]],
+    constant int        &head_idx  [[buffer(4)]],
+    constant int        &num_octs  [[buffer(5)]],
+#else
     constant int        &head_idx  [[buffer(2)]],
     constant int        &num_octs  [[buffer(3)]],
+#endif
     uint2 tptg  [[thread_position_in_threadgroup]],
     uint2 blk   [[threadgroup_position_in_grid]])
 {
@@ -896,16 +942,10 @@ kernel void set_unew_kernel(
     int oct_idx  = head_idx + oct_offset;
     int cell_idx = int(tptg.x) + 1;
 
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 0*TWOTONDIM + (cell_idx-1)] =
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 0*TWOTONDIM + (cell_idx-1)];
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 1*TWOTONDIM + (cell_idx-1)] =
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 1*TWOTONDIM + (cell_idx-1)];
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 2*TWOTONDIM + (cell_idx-1)] =
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 2*TWOTONDIM + (cell_idx-1)];
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 3*TWOTONDIM + (cell_idx-1)] =
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 3*TWOTONDIM + (cell_idx-1)];
-    unew[(oct_idx-1)*(NVAR)*TWOTONDIM + 4*TWOTONDIM + (cell_idx-1)] =
-    uold[(oct_idx-1)*(NVAR)*TWOTONDIM + 4*TWOTONDIM + (cell_idx-1)];
+    for (int ivar = 1; ivar <= NVAR; ++ivar) u_set(unew, oct_idx, ivar, cell_idx, u_get(uold, oct_idx, ivar, cell_idx));
+#ifdef MHD
+    for (int ivar = 1; ivar <= 6; ++ivar) b_set(bnew, oct_idx, ivar, cell_idx, b_get(bold, oct_idx, ivar, cell_idx));
+#endif
 }
 
 /* ===========================================================================
@@ -925,6 +965,20 @@ kernel void set_unew_kernel(
 kernel void cmpdt_kernel(
     device const oct_t  *grid             [[buffer(0)]],
     device const float  *uold             [[buffer(1)]],
+#ifdef MHD
+    device const float  *bold             [[buffer(2)]],
+    device atomic_uint  *data_buf         [[buffer(3)]],
+    constant int        &head_idx         [[buffer(4)]],
+    constant int        &num_octs         [[buffer(5)]],
+    constant float      &dx               [[buffer(6)]],
+    constant float      &gamma            [[buffer(7)]],
+    constant float      &smallr           [[buffer(8)]],
+    constant float      &smallc2          [[buffer(9)]],
+    constant float      &courant_factor   [[buffer(10)]],
+    constant int        &induction        [[buffer(11)]],
+    constant float      *constant_gravity [[buffer(12)]],
+    device const float  *f                [[buffer(13)]],
+#else
     device atomic_uint  *data_buf         [[buffer(2)]],
     constant int        &head_idx         [[buffer(3)]],
     constant int        &num_octs         [[buffer(4)]],
@@ -935,6 +989,7 @@ kernel void cmpdt_kernel(
     constant float      &courant_factor   [[buffer(9)]],
     constant float      *constant_gravity [[buffer(10)]],
     device const float  *f                [[buffer(11)]],
+#endif
     uint tid    [[thread_position_in_threadgroup]],
     uint bid    [[threadgroup_position_in_grid]],
     uint lane   [[thread_index_in_simdgroup]],
@@ -958,14 +1013,43 @@ kernel void cmpdt_kernel(
             cv.momentum_y = u_get(uold, oct_idx, 3, cell_idx);
             cv.momentum_z = u_get(uold, oct_idx, 4, cell_idx);
             cv.energy     = u_get(uold, oct_idx, 5, cell_idx);
+#ifdef MHD
+            cv.Bx = 0.5f * (b_get(bold, oct_idx, 1, cell_idx) + b_get(bold, oct_idx, 4, cell_idx));
+            cv.By = 0.5f * (b_get(bold, oct_idx, 2, cell_idx) + b_get(bold, oct_idx, 5, cell_idx));
+            cv.Bz = 0.5f * (b_get(bold, oct_idx, 3, cell_idx) + b_get(bold, oct_idx, 6, cell_idx));
+#endif
             float vol = dx*dx*dx;
             primitive_t pv = conserved_2_primitive(cv, gamma, smallr, smallc2);
+#ifdef MHD
+            float pressure = max(pv.pressure, pv.density * smallc2 / gamma);
+            float b2 = magnitude_squared(pv.Bx, pv.By, pv.Bz);
+            mass_loc = cv.density * vol;
+#else
             mass_loc = pv.density * vol;
+#endif
             ekin_loc = cv.energy  * vol;
+#ifdef MHD
+            eint_loc = pressure / (gamma - 1.0f) * vol;
+            emag_loc = 0.5f * b2 * vol;
+            float rinv = 1.0f / pv.density;
+            float a2 = gamma * pressure * rinv;
+            float ctot;
+            if (induction != 0) {
+                float smallc = sqrt(smallc2);
+                ctot = abs(pv.velocity_x) + abs(pv.velocity_y) + abs(pv.velocity_z) + 3.0f * smallc;
+            } else {
+                float c2v = 0.5f * (b2 * rinv + a2);
+                float cfx = sqrt(c2v + sqrt(max(c2v * c2v - a2 * pv.Bx * pv.Bx * rinv, 0.0f)));
+                float cfy = sqrt(c2v + sqrt(max(c2v * c2v - a2 * pv.By * pv.By * rinv, 0.0f)));
+                float cfz = sqrt(c2v + sqrt(max(c2v * c2v - a2 * pv.Bz * pv.Bz * rinv, 0.0f)));
+                ctot = abs(pv.velocity_x) + cfx + abs(pv.velocity_y) + cfy + abs(pv.velocity_z) + cfz;
+            }
+#else
             eint_loc = pv.pressure / (gamma - 1.0f) * vol;
             emag_loc = 0.0f;
             float cs   = sqrt(gamma * pv.pressure / pv.density);
             float ctot = abs(pv.velocity_x) + abs(pv.velocity_y) + abs(pv.velocity_z) + 3.0f*cs;
+#endif
             float grav;
 #ifdef GRAV
             grav = abs(f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)]) + 
@@ -1021,6 +1105,7 @@ kernel void cmpdt_kernel(
     }
 }
 
+#ifndef MHD
 /* ===========================================================================
  * hydro_integrator_kernel — mirrors attributes(global) hydro_integrator_kernel
  *                           in gpu_hydro.cuf (no MHD, no scalars, no GRAV).
@@ -1108,6 +1193,7 @@ kernel void hydro_integrator_kernel(
                            int(thread_idx), cfs);
     }
 }
+#endif
 
 /* ===========================================================================
  * upload_kernel — restriction (averaging down) for fine→coarse levels.
@@ -1300,3 +1386,7 @@ kernel void grav_hydro_kernel(
     u_set(unew, oct_idx, 4, cell_idx, mz);
     u_set(unew, oct_idx, 5, cell_idx, e_prim + 0.5f * (mx*mx + my*my + mz*mz) / d);
 }
+
+#ifdef MHD
+#include "mhd_uct.metal"
+#endif
