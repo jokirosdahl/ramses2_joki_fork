@@ -27,10 +27,7 @@ subroutine cr_condinit(r,g,x,q,dx,nn)
   ! Add here, if you wish, some user-defined initial conditions
   ! ........
   if(r%cr_test_setup=='none') return
-  if(r%cr_test_setup=='streaming_triangle') then
-     q(1:nn,1)=2d0-1d0*sqrt((x(1:nn,1)-r%box_size(1)*0.5d0)**2)
-     !q(1:nn,1+1)=q(1:nn,1)*4d0/3d0*q(1:nn,2)
-  else if(r%cr_test_setup=='circular_diffusion') then
+  if(r%cr_test_setup=='circular_diffusion') then
      ! CR energy: enhanced on one arc of the loop (around the z-axis).
      ! atan2 replaces atan(yy/xx) to avoid a divide-by-zero FPE at xx=0;
      ! it is identical in the xx>0 region that the arc condition selects.

@@ -25,6 +25,15 @@ subroutine boundana(r,g,x,u,dx,ibound,ncell)
   !================================================================
   integer::ivar,i
 
+  if(r%cr_test_setup=='streaming_triangle') then
+     do i=1,ncell
+        u(i,6)=(2d0+r%gamma_rad(1)*g%t-abs(x(i,1)-r%box_size(1)*0.5d0))
+        u(i,5)=2.+u(i,6)
+        u(i,1)=1.0
+        u(i,2:4)=0.0
+     end do
+  endif
+
   ! Add here, if you wish, some user-defined boudary conditions
   ! ........
 
