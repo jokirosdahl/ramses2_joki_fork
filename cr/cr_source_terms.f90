@@ -65,6 +65,9 @@ subroutine cr_source_terms(s,ilevel)
   real(kind=8)::e_coef, new_ec, old_ec, sigma_x, sigma_y, sigma_z, sigma_stream
   real(kind=8)::Ecr, rhs2, rhs3, rhs4,v1, v2, v3
   real(kind=8)::f_decouple, g_grp, smallp, three_gmone
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
+  real(kind=8)::dtcool,lambda_cr,nH
+  real(kind=8),parameter:: zeta_cr=7.51d-16, fneut = 0.875d0, ne = 1.0d-3
   ! -------------------------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
   if(r%verbose.and.g%myid==1)write(*,'("   Entering cr_source_terms for level ",I2)')ilevel
@@ -84,6 +87,12 @@ subroutine cr_source_terms(s,ilevel)
        pack=pack_fetch_refine, unpack=unpack_fetch_refine, &
        init=init_flush_cr_source_terms, flush=pack_flush_cr_source_terms, &
        combine=unpack_flush_cr_source_terms, bound=init_bound_refine)
+
+  if(r%cr_cooling) then
+      call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+      dtcool = g%dtnew(ilevel) * scale_t
+      lambda_cr=zeta_cr*(1d0+0.22d0*ne+0.125d0*fneut)   ! [cm^3 s^-1]
+  endif
 
   ! Loop over cells
   do ind=1,twotondim
@@ -291,7 +300,6 @@ subroutine cr_source_terms(s,ilevel)
                frotx = frotx/fred ; froty = froty/fred ; frotz = frotz/fred
             endif
 
-            ! We are missing the perpendicular energy source term which is done here in Athena!!!
             ! Rotate the flux back to the simulation coordinate system
             call invrotatevec(sint, cost, sinp, cosp, frotx, froty, frotz)
             m%crunew(ind,1+(igrp-1)*ndim,ind_leaf(i)) = frotx
@@ -301,6 +309,21 @@ subroutine cr_source_terms(s,ilevel)
 #if NDIM>2
             m%crunew(ind,3+(igrp-1)*ndim,ind_leaf(i)) = frotz
 #endif
+
+            ! Add Coulomb+hadronic cooling losses from
+            ! Armillotta et al. 2021, 2024; Fitz Axen et al. 2024,
+            ! using exponential decay of the CR energy and flux
+            ! at the rate lambda_cr * n_H.
+            if(r%cr_cooling) then
+              nH = m%unew(ind,1,ind_leaf(i)) * scale_nH
+              m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = &
+                & m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) * EXP(-lambda_cr * nH * dtcool)
+              do idim=1,ndim
+                m%crunew(ind,idim+(igrp-1)*ndim,ind_leaf(i)) = &
+                  & m%crunew(ind,idim+(igrp-1)*ndim,ind_leaf(i)) * EXP(-lambda_cr * nH * dtcool * r%cr_c_fraction**2)
+              end do
+            endif
+
           end do ! End loop over groups
         end do ! End loop over leaves
      end do ! End loop over grid
