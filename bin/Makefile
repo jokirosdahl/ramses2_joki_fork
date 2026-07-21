@@ -236,7 +236,7 @@ MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
 	 rt_condinit.o rt_flag.o rt_upload.o interpol_rt.o rt_godunov_utils.o read_rt_params.o \
 	 cr_flux_module.o cr_godunov_fine.o cr_source_terms.o cr_input_condinit.o cr_init_flow_fine.o  \
-	 cr_condinit.o cr_flag.o cr_upload.o interpol_cr.o cr_godunov_utils.o read_cr_params.o \
+	 cr_condinit.o cr_upload.o interpol_cr.o cr_godunov_utils.o read_cr_params.o \
 	 turb_hydro.o turb_driving.o turb_init.o turb_update.o \
 	 lightcone_utils.o lightcone_buffer.o lightcone_io.o lightcone_test.o lightcone.o \
 	 init_hydro.o init_part.o init_amr.o smooth.o flag_utils.o init_time.o read_params.o \

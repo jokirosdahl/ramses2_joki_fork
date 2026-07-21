@@ -207,6 +207,7 @@ module amr_commons
 #endif
 #if NENER>0
      real(kind=8),dimension(1:NENER)::err_grad_prad=-1.0
+     real(kind=8),dimension(1:NENER)::floor_prad=1d-10
 #endif
 #if NVAR>5+NENER
      real(kind=8),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
@@ -568,9 +569,6 @@ module amr_commons
      real(kind=8),dimension(1:MAXREGION)   ::cr_fx_region=0.                    ! CR flux
      real(kind=8),dimension(1:MAXREGION)   ::cr_fy_region=0.                    ! CR flux
      real(kind=8),dimension(1:MAXREGION)   ::cr_fz_region=0.                    ! CR flux
-     ! CR refinement parameters----------------------------------------------------------------
-     real(kind=8)::cr_err_grad_ecr(ncrgrp)=-1   ! E_CR gradient for refinement                !
-     real(kind=8)::cr_floor_ecr(ncrgrp)=1d-10   ! E_CR floor for refinement                   !
      ! CR derived parameters.
      real(kind=8),dimension(1:ncrgrp)::cr_d_code ! CR diffusion coefficients in code units    !
      real(kind=8)::cr_dmax_code                  ! Max diffusion coefficient in code units    !

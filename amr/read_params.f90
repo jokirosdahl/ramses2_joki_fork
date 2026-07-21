@@ -267,6 +267,8 @@ subroutine m_read_params(pst)
 #endif
 #if NENER>0
   real(kind=8),dimension(1:NENER)::err_grad_prad=-1.0
+  real(kind=8),dimension(1:NENER)::floor_prad=1d-10
+
 #endif
 #if NVAR>5+NENER
   real(kind=8),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
@@ -278,12 +280,6 @@ subroutine m_read_params(pst)
   real(kind=8)::rt_err_grad_cn(nrtgrp)=-1 ! Photon flux gradient for refinement
   real(kind=8)::rt_floor_cn(nrtgrp)=1d-10 ! Photon flux floor for refinement
   real(kind=8)::rt_refine_aexp=-1.0      ! Start expansion factor for RT refinements
-#endif
-
-  ! Refinement parameters for cosmic rays
-#ifdef CRS
-  real(kind=8)::cr_err_grad_ecr(ncrgrp)=-1 ! CR density gradient for refinement
-  real(kind=8)::cr_floor_ecr(ncrgrp)=1d-10 ! CR density floor for refinement
 #endif
 
   ! Hydro solver parameters
@@ -628,16 +624,13 @@ subroutine m_read_params(pst)
        & ,floor_b2,floor_A,floor_B,floor_C &
 #endif
 #if NENER>0
-       & ,err_grad_prad &
+       & ,err_grad_prad, floor_prad &
 #endif
 #if NVAR>5+NENER
        & ,err_grad_var &
 #endif
 #ifdef RT
        & ,rt_err_grad_cn, rt_floor_cn, rt_refine_aexp &
-#endif
-#ifdef CRS
-       & ,cr_err_grad_ecr, cr_floor_ecr &
 #endif
        & ,err_grad_xHI, err_grad_xHII, floor_xHI, floor_xHII &
        & ,m_refine,mass_sph,err_grad_d,err_grad_p,err_grad_u &
@@ -1429,6 +1422,7 @@ subroutine m_read_params(pst)
 #endif
 #if NENER>0
   s%r%err_grad_prad=err_grad_prad
+  s%r%floor_prad=floor_prad
 #endif
 #if NVAR>5+NENER
   s%r%err_grad_var=err_grad_var
@@ -1441,10 +1435,6 @@ subroutine m_read_params(pst)
   s%r%rt_err_grad_cn=rt_err_grad_cn
   s%r%rt_floor_cn=rt_floor_cn
   s%r%rt_refine_aexp=rt_refine_aexp
-#endif
-#ifdef CRS
-  s%r%cr_err_grad_ecr=cr_err_grad_ecr
-  s%r%cr_floor_ecr=cr_floor_ecr
 #endif
 
   if(nrestart>0)filetype='restart'

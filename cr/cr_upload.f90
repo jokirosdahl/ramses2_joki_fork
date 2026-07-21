@@ -58,7 +58,6 @@ subroutine cr_upload_fine(s,ilevel)
   use nbors_utils
   use cache_commons
   use cache
-  use cr_flag_module, only: pack_fetch_cr, unpack_fetch_cr
   implicit none
   type(ramses_t)::s
   integer::ilevel
@@ -218,4 +217,100 @@ end subroutine unpack_flush_upload_cr
 !##########################################################################
 !##########################################################################
 !##########################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
+subroutine pack_fetch_cr(mesh,igrid,msg_size,msg_array)
+  use amr_parameters, only: ndim, twotondim
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
+  use amr_commons, only: mesh_t
+  use cache_commons, only: msg_realdp
+  type(mesh_t)::mesh
+  integer::igrid
+  integer::msg_size
+  integer,dimension(1:msg_size),optional::msg_array
+
+  integer::ind,ivar
+  type(msg_realdp)::msg
+
+  do ind=1,twotondim
+     if(mesh%grid(igrid)%refined(ind))then
+        msg%int4(ind)=1
+     else
+        msg%int4(ind)=0
+     endif
+  end do
+
+#ifdef HYDRO
+  do ivar=1,nvar
+     do ind=1,twotondim
+        msg%realdp(ind,ivar)=mesh%uold(ind,ivar,igrid)
+     end do
+  end do
+#endif
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
+     end do
+  end do
+#endif
+
+  msg_array=transfer(msg,msg_array)
+
+end subroutine pack_fetch_cr
+!#####################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
+subroutine unpack_fetch_cr(mesh,igrid,msg_size,msg_array,hash_key)
+  use amr_parameters, only: ndim, twotondim
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
+  use amr_commons, only: mesh_t
+  use cache_commons, only: msg_realdp
+  type(mesh_t)::mesh
+  integer::igrid
+  integer::msg_size
+  integer,dimension(1:msg_size),optional::msg_array
+  integer(kind=8),dimension(0:ndim)::hash_key
+
+  integer::ind,ivar
+  type(msg_realdp)::msg
+
+  mesh%grid(igrid)%lev=hash_key(0)
+  mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
+  msg=transfer(msg_array,msg)
+
+  do ind=1,twotondim
+     if(msg%int4(ind)==1)then
+        mesh%grid(igrid)%refined(ind)=.true.
+     else
+        mesh%grid(igrid)%refined(ind)=.false.
+     endif
+  end do
+
+#ifdef HYDRO
+  do ivar=1,nvar
+     do ind=1,twotondim
+        mesh%uold(ind,ivar,igrid)=msg%realdp(ind,ivar)
+     end do
+  end do
+#endif
+
+#ifdef CRS
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
+     end do
+  end do
+#endif
+
+end subroutine unpack_fetch_cr
+!#####################################################################
+!#####################################################################
+!#####################################################################
+!#####################################################################
 end module cr_upload_module
