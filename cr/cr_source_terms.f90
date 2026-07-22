@@ -63,10 +63,10 @@ subroutine cr_source_terms(s,ilevel)
   real(kind=8)::coef_11, coef_12, coef_13, coef_14, coef_21, coef_22
   real(kind=8)::coef_31, coef_33, coef_41, coef_44
   real(kind=8)::e_coef, new_ec, old_ec, sigma_x, sigma_y, sigma_z, sigma_stream
-  real(kind=8)::Ecr, rhs2, rhs3, rhs4,v1, v2, v3
+  real(kind=8)::Ecr, rhs2, rhs3, rhs4, v1, v2, v3
   real(kind=8)::f_decouple, g_grp, smallp, three_gmone
-  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
-  real(kind=8)::dtcool,lambda_cr,nH
+  real(kind=8)::scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
+  real(kind=8)::dtcool, lambda_cr, lambda_rad, nH
   real(kind=8),parameter:: zeta_cr=7.51d-16, fneut = 0.875d0, ne = 1.0d-3
   ! -------------------------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
@@ -91,8 +91,10 @@ subroutine cr_source_terms(s,ilevel)
   if(r%cr_cooling) then
       call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
       dtcool = g%dtnew(ilevel) * scale_t
-      lambda_cr=zeta_cr*(1d0+0.22d0*ne+0.125d0*fneut)   ! [cm^3 s^-1]
-  endif
+      ! Fitz Axen + 24. This can easily be improved by using actual ne and neutral fraction
+      lambda_cr=zeta_cr*(1d0 + 0.22d0*ne + 0.125d0*fneut)   ! [cm^3 s^-1]
+      lambda_rad = zeta_cr*(1d0-0.667d0) ! Radiative cooling [cm^3 s^-1]
+    endif
 
   ! Loop over cells
   do ind=1,twotondim
@@ -150,12 +152,10 @@ subroutine cr_source_terms(s,ilevel)
               icelld=icelln(2*idim  )
               igridg=igridn(2*idim-1)
               igridd=igridn(2*idim  )
-#ifdef CRS
               pcrg   = max(m%uold(icellg,r%iEcr+igrp-1,igridg),smallecr)
               pcrd   = max(m%uold(icelld,r%iEcr+igrp-1,igridd),smallecr)
               dx_g   = dx+refined(2*idim-1)*dx*0.5
               dx_d   = dx+refined(2*idim)*dx*0.5
-#endif 
               gradecr_loc(i,idim,iGrp) = (pcrd-pcrg)/(dx_g+dx_d)
               gradpcr_loc(i,idim,iGrp) = gradecr_loc(i,idim,iGrp) * (r%gamma_rad(r%iEcr-r%inener+igrp)-1d0)
             end do
@@ -288,7 +288,7 @@ subroutine cr_source_terms(s,ilevel)
               & m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) + (new_ec-old_ec) * f_decouple
 
             ! Floor the CR energy and update total energy if necessary
-            if ( m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) .lt. smallecr ) m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = smallecr
+            m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = max(m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)), smallecr)
 
             frotx = (rhs2 - coef_21 * new_ec)/coef_22
             froty = (rhs3 - coef_31 * new_ec)/coef_33
@@ -310,23 +310,29 @@ subroutine cr_source_terms(s,ilevel)
             m%crunew(ind,3+(igrp-1)*ndim,ind_leaf(i)) = frotz
 #endif
 
-            ! Add Coulomb+hadronic cooling losses from
-            ! Armillotta et al. 2021, 2024; Fitz Axen et al. 2024,
-            ! using exponential decay of the CR energy and flux
-            ! at the rate lambda_cr * n_H.
+            ! Add Coulomb+hadronic cooling losses from Fitz Axen + 24,
+            ! using exponential decay of the CR energy and flux at the rate lambda_cr * n_H.
             if(r%cr_cooling) then
               nH = m%unew(ind,1,ind_leaf(i)) * scale_nH
+              old_ec = m%unew(ind,r%iEcr+igrp-1,ind_leaf(i))
+              ! Radiative losses need to be subtracted from total energy
+              m%unew(ind,5,ind_leaf(i)) = &
+                & m%unew(ind,5,ind_leaf(i)) - old_ec * (1d0 - EXP(-lambda_rad * nH * dtcool))
+              ! Update E_cr and make sure it doesn't go below smallecr
+              m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = old_ec * EXP(-lambda_cr * nH * dtcool)
               m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = &
-                & m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) * EXP(-lambda_cr * nH * dtcool)
+                & max(m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)), smallecr)
               do idim=1,ndim
+                ! CR 'flux' cooling:
                 m%crunew(ind,idim+(igrp-1)*ndim,ind_leaf(i)) = &
-                  & m%crunew(ind,idim+(igrp-1)*ndim,ind_leaf(i)) * EXP(-lambda_cr * nH * dtcool * r%cr_c_fraction**2)
+                  & m%crunew(ind,idim+(igrp-1)*ndim,ind_leaf(i)) &
+                  & *EXP(-lambda_cr * nH * dtcool * r%cr_c_fraction**2)
               end do
             endif
 
           end do ! End loop over groups
         end do ! End loop over leaves
-     end do ! End loop over grid
+     end do ! End loop over octs
   end do ! End loop over cells
 
   call close_cache(mdl)
