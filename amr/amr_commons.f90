@@ -104,6 +104,7 @@ module amr_commons
      integer :: star_dep_algo=2                   ! star GPU CIC deposition algorithm
      integer :: star_force_interpolation_scheme=1 ! star force interpolation schemes
      integer :: sink_mass_deposition_scheme=1     ! sink mass deposition schemes
+     integer :: sink_dep_algo=2                   ! sink GPU CIC deposition algorithm
      integer :: sink_force_interpolation_scheme=1 ! sink force interpolation schemes
      integer :: tree_mass_deposition_scheme=1     ! tree mass deposition schemes
      integer :: tree_force_interpolation_scheme=1 ! tree force interpolation schemes

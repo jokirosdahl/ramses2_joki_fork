@@ -1,6 +1,6 @@
 module newdt_fine_module
 #ifdef _CUDA
-  use part_device, only: gpu_newdt_part, gpu_newdt_star
+  use part_device, only: gpu_newdt_part, gpu_newdt_star, gpu_newdt_sink
 #elif defined(_METAL)
   use metal_runner, only: metal_newdt_part
 #endif
@@ -231,37 +231,20 @@ recursive subroutine r_newdt_part(pst,ilevel,input_size,output,output_size)
      output%vmax=0.0d0
      output%ekin=0.0d0
 #ifdef _CUDA
-     if(pst%s%r%part)then
-        call gpu_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
-     endif
-     if(pst%s%r%star)then
-        call gpu_newdt_star(pst%s, ilevel, output%vmax, output%ekin)
-     endif
+     if (pst%s%r%part) call gpu_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
+     if (pst%s%r%star) call gpu_newdt_star(pst%s, ilevel, output%vmax, output%ekin)
+     if (pst%s%r%sink) call gpu_newdt_sink(pst%s, ilevel, output%vmax, output%ekin)
      return
 #elif defined(_METAL)
-     if(pst%s%r%part)then
-        call metal_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
-     endif
+     if (pst%s%r%part) call metal_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
      return
 #endif
-     if(pst%s%r%part)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%p   ,ilevel,output%ekin,output%vmax)
-     endif
-     if(pst%s%r%star)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%star,ilevel,output%ekin,output%vmax)
-     endif
-     if(pst%s%r%sink)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%sink,ilevel,output%ekin,output%vmax)
-     endif
-     if(pst%s%r%tree)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%tree,ilevel,output%ekin,output%vmax)
-     endif
-     if(pst%s%r%trac)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%trac,ilevel,output%ekin,output%vmax)
-     endif
-     if(pst%s%r%dust)then
-        call newdt_part(pst%s%r,pst%s%g,pst%s%dust,ilevel,output%ekin,output%vmax)
-     endif
+     if (pst%s%r%part) call newdt_part(pst%s%r,pst%s%g,pst%s%p   ,ilevel,output%ekin,output%vmax)
+     if (pst%s%r%star) call newdt_part(pst%s%r,pst%s%g,pst%s%star,ilevel,output%ekin,output%vmax)
+     if (pst%s%r%sink) call newdt_part(pst%s%r,pst%s%g,pst%s%sink,ilevel,output%ekin,output%vmax)
+     if (pst%s%r%tree) call newdt_part(pst%s%r,pst%s%g,pst%s%tree,ilevel,output%ekin,output%vmax)
+     if (pst%s%r%trac) call newdt_part(pst%s%r,pst%s%g,pst%s%trac,ilevel,output%ekin,output%vmax)
+     if (pst%s%r%dust) call newdt_part(pst%s%r,pst%s%g,pst%s%dust,ilevel,output%ekin,output%vmax)
   endif
 
 end subroutine r_newdt_part

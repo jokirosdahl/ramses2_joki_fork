@@ -1,0 +1,1459 @@
+!> GPU Clump Finder and Merger CUDA kernels.
+module clump_device
+  use amr_parameters, only: dp, ndim, twotondim, nbin
+  use oct_commons, only: oct
+  use gpu_utils
+  use cudafor
+  use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val
+  implicit none
+
+  ! -------------------------------------------------------------
+  ! Device arrays for test-cells (allocated to ntestmax)
+  ! -------------------------------------------------------------
+  integer, device, allocatable, dimension(:)         :: grid_d
+  integer, device, allocatable, dimension(:)         :: cell_d
+  integer, device, allocatable, dimension(:)         :: level_d
+  integer, device, allocatable, dimension(:)         :: nbor_grid_d
+  integer, device, allocatable, dimension(:)         :: nbor_cell_d
+  integer, device, allocatable, dimension(:)         :: isort_d
+  integer, device, allocatable, dimension(:)         :: is_peak_d
+  integer, device, allocatable, dimension(:)         :: is_peak_scan_d
+  integer, device, allocatable, dimension(:)         :: parent_d
+  real(kind=dp), device, allocatable, dimension(:)   :: dens_d
+
+  ! -------------------------------------------------------------
+  ! Device arrays for clumps (allocated to nclumpmax)
+  ! -------------------------------------------------------------
+  integer, device, allocatable, dimension(:)         :: peak_cell_d
+  integer, device, allocatable, dimension(:)         :: peak_grid_d
+  integer, device, allocatable, dimension(:)         :: peak_level_d
+  real(kind=dp), device, allocatable, dimension(:)   :: max_dens_d
+  real(kind=dp), device, allocatable, dimension(:)   :: saddle_dens_d
+  integer, device, allocatable, dimension(:)         :: saddle_nbor_d
+  integer, device, allocatable, dimension(:)         :: lev_peak_d
+  integer, device, allocatable, dimension(:)         :: new_peak_d
+  real(kind=dp), device, allocatable, dimension(:)   :: relevance_d
+  integer, device, allocatable, dimension(:)         :: alive_d
+  real(kind=dp), device, allocatable, dimension(:)   :: tidal_dens_d
+  real(kind=dp), device, allocatable, dimension(:)   :: min_dens_d
+  integer, device, allocatable, dimension(:)         :: n_cells_d
+  real(kind=dp), device, allocatable, dimension(:)   :: clump_mass_d
+  real(kind=dp), device, allocatable, dimension(:)   :: clump_vol_d
+  real(kind=dp), device, allocatable, dimension(:)   :: clump_rad_d
+  integer, device, allocatable, dimension(:)         :: npart_d
+  real(kind=dp), device, allocatable, dimension(:)   :: particle_mass_d
+  integer, device, allocatable, dimension(:)         :: ind_final_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: peak_pos_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: peak_vel_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: peak_acc_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: peak_com_d
+  integer, device, allocatable, dimension(:)         :: ind_halo_d
+  real(kind=dp), device, allocatable, dimension(:)   :: halo_mass_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: mass_bin_d
+  real(kind=dp), device, allocatable, dimension(:,:) :: phi_clump_d
+
+contains
+
+  include 'gpu_hash.cuf'
+
+  ! =========================================================================
+  ! Allocate clump arrays on the device
+  ! =========================================================================
+  subroutine gpu_allocate_clump(ntestmax, nclumpmax)
+    integer, intent(in) :: ntestmax, nclumpmax
+
+    ! Allocate test cell arrays
+    if (.not. allocated(grid_d))           allocate(grid_d(1:ntestmax))
+    if (.not. allocated(cell_d))           allocate(cell_d(1:ntestmax))
+    if (.not. allocated(level_d))          allocate(level_d(1:ntestmax))
+    if (.not. allocated(nbor_grid_d))      allocate(nbor_grid_d(1:ntestmax))
+    if (.not. allocated(nbor_cell_d))      allocate(nbor_cell_d(1:ntestmax))
+    if (.not. allocated(isort_d))          allocate(isort_d(1:ntestmax))
+    if (.not. allocated(is_peak_d))        allocate(is_peak_d(1:ntestmax))
+    if (.not. allocated(is_peak_scan_d))   allocate(is_peak_scan_d(1:ntestmax))
+    if (.not. allocated(parent_d))         allocate(parent_d(1:ntestmax))
+    if (.not. allocated(dens_d))           allocate(dens_d(1:ntestmax))
+
+    ! Allocate clump arrays
+    if (.not. allocated(peak_cell_d))      allocate(peak_cell_d(1:nclumpmax))
+    if (.not. allocated(peak_grid_d))      allocate(peak_grid_d(1:nclumpmax))
+    if (.not. allocated(peak_level_d))     allocate(peak_level_d(1:nclumpmax))
+    if (.not. allocated(max_dens_d))       allocate(max_dens_d(1:nclumpmax))
+    if (.not. allocated(saddle_dens_d))    allocate(saddle_dens_d(1:nclumpmax))
+    if (.not. allocated(saddle_nbor_d))    allocate(saddle_nbor_d(1:nclumpmax))
+    if (.not. allocated(lev_peak_d))       allocate(lev_peak_d(1:nclumpmax))
+    if (.not. allocated(new_peak_d))       allocate(new_peak_d(1:nclumpmax))
+    if (.not. allocated(relevance_d))      allocate(relevance_d(1:nclumpmax))
+    if (.not. allocated(alive_d))          allocate(alive_d(1:nclumpmax))
+    if (.not. allocated(tidal_dens_d))     allocate(tidal_dens_d(1:nclumpmax))
+    if (.not. allocated(min_dens_d))       allocate(min_dens_d(1:nclumpmax))
+    if (.not. allocated(n_cells_d))        allocate(n_cells_d(1:nclumpmax))
+    if (.not. allocated(clump_mass_d))     allocate(clump_mass_d(1:nclumpmax))
+    if (.not. allocated(clump_vol_d))      allocate(clump_vol_d(1:nclumpmax))
+    if (.not. allocated(clump_rad_d))      allocate(clump_rad_d(1:nclumpmax))
+    if (.not. allocated(npart_d))          allocate(npart_d(1:nclumpmax))
+    if (.not. allocated(particle_mass_d))  allocate(particle_mass_d(1:nclumpmax))
+    if (.not. allocated(ind_final_d))      allocate(ind_final_d(1:nclumpmax))
+    if (.not. allocated(peak_pos_d))       allocate(peak_pos_d(1:ndim, 1:nclumpmax))
+    if (.not. allocated(peak_vel_d))       allocate(peak_vel_d(1:ndim, 1:nclumpmax))
+    if (.not. allocated(peak_acc_d))       allocate(peak_acc_d(1:ndim, 1:nclumpmax))
+    if (.not. allocated(peak_com_d))       allocate(peak_com_d(1:ndim, 1:nclumpmax))
+    if (.not. allocated(ind_halo_d))       allocate(ind_halo_d(1:nclumpmax))
+    if (.not. allocated(halo_mass_d))      allocate(halo_mass_d(1:nclumpmax))
+    if (.not. allocated(mass_bin_d))       allocate(mass_bin_d(1:nbin, 1:nclumpmax))
+    if (.not. allocated(phi_clump_d))      allocate(phi_clump_d(1:nbin, 1:nclumpmax))
+
+  end subroutine gpu_allocate_clump
+
+  ! =========================================================================
+  ! Deallocate clump arrays on the device
+  ! =========================================================================
+  subroutine gpu_deallocate_clump()
+    if (allocated(grid_d))           deallocate(grid_d)
+    if (allocated(cell_d))           deallocate(cell_d)
+    if (allocated(level_d))          deallocate(level_d)
+    if (allocated(nbor_grid_d))      deallocate(nbor_grid_d)
+    if (allocated(nbor_cell_d))      deallocate(nbor_cell_d)
+    if (allocated(isort_d))          deallocate(isort_d)
+    if (allocated(is_peak_d))        deallocate(is_peak_d)
+    if (allocated(is_peak_scan_d))   deallocate(is_peak_scan_d)
+    if (allocated(parent_d))         deallocate(parent_d)
+    if (allocated(dens_d))           deallocate(dens_d)
+
+    if (allocated(peak_cell_d))      deallocate(peak_cell_d)
+    if (allocated(peak_grid_d))      deallocate(peak_grid_d)
+    if (allocated(peak_level_d))     deallocate(peak_level_d)
+    if (allocated(max_dens_d))       deallocate(max_dens_d)
+    if (allocated(saddle_dens_d))    deallocate(saddle_dens_d)
+    if (allocated(saddle_nbor_d))    deallocate(saddle_nbor_d)
+    if (allocated(lev_peak_d))       deallocate(lev_peak_d)
+    if (allocated(new_peak_d))       deallocate(new_peak_d)
+    if (allocated(relevance_d))      deallocate(relevance_d)
+    if (allocated(alive_d))          deallocate(alive_d)
+    if (allocated(tidal_dens_d))     deallocate(tidal_dens_d)
+    if (allocated(min_dens_d))       deallocate(min_dens_d)
+    if (allocated(n_cells_d))        deallocate(n_cells_d)
+    if (allocated(clump_mass_d))     deallocate(clump_mass_d)
+    if (allocated(clump_vol_d))      deallocate(clump_vol_d)
+    if (allocated(clump_rad_d))      deallocate(clump_rad_d)
+    if (allocated(npart_d))          deallocate(npart_d)
+    if (allocated(particle_mass_d))  deallocate(particle_mass_d)
+    if (allocated(ind_final_d))      deallocate(ind_final_d)
+    if (allocated(peak_pos_d))       deallocate(peak_pos_d)
+    if (allocated(peak_vel_d))       deallocate(peak_vel_d)
+    if (allocated(peak_acc_d))       deallocate(peak_acc_d)
+    if (allocated(peak_com_d))       deallocate(peak_com_d)
+    if (allocated(ind_halo_d))       deallocate(ind_halo_d)
+    if (allocated(halo_mass_d))      deallocate(halo_mass_d)
+    if (allocated(mass_bin_d))       deallocate(mass_bin_d)
+    if (allocated(phi_clump_d))      deallocate(phi_clump_d)
+  end subroutine gpu_deallocate_clump
+
+  ! =========================================================================
+  ! CUDA Kernel: Smooth density field
+  ! =========================================================================
+  attributes(global) subroutine smooth_rho_kernel(rho, nref, grid, father, head_idx, num_octs)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    real(kind=dp), device :: nref(1:twotondim, *)
+    type(oct), device :: grid(*)
+    integer, device :: father(*)
+    integer, value :: head_idx, num_octs
+
+    integer :: cell_idx, oct_idx, block_idx
+    integer :: father_idx, i, j, k, father_cell_idx
+
+    block_idx = blockIdx%x - 1
+    oct_idx = block_idx * blockDim%y + threadIdx%y - 1
+    if (oct_idx >= num_octs) return
+    oct_idx = head_idx + oct_idx
+
+    cell_idx = threadIdx%x
+
+    ! Save true density value into nref
+    nref(cell_idx, oct_idx) = rho(cell_idx, oct_idx)
+
+    ! Compute parent indices
+    father_idx = father(oct_idx)
+    i = grid(oct_idx)%ckey(1) - 2 * grid(father_idx)%ckey(1)
+    j = grid(oct_idx)%ckey(2) - 2 * grid(father_idx)%ckey(2)
+    k = grid(oct_idx)%ckey(3) - 2 * grid(father_idx)%ckey(3)
+    father_cell_idx = 1 + i + 2*j + 4*k
+
+    ! Smooth density field
+    rho(cell_idx, oct_idx) = 0.5d0 * rho(cell_idx, oct_idx) + 0.5d0 * rho(father_cell_idx, father_idx)
+
+  end subroutine smooth_rho_kernel
+
+  ! =========================================================================
+  ! Host Driver: Smooth density field level-by-level on GPU
+  ! =========================================================================
+  subroutine gpu_smooth_rho(sim)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    integer :: ilevel, num_octs, head_idx
+    integer :: block_y, grid_x
+    type(dim3) :: block_dim, grid_dim
+
+    block_y = 16
+    block_dim = dim3(twotondim, block_y, 1)
+
+    do ilevel = sim%r%levelmin + 1, sim%r%nlevelmax
+       head_idx = sim%m%head(ilevel)
+       num_octs = sim%m%noct(ilevel)
+       if (num_octs > 0) then
+          grid_x = (num_octs + block_y - 1) / block_y
+          grid_dim = dim3(grid_x, 1, 1)
+          call smooth_rho_kernel<<<grid_dim, block_dim>>>(rho, nref, grid, father, head_idx, num_octs)
+       endif
+    enddo
+
+  end subroutine gpu_smooth_rho
+
+  ! =========================================================================
+  ! CUDA Kernel: Flag active cells above threshold
+  ! =========================================================================
+  attributes(global) subroutine flag_test_cells_kernel(flag1, rho, grid, threshold, head_idx, num_octs)
+    integer, device :: flag1(1:twotondim, *)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    type(oct), device :: grid(*)
+    real(kind=dp), value :: threshold
+    integer, value :: head_idx, num_octs
+
+    integer :: cell_idx, oct_idx, block_idx
+
+    block_idx = blockIdx%x - 1
+    oct_idx = block_idx * blockDim%y + threadIdx%y - 1
+    if (oct_idx >= num_octs) return
+    oct_idx = head_idx + oct_idx
+
+    cell_idx = threadIdx%x
+
+    if (.not. grid(oct_idx)%refined(cell_idx) .and. rho(cell_idx, oct_idx) > threshold) then
+       flag1(cell_idx, oct_idx) = 1
+    else
+       flag1(cell_idx, oct_idx) = 0
+    endif
+
+  end subroutine flag_test_cells_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Scatter active test cells to compacted arrays
+  ! =========================================================================
+  attributes(global) subroutine scatter_test_cells_kernel(grid_d, cell_d, level_d, dens_d, &
+       flag_scan, rho, grid, threshold, head_idx, num_octs)
+    integer, device :: grid_d(*), cell_d(*), level_d(*)
+    real(kind=dp), device :: dens_d(*)
+    integer, device :: flag_scan(1:twotondim, *)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    type(oct), device :: grid(*)
+    real(kind=dp), value :: threshold
+    integer, value :: head_idx, num_octs
+
+    integer :: cell_idx, oct_idx, block_idx, idx
+    logical :: ok
+
+    block_idx = blockIdx%x - 1
+    oct_idx = block_idx * blockDim%y + threadIdx%y - 1
+    if (oct_idx >= num_octs) return
+    oct_idx = head_idx + oct_idx
+
+    cell_idx = threadIdx%x
+
+    ok = .not. grid(oct_idx)%refined(cell_idx) .and. rho(cell_idx, oct_idx) > threshold
+    if (ok) then
+       idx = flag_scan(cell_idx, oct_idx)
+       grid_d(idx) = oct_idx
+       cell_d(idx) = cell_idx
+       level_d(idx) = grid(oct_idx)%lev
+       dens_d(idx) = rho(cell_idx, oct_idx)
+    endif
+
+  end subroutine scatter_test_cells_kernel
+
+  ! =========================================================================
+  ! Host Driver: Collect and compact cells above threshold
+  ! =========================================================================
+  subroutine gpu_collect_test(sim, threshold, ntest)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    real(kind=dp), intent(in) :: threshold
+    integer, intent(out) :: ntest
+
+    integer :: num_octs, head_idx, num_total_cells
+    integer :: block_y, grid_x
+    type(dim3) :: block_dim, grid_dim
+    integer :: total_test_d
+
+    block_y = 16
+    block_dim = dim3(twotondim, block_y, 1)
+
+    ! 1. Zero out flag1
+    flag1 = 0
+
+    ! 2. Flag active test cells in a single launch
+    head_idx = 1
+    num_octs = sim%m%ifree - 1
+    if (num_octs > 0) then
+       grid_x = (num_octs + block_y - 1) / block_y
+       grid_dim = dim3(grid_x, 1, 1)
+       call flag_test_cells_kernel<<<grid_dim, block_dim>>>(flag1, rho, grid, threshold, head_idx, num_octs)
+    endif
+
+    ! 3. Compute inclusive prefix scan on flag1
+    if (num_octs > 0) then
+       num_total_cells = (sim%m%ifree - 1) * twotondim
+       call gpu_scan(flag1, 1, num_total_cells, total_test_d)
+       ntest = total_test_d
+    else
+       ntest = 0
+    endif
+
+    if (ntest == 0) return
+
+    ! 4. Scatter to compacted arrays in a single launch
+    if (num_octs > 0) then
+       grid_x = (num_octs + block_y - 1) / block_y
+       grid_dim = dim3(grid_x, 1, 1)
+       call scatter_test_cells_kernel<<<grid_dim, block_dim>>>(grid_d, cell_d, level_d, dens_d, &
+            & flag1, rho, grid, threshold, head_idx, num_octs)
+    endif
+
+  end subroutine gpu_collect_test
+
+  ! =========================================================================
+  ! Device Function: Resolve spatial coordinates to a parent grid and cell
+  ! =========================================================================
+  attributes(device) subroutine get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+    integer(kind=8), intent(in) :: hash_nbor(0:3)
+    integer, intent(out) :: igridn, icelln
+    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer, value :: hash_size
+
+    integer :: ilev_par
+    integer(kind=8) :: ix, iy, iz, nx, offset, key
+    integer :: bit(3)
+
+    ilev_par = hash_nbor(0) - 1
+    
+    ix = hash_nbor(1) / 2
+    iy = hash_nbor(2) / 2
+    iz = hash_nbor(3) / 2
+
+    bit(1) = hash_nbor(1) - 2 * ix
+    bit(2) = hash_nbor(2) - 2 * iy
+    bit(3) = hash_nbor(3) - 2 * iz
+    icelln = 1 + bit(1) + 2*bit(2) + 4*bit(3)
+
+    nx = ckey_max(ilev_par)
+    offset = key_off(ilev_par)
+    key = offset + ix + iy*nx + iz*nx*nx
+
+    igridn = hash_get(hash_key, hash_val, hash_size, key)
+
+  end subroutine get_parent_cell_device
+
+  ! =========================================================================
+  ! CUDA Kernel: Scan neighbors and identify peaks
+  ! =========================================================================
+  attributes(global) subroutine collect_peak_kernel( &
+       grid_d, cell_d, level_d, nbor_grid_d, nbor_cell_d, is_peak_d, &
+       rho, grid, periodic, box_ckey_min, box_ckey_max, hash_key, hash_val, hash_size, ntest)
+    integer, device :: grid_d(*), cell_d(*), level_d(*)
+    integer, device :: nbor_grid_d(*), nbor_cell_d(*)
+    integer, device :: is_peak_d(*)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    type(oct), device :: grid(*)
+    logical, device :: periodic(3)
+    real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
+    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer, value :: hash_size, ntest
+
+    integer :: itest, gid, tid
+    integer :: ilevel, igrid, ind, igridn, icelln
+    integer :: ii, jj, kk, idim
+    real(kind=8) :: xcen(3), xnei(3), dx, dy, dz
+    integer :: ckey_nbor(3)
+    integer(kind=8) :: hash_nbor(0:3)
+    real(kind=8) :: dens_nbor, density_max
+    logical :: ok_peak
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    ilevel = level_d(itest)
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+
+    xcen(1) = 2*grid(igrid)%ckey(1) + MOD((ind-1),   2) + 0.5d0
+    xcen(2) = 2*grid(igrid)%ckey(2) + MOD((ind-1)/2, 2) + 0.5d0
+    xcen(3) = 2*grid(igrid)%ckey(3) + MOD((ind-1)/4, 2) + 0.5d0
+
+    density_max = 1.0001d0 * rho(ind, igrid)
+    ok_peak = .true.
+    nbor_grid_d(itest) = 0
+    nbor_cell_d(itest) = 0
+
+    ! Scan 56 neighbors
+    do kk = 1, 4
+       do jj = 1, 4
+          do ii = 1, 4
+             if ((ii==2.or.ii==3).and.(jj==2.or.jj==3).and.(kk==2.or.kk==3)) cycle
+
+             dx = (ii - 1) + 0.5d0 - 2.0d0
+             dy = (jj - 1) + 0.5d0 - 2.0d0
+             dz = (kk - 1) + 0.5d0 - 2.0d0
+
+             xnei(1) = xcen(1) + dx/2.0d0
+             xnei(2) = xcen(2) + dy/2.0d0
+             xnei(3) = xcen(3) + dz/2.0d0
+
+             ! Periodic boundary conditions
+             do idim = 1, 3
+                if (periodic(idim)) then
+                   if (xnei(idim) < box_ckey_min(idim, ilevel+1)) then
+                      xnei(idim) = xnei(idim) - box_ckey_min(idim, ilevel+1) + box_ckey_max(idim, ilevel+1)
+                   endif
+                   if (xnei(idim) >= box_ckey_max(idim, ilevel+1)) then
+                      xnei(idim) = xnei(idim) + box_ckey_min(idim, ilevel+1) - box_ckey_max(idim, ilevel+1)
+                   endif
+                endif
+             end do
+
+             ! Get neighboring cell at ilevel
+             ckey_nbor(1) = int(xnei(1))
+             ckey_nbor(2) = int(xnei(2))
+             ckey_nbor(3) = int(xnei(3))
+             hash_nbor(0) = ilevel + 1
+             hash_nbor(1:3) = ckey_nbor(1:3)
+             call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+
+             ! If missing, get neighboring cell at ilevel-1
+             if (igridn == 0) then
+                ckey_nbor(1) = int(xnei(1)/2.0d0)
+                ckey_nbor(2) = int(xnei(2)/2.0d0)
+                ckey_nbor(3) = int(xnei(3)/2.0d0)
+                hash_nbor(0) = ilevel
+                hash_nbor(1:3) = ckey_nbor(1:3)
+                call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+             ! If refined, get neighboring cell at ilevel+1
+             else if (grid(igridn)%refined(icelln)) then
+                ckey_nbor(1) = int(xnei(1)*2.0d0)
+                ckey_nbor(2) = int(xnei(2)*2.0d0)
+                ckey_nbor(3) = int(xnei(3)*2.0d0)
+                hash_nbor(0) = ilevel + 2
+                hash_nbor(1:3) = ckey_nbor(1:3)
+                call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+             endif
+
+             if (igridn > 0) then
+                dens_nbor = rho(icelln, igridn)
+                if (dens_nbor > density_max) then
+                   ok_peak = .false.
+                   density_max = dens_nbor
+                   nbor_grid_d(itest) = igridn
+                   nbor_cell_d(itest) = icelln
+                endif
+             endif
+          end do
+       end do
+    end do
+
+    if (ok_peak) then
+       is_peak_d(itest) = 1
+    else
+       is_peak_d(itest) = 0
+    endif
+
+  end subroutine collect_peak_kernel
+
+  ! =========================================================================
+  ! Host Driver: Detect peaks on GPU
+  ! =========================================================================
+  subroutine gpu_collect_peak(sim, ntest, npeak)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    integer, intent(in) :: ntest
+    integer, intent(out) :: npeak
+
+    integer :: block_size, grid_size
+    integer :: total_peaks_d
+
+    block_size = 256
+    grid_size = (ntest + block_size - 1) / block_size
+
+    ! Launch peak detection kernel
+    call collect_peak_kernel<<<grid_size, block_size>>>( &
+         grid_d, cell_d, level_d, nbor_grid_d, nbor_cell_d, is_peak_d, &
+         rho, grid, periodic, box_ckey_min, box_ckey_max, hash_key, hash_val, sim%m%hash_size, ntest)
+
+    ! Compute prefix scan to count total peaks
+    is_peak_scan_d = is_peak_d
+    call gpu_scan(is_peak_scan_d, 1, ntest, total_peaks_d)
+    npeak = total_peaks_d
+
+  end subroutine gpu_collect_peak
+
+  ! =========================================================================
+  ! CUDA Kernel: Map peak IDs to all cells and populate peak properties
+  ! =========================================================================
+  attributes(global) subroutine map_final_labels_kernel( &
+       flag1, peak_grid_d, peak_cell_d, peak_level_d, max_dens_d, &
+       parent_d, grid_d, cell_d, level_d, rho, is_peak_scan, is_peak_raw, ntest)
+    integer, device :: flag1(1:twotondim, *)
+    integer, device :: peak_grid_d(*), peak_cell_d(*), peak_level_d(*)
+    real(kind=dp), device :: max_dens_d(*)
+    integer, device :: parent_d(*), grid_d(*), cell_d(*), level_d(*)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    integer, device :: is_peak_scan(*), is_peak_raw(*)
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, root_idx, peak_id, igrid, ind
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    root_idx = parent_d(itest)
+    peak_id = is_peak_scan(root_idx)
+
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+    flag1(ind, igrid) = peak_id
+
+    if (itest == root_idx) then
+       peak_grid_d(peak_id) = igrid
+       peak_cell_d(peak_id) = ind
+       peak_level_d(peak_id) = level_d(itest)
+       max_dens_d(peak_id) = rho(ind, igrid)
+    endif
+  end subroutine map_final_labels_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Map test cell index to flag1 temporarily
+  ! =========================================================================
+  attributes(global) subroutine map_indices_kernel(flag1, grid_d, cell_d, ntest)
+    integer, device :: flag1(1:twotondim, *), grid_d(*), cell_d(*)
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, igrid, ind
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+    flag1(ind, igrid) = itest
+
+  end subroutine map_indices_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Initialize parent array from neighbor pointers
+  ! =========================================================================
+  attributes(global) subroutine init_parent_kernel(parent_d, grid_d, cell_d, nbor_grid_d, nbor_cell_d, flag1, ntest)
+    integer, device :: parent_d(*), grid_d(*), cell_d(*), nbor_grid_d(*), nbor_cell_d(*), flag1(1:twotondim, *)
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, igridn, icelln
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    igridn = nbor_grid_d(itest)
+    icelln = nbor_cell_d(itest)
+
+    if (igridn > 0) then
+       parent_d(itest) = flag1(icelln, igridn)
+    else
+       parent_d(itest) = itest
+    endif
+
+  end subroutine init_parent_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Pointer-jumping step to flatten tree paths
+  ! =========================================================================
+  attributes(global) subroutine pointer_jump_kernel(parent_d, nmove, ntest)
+    integer, device :: parent_d(*), nmove
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, p, gp, info
+    integer, shared :: block_nmove
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+
+    if (tid == 1) then
+       block_nmove = 0
+    endif
+    call syncthreads()
+
+    if (gid <= ntest) then
+       itest = gid
+       p = parent_d(itest)
+       gp = parent_d(p)
+       if (p /= gp) then
+          parent_d(itest) = gp
+          info = atomicadd(block_nmove, 1)
+       endif
+    endif
+
+    call syncthreads()
+    if (tid == 1) then
+       if (block_nmove > 0) then
+          info = atomicadd(nmove, block_nmove)
+       endif
+    endif
+
+  end subroutine pointer_jump_kernel
+
+  ! =========================================================================
+  ! Host Driver: Watershed patch segmentation on GPU using Pointer-Jumping
+  ! =========================================================================
+  subroutine gpu_collect_patch(sim, ntest, npeak)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    integer, intent(in) :: ntest, npeak
+
+    integer :: block_size, grid_size
+    integer, device :: nmove_d
+    integer :: nmove_h, istep
+
+    if (ntest == 0) return
+
+    block_size = 256
+    grid_size = (ntest + block_size - 1) / block_size
+
+    ! 1. Store test cell indices in flag1 temporarily for parent lookup
+    flag1 = 0
+    call map_indices_kernel<<<grid_size, block_size>>>(flag1, grid_d, cell_d, ntest)
+
+    ! 2. Initialize parent array
+    call init_parent_kernel<<<grid_size, block_size>>>(parent_d, grid_d, cell_d, nbor_grid_d, nbor_cell_d, flag1, ntest)
+
+    ! 3. Pointer-jumping loop to flatten tree paths
+    nmove_h = 1
+    istep = 0
+    do while (nmove_h > 0)
+       nmove_d = 0
+       call pointer_jump_kernel<<<grid_size, block_size>>>(parent_d, nmove_d, ntest)
+       nmove_h = nmove_d
+       istep = istep + 1
+    end do
+
+    ! 4. Clear flag1 and flag2, then write the final labels and peak properties in one kernel
+    flag1 = 0
+    flag2 = 0
+    call map_final_labels_kernel<<<grid_size, block_size>>>( &
+         flag1, peak_grid_d, peak_cell_d, peak_level_d, max_dens_d, &
+         parent_d, grid_d, cell_d, level_d, rho, is_peak_scan_d, is_peak_d, ntest)
+
+  end subroutine gpu_collect_patch
+
+
+  ! =========================================================================
+  ! CUDA Kernel: Initialize saddle density and neighbor id
+  ! =========================================================================
+  attributes(global) subroutine init_saddle_arrays_kernel(saddle_dens_d, saddle_nbor_d, density_threshold, npeak)
+    real(kind=dp), device :: saddle_dens_d(*)
+    integer, device :: saddle_nbor_d(*)
+    real(kind=dp), value :: density_threshold
+    integer, value :: npeak
+
+    integer :: ipeak, gid
+
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    saddle_dens_d(ipeak) = density_threshold
+    saddle_nbor_d(ipeak) = 0
+
+  end subroutine init_saddle_arrays_kernel
+
+  ! =========================================================================
+  ! Device Subroutine: Double-precision Atomic Maximum using atomicCAS
+  ! =========================================================================
+  attributes(device) subroutine atomicmax_dp(address, val, update_nbor, nbor_address, nbor_val)
+    real(kind=dp), intent(inout) :: address
+    real(kind=dp), intent(in) :: val
+    logical, intent(in) :: update_nbor
+    integer, intent(inout) :: nbor_address
+    integer, intent(in) :: nbor_val
+
+    integer(kind=8) :: assumed, old, expected
+    real(kind=dp) :: old_val
+
+    old = transfer(address, old)
+    do
+       old_val = transfer(old, old_val)
+       if (val <= old_val) exit
+       assumed = old
+       expected = transfer(val, expected)
+       old = atomiccas(address, assumed, expected)
+       if (old == assumed) then
+          if (update_nbor) nbor_address = nbor_val
+          exit
+       endif
+    enddo
+
+  end subroutine atomicmax_dp
+
+  ! =========================================================================
+  ! CUDA Kernel: Scan neighbors and identify saddle points
+  ! =========================================================================
+  attributes(global) subroutine collect_saddle_kernel( &
+       flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
+       rho, grid, periodic, box_ckey_min, box_ckey_max, threshold, hash_key, hash_val, hash_size, ntest)
+    integer, device :: flag1(1:twotondim, *)
+    integer, device :: grid_d(*), cell_d(*), level_d(*)
+    real(kind=dp), device :: saddle_dens_d(*)
+    integer, device :: saddle_nbor_d(*)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    type(oct), device :: grid(*)
+    logical, device :: periodic(3)
+    real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
+    real(kind=dp), value :: threshold
+    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer, value :: hash_size, ntest
+
+    integer :: itest, gid, tid
+    integer :: ilevel, igrid, ind, igridn, icelln
+    integer :: ii, jj, kk, idim
+    real(kind=8) :: xcen(3), xnei(3), dx, dy, dz
+    integer :: ckey_nbor(3)
+    integer(kind=8) :: hash_nbor(0:3)
+    integer :: peak_cen, peak_nbor, ipeak
+    real(kind=dp) :: dens_cen, dens_ave
+    logical :: ok
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    ilevel = level_d(itest)
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+
+    peak_cen = flag1(ind, igrid)
+    dens_cen = rho(ind, igrid)
+
+    xcen(1) = 2*grid(igrid)%ckey(1) + MOD((ind-1), 2) + 0.5d0
+    xcen(2) = 2*grid(igrid)%ckey(2) + MOD((ind-1)/2, 2) + 0.5d0
+    xcen(3) = 2*grid(igrid)%ckey(3) + MOD((ind-1)/4, 2) + 0.5d0
+
+    ! Scan 56 neighbors
+    do kk = 1, 4
+       do jj = 1, 4
+          do ii = 1, 4
+             if ((ii==2.or.ii==3).and.(jj==2.or.jj==3).and.(kk==2.or.kk==3)) cycle
+
+             dx = (ii - 1) + 0.5d0 - 2.0d0
+             dy = (jj - 1) + 0.5d0 - 2.0d0
+             dz = (kk - 1) + 0.5d0 - 2.0d0
+
+             xnei(1) = xcen(1) + dx/2.0d0
+             xnei(2) = xcen(2) + dy/2.0d0
+             xnei(3) = xcen(3) + dz/2.0d0
+
+             ! Periodic boundary conditions
+             do idim = 1, 3
+                if (periodic(idim)) then
+                   if (xnei(idim) < box_ckey_min(idim, ilevel+1)) then
+                      xnei(idim) = xnei(idim) - box_ckey_min(idim, ilevel+1) + box_ckey_max(idim, ilevel+1)
+                   endif
+                   if (xnei(idim) >= box_ckey_max(idim, ilevel+1)) then
+                      xnei(idim) = xnei(idim) + box_ckey_min(idim, ilevel+1) - box_ckey_max(idim, ilevel+1)
+                   endif
+                endif
+             end do
+
+             ! Get neighboring cell at ilevel
+             ckey_nbor(1) = int(xnei(1))
+             ckey_nbor(2) = int(xnei(2))
+             ckey_nbor(3) = int(xnei(3))
+             hash_nbor(0) = ilevel + 1
+             hash_nbor(1:3) = ckey_nbor(1:3)
+             call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+
+             ! If missing, get neighboring cell at ilevel-1
+             if (igridn == 0) then
+                ckey_nbor(1) = int(xnei(1)/2.0d0)
+                ckey_nbor(2) = int(xnei(2)/2.0d0)
+                ckey_nbor(3) = int(xnei(3)/2.0d0)
+                hash_nbor(0) = ilevel
+                hash_nbor(1:3) = ckey_nbor(1:3)
+                call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+             ! If refined, get neighboring cell at ilevel+1
+             else if (grid(igridn)%refined(icelln)) then
+                ckey_nbor(1) = int(xnei(1)*2.0d0)
+                ckey_nbor(2) = int(xnei(2)*2.0d0)
+                ckey_nbor(3) = int(xnei(3)*2.0d0)
+                hash_nbor(0) = ilevel + 2
+                hash_nbor(1:3) = ckey_nbor(1:3)
+                call get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
+             endif
+
+             if (igridn > 0) then
+                peak_nbor = flag1(icelln, igridn)
+                ok = peak_cen /= 0
+                ok = ok .and. peak_nbor /= 0
+                ok = ok .and. peak_cen /= peak_nbor
+
+                if (ok) then
+                   dens_ave = 0.5d0 * (dens_cen + rho(icelln, igridn))
+                   ipeak = peak_cen
+                   call atomicmax_dp(saddle_dens_d(ipeak), dens_ave, .true., saddle_nbor_d(ipeak), peak_nbor)
+                endif
+             endif
+          end do
+       end do
+    end do
+
+  end subroutine collect_saddle_kernel
+
+  ! =========================================================================
+  ! Host Driver: Collect saddle points on GPU
+  ! =========================================================================
+  subroutine gpu_collect_saddle(sim, ntest, npeak)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    integer, intent(in) :: ntest, npeak
+
+    integer :: block_size, grid_size, grid_size_peaks
+
+    if (ntest == 0) return
+
+    block_size = 256
+    grid_size_peaks = (npeak + block_size - 1) / block_size
+
+    ! Initialize saddle density to threshold and saddle neighbor to 0
+    call init_saddle_arrays_kernel<<<grid_size_peaks, block_size>>>( &
+         saddle_dens_d, saddle_nbor_d, sim%c%density_threshold, npeak)
+
+    grid_size = (ntest + block_size - 1) / block_size
+
+    ! Collect densest saddle points and corresponding peak id
+    call collect_saddle_kernel<<<grid_size, block_size>>>( &
+         flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
+         rho, grid, periodic, box_ckey_min, box_ckey_max, sim%c%density_threshold, &
+         hash_key, hash_val, sim%m%hash_size, ntest)
+
+  end subroutine gpu_collect_saddle
+
+  ! =========================================================================
+  ! CUDA Kernel: Initialize merge arrays and alive status
+  ! =========================================================================
+  attributes(global) subroutine init_merge_kernel( &
+       new_peak_d, tidal_dens_d, lev_peak_d, alive_d, max_dens_d, relevance_d, &
+       relevance_threshold, saddle_threshold, npeak, action_code)
+    integer, device :: new_peak_d(*), lev_peak_d(*), alive_d(*)
+    real(kind=dp), device :: tidal_dens_d(*), max_dens_d(*), relevance_d(*)
+    real(kind=dp), value :: relevance_threshold, saddle_threshold
+    integer, value :: npeak, action_code
+
+    integer :: ipeak, gid, tid
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    ipeak = gid
+    new_peak_d(ipeak) = ipeak
+    tidal_dens_d(ipeak) = saddle_threshold
+
+    if (action_code == 1) then ! 'relevance'
+       alive_d(ipeak) = 1
+    else if (action_code == 2) then ! 'saddleden'
+       if (relevance_d(ipeak) > relevance_threshold) then
+          alive_d(ipeak) = 1
+       else
+          alive_d(ipeak) = 0
+       endif
+       lev_peak_d(ipeak) = -1
+    endif
+
+  end subroutine init_merge_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Propagate merges between neighbor peaks
+  ! =========================================================================
+  attributes(global) subroutine propagate_merge_kernel( &
+       new_peak_d, tidal_dens_d, alive_d, max_dens_d, saddle_dens_d, saddle_nbor_d, &
+       relevance_threshold, saddle_threshold, npeak, action_code, nmove)
+    integer, device :: new_peak_d(*), alive_d(*), saddle_nbor_d(*)
+    real(kind=dp), device :: tidal_dens_d(*), max_dens_d(*), saddle_dens_d(*)
+    real(kind=dp), value :: relevance_threshold, saddle_threshold
+    integer, value :: npeak, action_code
+    integer, device :: nmove
+
+    integer :: ipeak, gid, tid, jpeak, global_peak_id, info, p, merge_target
+    integer :: merge_to, current_merge
+    real(kind=dp) :: relevance_val
+    logical :: do_merge
+
+    integer, shared :: block_nmove
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+
+    if (tid == 1) then
+       block_nmove = 0
+    endif
+    call syncthreads()
+
+    if (gid <= npeak) then
+       ipeak = gid
+       current_merge = new_peak_d(ipeak)
+       merge_to = current_merge
+
+       ! 1. Path compression / pointer jumping
+       p = new_peak_d(current_merge)
+       if (current_merge /= p) then
+          new_peak_d(ipeak) = p
+          current_merge = p
+          merge_to = p
+          info = atomicadd(block_nmove, 1)
+       endif
+
+       ! 2. Neighborhood merge propagation
+       if (alive_d(ipeak) > 0) then
+          do_merge = .false.
+          if (action_code == 1) then ! 'relevance'
+             relevance_val = max_dens_d(ipeak) / saddle_dens_d(ipeak)
+             do_merge = relevance_val < relevance_threshold
+          else if (action_code == 2) then ! 'saddleden'
+             do_merge = saddle_dens_d(ipeak) > saddle_threshold
+          endif
+
+          if (do_merge) then
+             global_peak_id = saddle_nbor_d(ipeak)
+             if (global_peak_id > 0) then
+                jpeak = global_peak_id
+                merge_target = new_peak_d(jpeak)
+                if (max_dens_d(jpeak) > max_dens_d(ipeak)) then
+                   merge_to = merge_target
+                else if (max_dens_d(jpeak) == max_dens_d(ipeak)) then
+                   merge_to = min(current_merge, merge_target)
+                endif
+             endif
+          endif
+       endif
+
+       if (current_merge /= merge_to) then
+          new_peak_d(ipeak) = merge_to
+          tidal_dens_d(ipeak) = saddle_dens_d(ipeak)
+          info = atomicadd(block_nmove, 1)
+       endif
+    endif
+
+    call syncthreads()
+    if (tid == 1) then
+       if (block_nmove > 0) then
+          info = atomicadd(nmove, block_nmove)
+       endif
+    endif
+
+  end subroutine propagate_merge_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Update cell-to-peak associations (flag1)
+  ! =========================================================================
+  attributes(global) subroutine update_flag1_kernel(flag1, grid_d, cell_d, new_peak_d, ntest)
+    integer, device :: flag1(1:twotondim, *)
+    integer, device :: grid_d(*), cell_d(*), new_peak_d(*)
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, igrid, ind, global_peak_id, ipeak
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+    global_peak_id = flag1(ind, igrid)
+    if (global_peak_id > 0) then
+       ipeak = global_peak_id
+       flag1(ind, igrid) = new_peak_d(ipeak)
+    endif
+
+  end subroutine update_flag1_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Update alive status and merge depth of peaks
+  ! =========================================================================
+  attributes(global) subroutine update_alive_kernel( &
+       new_peak_d, alive_d, lev_peak_d, idepth, npeak, nzero)
+    integer, device :: new_peak_d(*), alive_d(*), lev_peak_d(*)
+    integer, value :: idepth, npeak
+    integer, device :: nzero
+
+    integer :: ipeak, gid, tid, info
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    ipeak = gid
+    if (alive_d(ipeak) > 0) then
+       if (new_peak_d(ipeak) /= ipeak) then
+          alive_d(ipeak) = 0
+          lev_peak_d(ipeak) = idepth
+          info = atomicadd(nzero, 1)
+       endif
+    endif
+
+  end subroutine update_alive_kernel
+
+  ! =========================================================================
+  ! CUDA Kernels: Post-merge relevance processing
+  ! =========================================================================
+  attributes(global) subroutine propagate_merge_level_kernel(new_peak_d, lev_peak_d, ilev, npeak)
+    integer, device :: new_peak_d(*), lev_peak_d(*)
+    integer, value :: ilev, npeak
+    integer :: ipeak, gid, jpeak
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    if (lev_peak_d(ipeak) == ilev) then
+       jpeak = new_peak_d(ipeak)
+       new_peak_d(ipeak) = new_peak_d(jpeak)
+    endif
+  end subroutine propagate_merge_level_kernel
+
+  attributes(global) subroutine compute_relevance_kernel(relevance_d, max_dens_d, saddle_dens_d, alive_d, npeak)
+    real(kind=dp), device :: relevance_d(*), max_dens_d(*), saddle_dens_d(*)
+    integer, device :: alive_d(*)
+    integer, value :: npeak
+    integer :: ipeak, gid
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    if (alive_d(ipeak) > 0) then
+       relevance_d(ipeak) = max_dens_d(ipeak) / saddle_dens_d(ipeak)
+    else
+       relevance_d(ipeak) = 0.0d0
+    endif
+  end subroutine compute_relevance_kernel
+
+  ! =========================================================================
+  ! CUDA Kernels: Halo index propagation and level initialization
+  ! =========================================================================
+  attributes(global) subroutine init_halo_index_kernel(ind_halo_d, new_peak_d, npeak)
+    integer, device :: ind_halo_d(*), new_peak_d(*)
+    integer, value :: npeak
+    integer :: ipeak, gid
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    ind_halo_d(ipeak) = new_peak_d(ipeak)
+  end subroutine init_halo_index_kernel
+
+  attributes(global) subroutine propagate_halo_level_kernel(ind_halo_d, lev_peak_d, ilev, npeak)
+    integer, device :: ind_halo_d(*), lev_peak_d(*)
+    integer, value :: ilev, npeak
+    integer :: ipeak, gid, jpeak
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    if (lev_peak_d(ipeak) == ilev) then
+       jpeak = ind_halo_d(ipeak)
+       ind_halo_d(ipeak) = ind_halo_d(jpeak)
+    endif
+  end subroutine propagate_halo_level_kernel
+
+  attributes(global) subroutine set_halo_level_kernel(lev_peak_d, ind_halo_d, idepth, npeak)
+    integer, device :: lev_peak_d(*), ind_halo_d(*)
+    integer, value :: idepth, npeak
+    integer :: ipeak, gid
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    if (ind_halo_d(ipeak) == ipeak) then
+       lev_peak_d(ipeak) = idepth - 1
+    endif
+  end subroutine set_halo_level_kernel
+
+  ! =========================================================================
+  ! CUDA Kernels: Halo mass accumulation and back-assignment
+  ! =========================================================================
+  attributes(global) subroutine init_halo_mass_kernel(halo_mass_d, npeak)
+    real(kind=dp), device :: halo_mass_d(*)
+    integer, value :: npeak
+    integer :: ipeak, gid
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    halo_mass_d(ipeak) = 0.0d0
+  end subroutine init_halo_mass_kernel
+
+  attributes(global) subroutine accumulate_halo_mass_kernel(halo_mass_d, ind_halo_d, clump_mass_d, npeak)
+    real(kind=dp), device :: halo_mass_d(*), clump_mass_d(*)
+    integer, device :: ind_halo_d(*)
+    integer, value :: npeak
+    integer :: ipeak, gid, merge_to
+    real(kind=dp) :: info
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    merge_to = ind_halo_d(ipeak)
+    info = atomicadd(halo_mass_d(merge_to), clump_mass_d(ipeak))
+  end subroutine accumulate_halo_mass_kernel
+
+  attributes(global) subroutine assign_halo_mass_kernel(halo_mass_d, ind_halo_d, npeak)
+    real(kind=dp), device :: halo_mass_d(*)
+    integer, device :: ind_halo_d(*)
+    integer, value :: npeak
+    integer :: ipeak, gid, merge_to
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    merge_to = ind_halo_d(ipeak)
+    halo_mass_d(ipeak) = halo_mass_d(merge_to)
+  end subroutine assign_halo_mass_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Hierarchical clump properties accumulation
+  ! =========================================================================
+  attributes(global) subroutine hierarchical_properties_kernel( &
+       new_peak_d, lev_peak_d, clump_mass_d, clump_vol_d, n_cells_d, min_dens_d, halo_mass_d, &
+       fraction_threshold, ilev, idepth, npeak)
+    integer, device :: new_peak_d(*), lev_peak_d(*), n_cells_d(*)
+    real(kind=dp), device :: clump_mass_d(*), clump_vol_d(*), min_dens_d(*), halo_mass_d(*)
+    real(kind=dp), value :: fraction_threshold
+    integer, value :: ilev, idepth, npeak
+    integer :: ipeak, gid, merge_to
+    real(kind=dp) :: info_dp
+    integer :: info_int
+
+    gid = threadIdx%x + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+
+    if (lev_peak_d(ipeak) == ilev) then
+       ! If clump is too massive, then it does not merge
+       if (clump_mass_d(ipeak) > fraction_threshold * halo_mass_d(ipeak)) then
+          new_peak_d(ipeak) = ipeak
+          lev_peak_d(ipeak) = idepth - 1
+       endif
+       merge_to = new_peak_d(ipeak)
+       if (merge_to /= ipeak) then
+          info_dp = atomicadd(clump_mass_d(merge_to), clump_mass_d(ipeak))
+          info_dp = atomicadd(clump_vol_d(merge_to), clump_vol_d(ipeak))
+          info_int = atomicadd(n_cells_d(merge_to), n_cells_d(ipeak))
+          info_dp = atomicmin(min_dens_d(merge_to), min_dens_d(ipeak))
+       endif
+    endif
+  end subroutine hierarchical_properties_kernel
+
+  ! =========================================================================
+  ! Host Driver: Merge irrelevant clumps iteratively on GPU
+  ! =========================================================================
+  subroutine gpu_merge_clumps(sim, action, ntest, npeak)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    character(len=*), intent(in) :: action
+    integer, intent(in) :: ntest, npeak
+
+    integer :: action_code
+    integer :: block_size, grid_size_peaks, grid_size_test
+    integer, device :: nmove_d, nzero_d
+    integer :: nmove_h, nzero_h, idepth, iter, ilev
+
+    if (npeak == 0) return
+
+    if (action == 'relevance') then
+       action_code = 1
+     else if (action == 'saddleden') then
+       action_code = 2
+     else
+        return
+     endif
+
+    block_size = 256
+    grid_size_peaks = (npeak + block_size - 1) / block_size
+    grid_size_test = (ntest + block_size - 1) / block_size
+
+    ! 1. Initialize merge arrays
+    call init_merge_kernel<<<grid_size_peaks, block_size>>>( &
+         new_peak_d, tidal_dens_d, lev_peak_d, alive_d, max_dens_d, relevance_d, &
+         sim%c%relevance_threshold, sim%c%saddle_threshold, npeak, action_code)
+
+    ! 2. Outer loop: Merge hierarchy depth
+    nzero_h = npeak
+    idepth = 0
+    do while (nzero_h > 0)
+
+       ! 2.1 Compute new saddle points
+       call gpu_collect_saddle(sim, ntest, npeak)
+
+       ! 2.2 Inner loop: propagate merges
+       nmove_h = 1
+       iter = 0
+       do while (nmove_h > 0)
+          nmove_d = 0
+          call propagate_merge_kernel<<<grid_size_peaks, block_size>>>( &
+               new_peak_d, tidal_dens_d, alive_d, max_dens_d, saddle_dens_d, saddle_nbor_d, &
+               sim%c%relevance_threshold, sim%c%saddle_threshold, npeak, action_code, nmove_d)
+          nmove_h = nmove_d
+          iter = iter + 1
+       end do
+
+       ! 2.3 Update cells to peak associations (flag1)
+       if (ntest > 0) then
+          call update_flag1_kernel<<<grid_size_test, block_size>>>(flag1, grid_d, cell_d, new_peak_d, ntest)
+       endif
+
+       ! 2.4 Update alive status of merged peaks
+       nzero_d = 0
+       call update_alive_kernel<<<grid_size_peaks, block_size>>>( &
+            new_peak_d, alive_d, lev_peak_d, idepth, npeak, nzero_d)
+       nzero_h = nzero_d
+       idepth = idepth + 1
+    end do
+
+    sim%c%merge_levelmax = idepth - 2
+
+    ! Post-processing
+    if (action == 'relevance') then
+       do ilev = idepth - 2, 0, -1
+          call propagate_merge_level_kernel<<<grid_size_peaks, block_size>>>(new_peak_d, lev_peak_d, ilev, npeak)
+       end do
+       call compute_relevance_kernel<<<grid_size_peaks, block_size>>>(relevance_d, max_dens_d, &
+            & saddle_dens_d, alive_d, npeak)
+    endif
+
+    if (action == 'saddleden') then
+       call init_halo_index_kernel<<<grid_size_peaks, block_size>>>(ind_halo_d, new_peak_d, npeak)
+       do ilev = idepth - 2, 0, -1
+          call propagate_halo_level_kernel<<<grid_size_peaks, block_size>>>(ind_halo_d, lev_peak_d, ilev, npeak)
+       end do
+       call set_halo_level_kernel<<<grid_size_peaks, block_size>>>(lev_peak_d, ind_halo_d, idepth, npeak)
+
+       ! Compute halo mass
+       call init_halo_mass_kernel<<<grid_size_peaks, block_size>>>(halo_mass_d, npeak)
+       call accumulate_halo_mass_kernel<<<grid_size_peaks, block_size>>>(halo_mass_d, ind_halo_d, clump_mass_d, npeak)
+       call assign_halo_mass_kernel<<<grid_size_peaks, block_size>>>(halo_mass_d, ind_halo_d, npeak)
+
+       ! Compute hierarchical clump properties
+       do ilev = 0, idepth - 2
+          call hierarchical_properties_kernel<<<grid_size_peaks, block_size>>>( &
+               new_peak_d, lev_peak_d, clump_mass_d, clump_vol_d, n_cells_d, min_dens_d, halo_mass_d, &
+               sim%c%fraction_threshold, ilev, idepth, npeak)
+       end do
+    endif
+
+  end subroutine gpu_merge_clumps
+
+  ! =========================================================================
+  ! CUDA Kernel: Initialize peak position, velocity, and acceleration
+  ! =========================================================================
+  attributes(global) subroutine init_peak_properties_kernel( &
+       peak_pos_d, peak_vel_d, peak_acc_d, peak_grid_d, peak_cell_d, peak_level_d, &
+       min_dens_d, n_cells_d, clump_mass_d, clump_vol_d, &
+       uold, f, grid, boxlen, skip, npeak, rtype)
+    real(kind=dp), device :: peak_pos_d(1:ndim, *), peak_vel_d(1:ndim, *), peak_acc_d(1:ndim, *)
+    integer, device :: peak_grid_d(*), peak_cell_d(*), peak_level_d(*)
+    real(kind=dp), device :: min_dens_d(*), clump_mass_d(*), clump_vol_d(*)
+    integer, device :: n_cells_d(*)
+    real(kind=dp), device :: uold(1:twotondim, 1:nvar, *)
+    real(kind=dp), device :: f(1:twotondim, 1:3, *)
+    type(oct), device :: grid(*)
+    real(kind=8), value :: boxlen
+    real(kind=8), device :: skip(3)
+    integer, value :: npeak, rtype
+
+    integer :: ipeak, gid, tid, ilevel, igrid, ind
+    real(kind=8) :: dx_loc, xcell(3)
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+    ipeak = gid
+    min_dens_d(ipeak) = huge(0.0_dp)
+    n_cells_d(ipeak) = 0
+    clump_mass_d(ipeak) = 0.0d0
+    clump_vol_d(ipeak) = 0.0d0
+
+    ilevel = peak_level_d(ipeak)
+    igrid = peak_grid_d(ipeak)
+    ind = peak_cell_d(ipeak)
+    dx_loc = boxlen / (2**ilevel)
+
+    xcell(1) = (2*grid(igrid)%ckey(1) + MOD((ind-1),   2) + 0.5d0) * dx_loc - skip(1)
+    xcell(2) = (2*grid(igrid)%ckey(2) + MOD((ind-1)/2, 2) + 0.5d0) * dx_loc - skip(2)
+    xcell(3) = (2*grid(igrid)%ckey(3) + MOD((ind-1)/4, 2) + 0.5d0) * dx_loc - skip(3)
+
+    peak_pos_d(1:ndim, ipeak) = xcell(1:ndim)
+    peak_vel_d(1:ndim, ipeak) = 0.0d0
+    peak_acc_d(1:ndim, ipeak) = 0.0d0
+
+#ifdef HYDRO
+    if (rtype == 4) then
+       peak_vel_d(1:ndim, ipeak) = uold(ind, 2:ndim+1, igrid) / uold(ind, 1, igrid)
+    endif
+#endif
+#ifdef GRAV
+    peak_acc_d(1:ndim, ipeak) = f(ind, 1:ndim, igrid)
+#endif
+
+  end subroutine init_peak_properties_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Accumulate properties over all test cells
+  ! =========================================================================
+  attributes(global) subroutine accumulate_clump_properties_kernel( &
+       flag1, flag2, grid_d, cell_d, level_d, n_cells_d, min_dens_d, clump_mass_d, clump_vol_d, &
+       rho, nref, boxlen, ntest)
+    integer, device :: flag1(1:twotondim, *), flag2(1:twotondim, *)
+    integer, device :: grid_d(*), cell_d(*), level_d(*)
+    integer, device :: n_cells_d(*)
+    real(kind=dp), device :: min_dens_d(*), clump_mass_d(*), clump_vol_d(*)
+    real(kind=dp), device :: rho(1:twotondim, *), nref(1:twotondim, *)
+    real(kind=8), value :: boxlen
+    integer, value :: ntest
+
+    integer :: itest, gid, tid, ilevel, igrid, ind, peak_nr, info
+    integer(kind=8) :: global_peak_id
+    real(kind=dp) :: d, nr, dx_loc, vol
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > ntest) return
+
+    itest = gid
+    igrid = grid_d(itest)
+    ind = cell_d(itest)
+    ilevel = level_d(itest)
+    global_peak_id = flag1(ind, igrid)
+
+    flag2(ind, igrid) = global_peak_id
+
+    if (global_peak_id /= 0) then
+       peak_nr = global_peak_id
+       d = rho(ind, igrid)
+       nr = nref(ind, igrid)
+       dx_loc = boxlen / (2**ilevel)
+       vol = dx_loc**ndim
+
+       info = atomicadd(n_cells_d(peak_nr), 1)
+       info = atomicmin(min_dens_d(peak_nr), d)
+       info = atomicadd(clump_mass_d(peak_nr), vol * nr)
+       info = atomicadd(clump_vol_d(peak_nr), vol)
+    endif
+
+  end subroutine accumulate_clump_properties_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Finalize clump properties (tidal radius)
+  ! =========================================================================
+  attributes(global) subroutine finalize_clump_properties_kernel( &
+       clump_rad_d, clump_mass_d, tidal_dens_d, npeak)
+    real(kind=dp), device :: clump_rad_d(*), clump_mass_d(*), tidal_dens_d(*)
+    integer, value :: npeak
+
+    integer :: ipeak, gid, tid
+    real(kind=8), parameter :: pi = 3.141592653589793d0
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    ipeak = gid
+    clump_rad_d(ipeak) = (clump_mass_d(ipeak) * 3.0d0 / (4.0d0 * pi * tidal_dens_d(ipeak)))**(1.0d0 / 3.0d0)
+
+  end subroutine finalize_clump_properties_kernel
+
+  ! =========================================================================
+  ! Host Driver: Compute clump properties on GPU
+  ! =========================================================================
+  subroutine gpu_compute_clump_properties(sim, rtype, ntest, npeak)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+    integer, intent(in) :: rtype, ntest, npeak
+
+    integer :: block_size, grid_size_peaks, grid_size_test
+
+    if (npeak == 0) return
+
+    block_size = 256
+    grid_size_peaks = (npeak + block_size - 1) / block_size
+    grid_size_test = (ntest + block_size - 1) / block_size
+
+    ! 1. Launch peak properties initialization
+    call init_peak_properties_kernel<<<grid_size_peaks, block_size>>>( &
+         peak_pos_d, peak_vel_d, peak_acc_d, peak_grid_d, peak_cell_d, peak_level_d, &
+         min_dens_d, n_cells_d, clump_mass_d, clump_vol_d, &
+         uold, f, grid, sim%r%boxlen, sim%m%skip, npeak, rtype)
+
+    ! 2. Accumulate properties from cells
+    call accumulate_clump_properties_kernel<<<grid_size_test, block_size>>>( &
+         flag1, flag2, grid_d, cell_d, level_d, n_cells_d, min_dens_d, clump_mass_d, clump_vol_d, &
+         rho, nref, sim%r%boxlen, ntest)
+
+    ! 3. Finalize clump properties
+    call finalize_clump_properties_kernel<<<grid_size_peaks, block_size>>>( &
+         clump_rad_d, clump_mass_d, tidal_dens_d, npeak)
+
+  end subroutine gpu_compute_clump_properties
+
+  ! =========================================================================
+  ! Host Driver: Complete clump finding workflow on the GPU
+  ! =========================================================================
+  subroutine gpu_sink_clump(sim)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+
+    ! 1. Load clump finder parameters
+    sim%c%relevance_threshold = sim%r%sink_relevance_threshold
+    sim%c%density_threshold   = sim%r%sink_density_threshold
+    sim%c%saddle_threshold    = sim%r%sink_saddle_threshold
+    sim%c%mass_threshold      = sim%r%sink_mass_threshold
+    sim%c%fraction_threshold  = sim%r%sink_fraction_threshold
+
+    ! 2. Smooth density field
+    call gpu_smooth_rho(sim)
+
+    ! 3. Collect test cells above threshold
+    call gpu_collect_test(sim, sim%c%density_threshold, sim%c%ntest)
+
+    if (sim%c%ntest == 0) return
+
+    ! 4. Detect local density peaks
+    call gpu_collect_peak(sim, sim%c%ntest, sim%c%npeak)
+
+    if (sim%c%npeak == 0) return
+
+    ! 5. Perform watershed segmentation (collect patches)
+    call gpu_collect_patch(sim, sim%c%ntest, sim%c%npeak)
+
+    ! 6. Merge irrelevant clumps
+    call gpu_merge_clumps(sim, 'relevance', sim%c%ntest, sim%c%npeak)
+
+    ! 7. Compute clump properties
+    call gpu_compute_clump_properties(sim, sim%r%rho_type_sink, sim%c%ntest, sim%c%npeak)
+
+    ! 8. Merge clumps into halos if saddle density threshold is positive
+    if (sim%c%saddle_threshold > 0.0d0) then
+       call gpu_merge_clumps(sim, 'saddleden', sim%c%ntest, sim%c%npeak)
+    endif
+
+  end subroutine gpu_sink_clump
+
+end module clump_device

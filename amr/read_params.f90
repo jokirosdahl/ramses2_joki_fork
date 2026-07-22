@@ -336,6 +336,7 @@ subroutine m_read_params(pst)
   integer :: star_dep_algo=2                   ! star GPU CIC deposition algorithm
   integer :: star_force_interpolation_scheme=1 ! star force interpolation schemes
   integer :: sink_mass_deposition_scheme=1     ! sink mass deposition schemes
+  integer :: sink_dep_algo=2                   ! sink GPU CIC deposition algorithm
   integer :: sink_force_interpolation_scheme=1 ! sink force interpolation schemes
   integer :: tree_mass_deposition_scheme=1     ! tree mass deposition schemes
   integer :: tree_force_interpolation_scheme=1 ! tree force interpolation schemes
@@ -579,7 +580,7 @@ subroutine m_read_params(pst)
        & ,cg_levelmin,cic_levelmax,fast_solver,gravity_test &
        & ,part_mass_deposition_scheme,part_dep_algo,part_force_interpolation_scheme &
        & ,star_mass_deposition_scheme,star_dep_algo,star_force_interpolation_scheme &
-       & ,sink_mass_deposition_scheme,sink_force_interpolation_scheme &
+       & ,sink_mass_deposition_scheme,sink_dep_algo,sink_force_interpolation_scheme &
        & ,tree_mass_deposition_scheme,tree_force_interpolation_scheme
   ! Movies parameters
   namelist/movie_params/levelmax_frame,nw_frame,nh_frame,ivar_frame &
@@ -1311,6 +1312,7 @@ subroutine m_read_params(pst)
   s%r%star_dep_algo=star_dep_algo
   s%r%star_force_interpolation_scheme=star_force_interpolation_scheme
   s%r%sink_mass_deposition_scheme=sink_mass_deposition_scheme
+  s%r%sink_dep_algo=sink_dep_algo
   s%r%sink_force_interpolation_scheme=sink_force_interpolation_scheme
   s%r%tree_mass_deposition_scheme=tree_mass_deposition_scheme
   s%r%tree_force_interpolation_scheme=tree_force_interpolation_scheme

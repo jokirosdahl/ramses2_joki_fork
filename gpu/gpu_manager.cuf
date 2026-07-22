@@ -40,7 +40,7 @@ recursive subroutine r_set_grid_device(pst)
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
 
-     ! Particle H→D (allocated in init_part).
+     ! Particle H→D
      if (pst%s%r%part .and. allocated(pst%s%p%xp) .and. allocated(xp)) then
         call nvtxStartRange("Copy part from host to device", color=5)!red
         xp     = pst%s%p%xp
@@ -64,6 +64,22 @@ recursive subroutine r_set_grid_device(pst)
         star_levelp = pst%s%star%levelp
         star_sortp  = pst%s%star%sortp
         if (allocated(star_idp)) star_idp = pst%s%star%idp
+        call GPU_Error_Check(__FILE__, __LINE__)
+        call nvtxEndRange()
+     endif
+
+     ! Sink particle H→D
+     if (pst%s%r%sink .and. allocated(pst%s%sink%xp) .and. allocated(sink_xp)) then
+        call nvtxStartRange("Copy sink from host to device", color=5)!red
+        sink_xp     = pst%s%sink%xp
+        sink_vp     = pst%s%sink%vp
+        sink_fp     = pst%s%sink%fp
+        sink_jp     = pst%s%sink%jp
+        sink_mp     = pst%s%sink%mp
+        sink_tp     = pst%s%sink%tp
+        sink_levelp = pst%s%sink%levelp
+        sink_sortp  = pst%s%sink%sortp
+        if (allocated(sink_idp)) sink_idp = pst%s%sink%idp
         call GPU_Error_Check(__FILE__, __LINE__)
         call nvtxEndRange()
      endif
@@ -171,6 +187,21 @@ subroutine gpu_to_host_part(pst)
      pst%s%star%levelp = star_levelp
      pst%s%star%sortp  = star_sortp
      if (allocated(star_idp)) pst%s%star%idp = star_idp
+     call GPU_Error_Check(__FILE__, __LINE__)
+     call nvtxEndRange()
+  endif
+
+  if (allocated(sink_xp)) then
+     call nvtxStartRange("Copy sink from device to host", color=5)!red
+     pst%s%sink%xp     = sink_xp
+     pst%s%sink%vp     = sink_vp
+     pst%s%sink%fp     = sink_fp
+     pst%s%sink%jp     = sink_jp
+     pst%s%sink%mp     = sink_mp
+     pst%s%sink%tp     = sink_tp
+     pst%s%sink%levelp = sink_levelp
+     pst%s%sink%sortp  = sink_sortp
+     if (allocated(sink_idp)) pst%s%sink%idp = sink_idp
      call GPU_Error_Check(__FILE__, __LINE__)
      call nvtxEndRange()
   endif
@@ -403,7 +434,6 @@ subroutine gpu_allocate_part(sim)
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   allocate(phip(1:sim%r%npartmax))
 #endif
-  ! gpu_cic_part source map.
   allocate(xp_swap(1:sim%r%npartmax))
   allocate(isp_swap(1:sim%r%npartmax))
   allocate(idp_swap(1:sim%r%npartmax))
@@ -438,7 +468,6 @@ subroutine gpu_allocate_star(sim)
 #ifdef OUTPUT_PARTICLE_POTENTIAL
   allocate(star_phip(1:sim%r%nstarmax))
 #endif
-  ! gpu_cic_part source map.
   if (.not. allocated(xp_swap)) allocate(xp_swap(1:sim%r%nstarmax))
   if (.not. allocated(isp_swap)) allocate(isp_swap(1:sim%r%nstarmax))
   if (.not. allocated(idp_swap)) allocate(idp_swap(1:sim%r%nstarmax))
@@ -451,6 +480,41 @@ subroutine gpu_allocate_star(sim)
   call ensure_scan_capacity_part(scan_size, sim%r%star_dep_algo)
 
 end subroutine gpu_allocate_star
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine gpu_allocate_sink(sim)
+  use amr_parameters, ONLY: ndim, twotondim
+  use part_device, only: ensure_scan_capacity_part
+  implicit none
+  type(ramses_t) :: sim
+  integer :: scan_size
+
+  allocate(sink_xp(1:sim%r%nsinkmax, 1:ndim))
+  allocate(sink_vp(1:sim%r%nsinkmax, 1:ndim))
+  allocate(sink_fp(1:sim%r%nsinkmax, 1:ndim))
+  allocate(sink_jp(1:sim%r%nsinkmax, 1:ndim))
+  allocate(sink_mp(1:sim%r%nsinkmax))
+  allocate(sink_tp(1:sim%r%nsinkmax))
+  allocate(sink_sortp(1:sim%r%nsinkmax))
+  allocate(sink_levelp(1:sim%r%nsinkmax))
+  if (sim%r%nlevelmax > sim%r%levelmin) allocate(sink_idp(1:sim%r%nsinkmax))
+#ifdef OUTPUT_PARTICLE_POTENTIAL
+  allocate(sink_phip(1:sim%r%nsinkmax))
+#endif
+  if (.not. allocated(xp_swap)) allocate(xp_swap(1:sim%r%nsinkmax))
+  if (.not. allocated(isp_swap)) allocate(isp_swap(1:sim%r%nsinkmax))
+  if (.not. allocated(idp_swap)) allocate(idp_swap(1:sim%r%nsinkmax))
+  ! CUB workspace
+#if defined(CUB_SORT_PART)
+  if (.not. allocated(hkeyp)) allocate(hkeyp(1:sim%r%nsinkmax))
+#endif
+  ! Prefix sum arrays
+  scan_size = max(sim%r%nsinkmax, (sim%m%ngridmax + sim%m%ncachemax) * twotondim)
+  call ensure_scan_capacity_part(scan_size, sim%r%sink_dep_algo)
+
+end subroutine gpu_allocate_sink
 !###########################################################
 !###########################################################
 !###########################################################

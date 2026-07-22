@@ -42,6 +42,9 @@ recursive subroutine r_init_part(pst)
      end if
      if(pst%s%r%sink)then
         call init_sink(pst%s%r,pst%s%g,pst%s%sink)
+#ifdef _CUDA
+        call gpu_allocate_sink(pst%s)
+#endif
      end if
      if(pst%s%r%tree)then
         call init_tree(pst%s%r,pst%s%g,pst%s%tree)

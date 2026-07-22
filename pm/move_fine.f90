@@ -1,7 +1,7 @@
 module move_fine_module
   use rho_fine_module, only: cic_weight, cic_index, tsc_weight, tsc_index, pcs_weight, pcs_index
 #ifdef _CUDA
-  use part_device, only: gpu_kick_drift_part, gpu_kick_drift_star
+  use part_device, only: gpu_kick_drift_part, gpu_kick_drift_star, gpu_kick_drift_sink
 #elif defined(_METAL)
   use metal_runner, only: metal_kick_drift_part
 #endif
@@ -65,16 +65,11 @@ recursive subroutine r_kick_drift_part(pst,input_array,input_size,output_array,o
      ! Force interpolation for various components (part, star, sink, tree...)
      ! based on their respective deposition schemes (CIC 1, TSC 2 or PCS 3)
 #ifdef _CUDA
-     if(pst%s%r%part)then
-        call gpu_kick_drift_part(pst%s, ilevel, action_part)
-     endif
-     if(pst%s%r%star)then
-        call gpu_kick_drift_star(pst%s, ilevel, action_part)
-     endif
+     if (pst%s%r%part) call gpu_kick_drift_part(pst%s, ilevel, action_part)
+     if (pst%s%r%star) call gpu_kick_drift_star(pst%s, ilevel, action_part)
+     if (pst%s%r%sink) call gpu_kick_drift_sink(pst%s, ilevel, action_part)
 #elif defined(_METAL)
-     if(pst%s%r%part)then
-        call metal_kick_drift_part(pst%s, ilevel, action_part)
-     endif
+     if (pst%s%r%part) call metal_kick_drift_part(pst%s, ilevel, action_part)
 #else
      if(pst%s%r%part)then
         if(pst%s%r%part_force_interpolation_scheme==1)then
@@ -344,16 +339,11 @@ subroutine cic_kick_drift_part(s,p,ilevel,action_part)
         do ind=1,twotondim
            ff(1:ndim)=ff(1:ndim)+m%f(icell(ind),1:ndim,igrid(ind))*vol(ind)
         end do
-        ! Store potential
-        if(allocated(p%phip))then
+        if(allocated(p%phip))then ! Store potential
            p%phip(ipart)=0.0
            do ind=1,twotondim
               p%phip(ipart)=p%phip(ipart)+m%phi(icell(ind),igrid(ind))*vol(ind)
            end do
-        endif
-        ! Store old force
-        if(allocated(p%fp))then
-           p%fp(ipart,1:ndim)=ff(1:ndim)
         endif
 #endif
      endif
@@ -394,6 +384,8 @@ subroutine cic_kick_drift_part(s,p,ilevel,action_part)
 !!$           if(norm2>0)then
 !!$              p%xp(ipart,1:ndim) = p%xp(ipart,1:ndim) + (ff(1:ndim)-p%fp(ipart,1:ndim))/sqrt(norm2)*delta
 !!$           endif
+           ! Store force
+           p%fp(ipart,1:ndim)=ff(1:ndim)
         endif
 
      else if(action_part.EQ.action_kick_only)then
