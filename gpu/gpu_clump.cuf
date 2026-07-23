@@ -6,7 +6,7 @@ module clump_device
   use gpu_utils
   use cudafor
   use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val, &
-       uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off
+       uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off, d_skip
   implicit none
 
   interface atomiccas
@@ -377,7 +377,7 @@ contains
     real(kind=dp), device :: rho(1:twotondim, *)
     type(oct), device :: grid(*)
     logical, device :: periodic(3)
-    real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
+    integer, device :: box_ckey_min(3,*), box_ckey_max(3,*)
     integer(kind=8), device :: hash_key(*)
     integer(kind=4), device :: hash_val(*)
     integer, value :: hash_size, ntest
@@ -733,7 +733,7 @@ contains
     real(kind=dp), device :: rho(1:twotondim, *)
     type(oct), device :: grid(*)
     logical, device :: periodic(3)
-    real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
+    integer, device :: box_ckey_min(3,*), box_ckey_max(3,*)
     real(kind=dp), value :: threshold
     integer(kind=8), device :: hash_key(*)
     integer(kind=4), device :: hash_val(*)
@@ -1412,7 +1412,7 @@ contains
     call init_peak_properties_kernel<<<grid_size_peaks, block_size>>>( &
          peak_pos_d, peak_vel_d, peak_acc_d, peak_grid_d, peak_cell_d, peak_level_d, &
          min_dens_d, n_cells_d, clump_mass_d, clump_vol_d, &
-         uold, f, grid, sim%r%boxlen, sim%m%skip, npeak, rtype)
+         uold, f, grid, sim%r%boxlen, d_skip, npeak, rtype)
 
     ! 2. Accumulate properties from cells
     call accumulate_clump_properties_kernel<<<grid_size_test, block_size>>>( &
