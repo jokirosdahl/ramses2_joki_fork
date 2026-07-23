@@ -1,6 +1,7 @@
 !> GPU Clump Finder and Merger CUDA kernels.
 module clump_device
   use amr_parameters, only: dp, ndim, twotondim, nbin
+  use hydro_parameters, only: nvar
   use oct_commons, only: oct
   use gpu_utils
   use cudafor

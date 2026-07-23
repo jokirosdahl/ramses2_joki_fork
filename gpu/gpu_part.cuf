@@ -3250,7 +3250,7 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, fp_d, levelp_d,
         do idim = 1, ndim
            fp_d(ipart + (idim-1)*leading) = ff(idim)
         end do
-     end do
+     endif
 
   else if (action_part == 1) then ! kick-only
 
