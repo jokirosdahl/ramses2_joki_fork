@@ -9,13 +9,7 @@ module clump_device
        uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off, d_skip
   implicit none
 
-  interface atomiccas
-     attributes(device) integer(kind=8) function atomiccas(val, cmp, xchg) bind(c, name='atomicCAS')
-       import :: dp
-       real(kind=dp) :: val
-       integer(kind=8), value :: cmp, xchg
-     end function atomiccas
-  end interface
+
 
   ! -------------------------------------------------------------
   ! Device arrays for test-cells (allocated to ntestmax)
@@ -702,17 +696,15 @@ contains
     integer, intent(inout) :: nbor_address
     integer, intent(in) :: nbor_val
 
-    integer(kind=8) :: assumed, old, expected
-    real(kind=dp) :: old_val
+    real(kind=dp) :: assumed_real, expected_real, old_real
 
-    old = transfer(address, old)
+    old_real = address
     do
-       old_val = transfer(old, old_val)
-       if (val <= old_val) exit
-       assumed = old
-       expected = transfer(val, expected)
-       old = atomiccas(address, assumed, expected)
-       if (old == assumed) then
+       if (val <= old_real) exit
+       assumed_real = old_real
+       expected_real = val
+       old_real = atomiccas(address, assumed_real, expected_real)
+       if (old_real == assumed_real) then
           if (update_nbor) nbor_address = nbor_val
           exit
        endif
