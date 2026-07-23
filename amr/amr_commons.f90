@@ -414,6 +414,8 @@ module amr_commons
      real(kind=8)::sink_fraction_threshold=2d0
      real(kind=8)::sink_radius=-1
      real(kind=8)::sink_delta_tout=0
+     real(kind=8)::sink_nstar_frac=-1
+     real(kind=8)::sink_mseed
      logical::sink_form=.false.
      logical::sink_merge=.false.
      logical::sink_refine=.false.

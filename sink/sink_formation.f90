@@ -152,13 +152,18 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   integer::info
   integer,dimension(1:g%ncpu)::nsite_cpu_tot,nsink_cpu_tot
 #endif
+  real(kind=8)::dx,vol,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
   integer(kind=8),dimension(0:g%ncpu)::nsite_cum,nsink_cum
   integer,dimension(1:g%ncpu)::nsite_cpu,nsink_cpu
-  integer::i,j,icpu,nsite,nsink,nsink_loc,peak_nr
-  real(kind=8)::purity
+  integer::i,j,icpu,ilevel,nsite,nsink,nsink_loc,peak_nr,igrid,ind
+  real(kind=8)::purity,mgas,mseed,dgas,dseed
   logical::ok
 
 #if NDIM>2
+  ! Conversion factor from user units to cgs units
+  call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+  scale_m=scale_d*scale_l**3
+  mseed=r%sink_mseed*M_sun/scale_m
   !---------------------------
   ! Count sink formation sites
   !---------------------------
@@ -166,6 +171,11 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   c%form_sink=0
   ! Loop over peaks
   do j=1,c%npeak
+     ilevel=c%peak_level(j)
+     igrid=c%peak_grid(j)
+     ind=c%peak_cell(j)
+     dx=r%boxlen/2**ilevel
+     vol=dx**ndim
      ok=.true.
      !-------------------------------------
      ! Add here all sink formation criteria
@@ -174,6 +184,12 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
      if(c%relevance(j)<=c%relevance_threshold)ok=.false.
      if(c%clump_mass(j)<=c%mass_threshold)ok=.false.
      if(c%nsink(j)>0)ok=.false.
+#if HYDRO
+     dgas=m%uold(ind,1,igrid)
+     if(dgas<=r%sink_nstar_frac*r%n_star)ok=.false.
+     mgas=m%uold(ind,1,igrid)*vol
+     if(mseed>0.75*mgas)ok=.false.
+#endif
      ! Set sink formation flag
      if(ok)c%form_sink(j)=1
      if(ok)nsite=nsite+1
@@ -201,6 +217,11 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   ! Loop over peaks
   do j=1,c%npeak
      if(c%form_sink(j).eq.1)then
+        ilevel=c%peak_level(j)
+        igrid=c%peak_grid(j)
+        ind=c%peak_cell(j)
+        dx=r%boxlen/2**ilevel
+        vol=dx**ndim
         nsink_loc=nsink_loc+1
         p%npart=p%npart+1
         if(p%npart>r%nsinkmax)then
@@ -222,10 +243,16 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
         p%fp(p%npart,3)=c%peak_acc(j,3)
         ! Compute sink particle mass
         p%mp(p%npart)=0
+#ifdef HYDRO
+        p%mp(p%npart)=mseed
+        dseed=mseed/vol
+        m%uold(ind,1,igrid)=m%uold(ind,1,igrid)-dseed
+        msink_loc=msink_loc+mseed
+#endif
         ! Compute sink particle birth time using proper time
         p%tp(p%npart)=g%texp
         ! Compute level
-        p%levelp(p%npart)=c%peak_level(j)
+        p%levelp(p%npart)=ilevel
      endif
   end do
   p%tailp(r%nlevelmax)=p%tailp(r%nlevelmax)+nsink_loc
@@ -252,7 +279,7 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   end do
   p%npart_tot=p%npart_tot+nsink_cum(g%ncpu)
 
-  if(g%myid==1)write(*,*)'Found',int(nsink_cum(g%ncpu),kind=4),' new sinks for a total of',int(p%npart_tot,kind=4)
+!  if(g%myid==1)write(*,*)'Formed',int(nsink_cum(g%ncpu),kind=4),' new sinks for a total of',int(p%npart_tot,kind=4)
 
 #endif
 
@@ -406,7 +433,7 @@ subroutine sink_clump(s)
   ! Count sinks in each clump hierarchically.
   !---------------------------------------------
   call particle_peak_id(s,s%sink)
-  call sink_in_peak(s,.true.,.true.)
+  call sink_in_peak(s,.false.,.true.)
 
 #endif
 end subroutine sink_clump

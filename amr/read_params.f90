@@ -475,7 +475,7 @@ subroutine m_read_params(pst)
   real(kind=8) :: cone_phi = 0.0 ! Rotation of the cone's x-axis around the box's z-axis in degrees
   real(kind=8), dimension(1:3) :: cone_observer = (/0.0, 0.0, 0.0/) ! Observer position in code units
 
-  ! Sink formation parameters
+  ! Sink formation/dynamical parameters
   integer::rho_type_sink=1
   logical::sink_descent=.false.
   real(kind=8)::fudge_descent=0.5d0
@@ -485,7 +485,9 @@ subroutine m_read_params(pst)
   real(kind=8)::sink_mass_threshold=0
   real(kind=8)::sink_purity_threshold=-1
   real(kind=8)::sink_fraction_threshold=2d0
+  real(kind=8)::sink_nstar_frac=-1 ! Gas density threshold in units of SF density
   real(kind=8)::sink_delta_tout=0 ! Time interval in code units between each sink high frequency dump
+  real(kind=8)::sink_mseed ! Sink seed mass in solar masses
   logical::sink_form=.false.
   logical::sink_merge=.false.
   logical::sink_refine=.false.
@@ -683,6 +685,7 @@ subroutine m_read_params(pst)
   namelist/sink_accretion_params/accretion_type,acc_sink_boost,bondi_use_vrel,use_rho_inf &
        & ,eddington_cap,sink_b_spline_order,bondi_use_gas_mass,use_bondi_lambda &
        & ,t_start_black_hole,use_local_bondi_rate,static_sink,sink_delta_tout &
+       & ,sink_nstar_frac,sink_mseed &
        & ,fix_sink_mass,eddington_floor,mass_weighting,momentum_conserving
   ! AGN Feedback parameters
   namelist/sink_feedback_params/agn,agn_feedback_radius,agn_weighting_scheme,epsilon_rad &
@@ -1675,6 +1678,8 @@ subroutine m_read_params(pst)
   s%r%sink_fraction_threshold=sink_fraction_threshold
   s%r%static_sink=static_sink
   s%r%sink_delta_tout=sink_delta_tout
+  s%r%sink_nstar_frac=sink_nstar_frac
+  s%r%sink_mseed=sink_mseed
   s%r%fix_sink_mass=fix_sink_mass
   s%r%drag_sink=drag_sink
 
