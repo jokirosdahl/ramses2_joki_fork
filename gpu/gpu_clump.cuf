@@ -5,8 +5,17 @@ module clump_device
   use oct_commons, only: oct
   use gpu_utils
   use cudafor
-  use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val
+  use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val, &
+       uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off
   implicit none
+
+  interface atomiccas
+     attributes(device) integer(kind=8) function atomiccas(val, cmp, xchg)
+       import :: dp
+       real(kind=dp) :: val
+       integer(kind=8), value :: cmp, xchg
+     end function atomiccas
+  end interface
 
   ! -------------------------------------------------------------
   ! Device arrays for test-cells (allocated to ntestmax)
@@ -285,7 +294,7 @@ contains
     integer :: num_octs, head_idx, num_total_cells
     integer :: block_y, grid_x
     type(dim3) :: block_dim, grid_dim
-    integer :: total_test_d
+    integer, device :: total_test_d
 
     block_y = 16
     block_dim = dim3(twotondim, block_y, 1)
@@ -329,7 +338,8 @@ contains
   attributes(device) subroutine get_parent_cell_device(hash_nbor, igridn, icelln, hash_key, hash_val, hash_size)
     integer(kind=8), intent(in) :: hash_nbor(0:3)
     integer, intent(out) :: igridn, icelln
-    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer(kind=8), device :: hash_key(*)
+    integer(kind=4), device :: hash_val(*)
     integer, value :: hash_size
 
     integer :: ilev_par
@@ -368,7 +378,8 @@ contains
     type(oct), device :: grid(*)
     logical, device :: periodic(3)
     real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
-    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer(kind=8), device :: hash_key(*)
+    integer(kind=4), device :: hash_val(*)
     integer, value :: hash_size, ntest
 
     integer :: itest, gid, tid
@@ -482,7 +493,7 @@ contains
     integer, intent(out) :: npeak
 
     integer :: block_size, grid_size
-    integer :: total_peaks_d
+    integer, device :: total_peaks_d
 
     block_size = 256
     grid_size = (ntest + block_size - 1) / block_size
@@ -724,7 +735,8 @@ contains
     logical, device :: periodic(3)
     real(kind=8), device :: box_ckey_min(3,*), box_ckey_max(3,*)
     real(kind=dp), value :: threshold
-    integer(kind=8), device :: hash_key(*), hash_val(*)
+    integer(kind=8), device :: hash_key(*)
+    integer(kind=4), device :: hash_val(*)
     integer, value :: hash_size, ntest
 
     integer :: itest, gid, tid
@@ -841,14 +853,14 @@ contains
 
     ! Initialize saddle density to threshold and saddle neighbor to 0
     call init_saddle_arrays_kernel<<<grid_size_peaks, block_size>>>( &
-         saddle_dens_d, saddle_nbor_d, sim%c%density_threshold, npeak)
+         saddle_dens_d, saddle_nbor_d, real(sim%c%density_threshold, kind=dp), npeak)
 
     grid_size = (ntest + block_size - 1) / block_size
 
     ! Collect densest saddle points and corresponding peak id
     call collect_saddle_kernel<<<grid_size, block_size>>>( &
          flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
-         rho, grid, periodic, box_ckey_min, box_ckey_max, sim%c%density_threshold, &
+         rho, grid, periodic, box_ckey_min, box_ckey_max, real(sim%c%density_threshold, kind=dp), &
          hash_key, hash_val, sim%m%hash_size, ntest)
 
   end subroutine gpu_collect_saddle
@@ -1192,7 +1204,7 @@ contains
     ! 1. Initialize merge arrays
     call init_merge_kernel<<<grid_size_peaks, block_size>>>( &
          new_peak_d, tidal_dens_d, lev_peak_d, alive_d, max_dens_d, relevance_d, &
-         sim%c%relevance_threshold, sim%c%saddle_threshold, npeak, action_code)
+         real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), npeak, action_code)
 
     ! 2. Outer loop: Merge hierarchy depth
     nzero_h = npeak
@@ -1209,7 +1221,7 @@ contains
           nmove_d = 0
           call propagate_merge_kernel<<<grid_size_peaks, block_size>>>( &
                new_peak_d, tidal_dens_d, alive_d, max_dens_d, saddle_dens_d, saddle_nbor_d, &
-               sim%c%relevance_threshold, sim%c%saddle_threshold, npeak, action_code, nmove_d)
+               real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), npeak, action_code, nmove_d)
           nmove_h = nmove_d
           iter = iter + 1
        end do
@@ -1254,7 +1266,7 @@ contains
        do ilev = 0, idepth - 2
           call hierarchical_properties_kernel<<<grid_size_peaks, block_size>>>( &
                new_peak_d, lev_peak_d, clump_mass_d, clump_vol_d, n_cells_d, min_dens_d, halo_mass_d, &
-               sim%c%fraction_threshold, ilev, idepth, npeak)
+               real(sim%c%fraction_threshold, kind=dp), ilev, idepth, npeak)
        end do
     endif
 
@@ -1432,7 +1444,7 @@ contains
     call gpu_smooth_rho(sim)
 
     ! 3. Collect test cells above threshold
-    call gpu_collect_test(sim, sim%c%density_threshold, sim%c%ntest)
+    call gpu_collect_test(sim, real(sim%c%density_threshold, kind=dp), sim%c%ntest)
 
     if (sim%c%ntest == 0) return
 
