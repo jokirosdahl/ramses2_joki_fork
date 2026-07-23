@@ -145,9 +145,8 @@ subroutine file_descriptor_cr(r,filename)
   open(unit=ilun,file=fileloc,form='formatted')
 
   ! Write variable names in backup file
-  write(ilun,'("nvar        =",I11)')ncrgrp*(1+ndim)
+  write(ilun,'("nvar        =",I11)')ncrgrp*ndim
   do igrp = 1, ncrgrp
-     write(ilun,'("variable #",I2,": cr_density_", i0.2)')1+(igrp-1)*(ndim+1), igrp
      do idim = 1, ndim
         write(ilun,'("variable #",I2,": cr_flux_", i0.2, "_", a)')1+idim+(igrp-1)*(ndim+1), igrp, dim_keys(idim)
      end do
@@ -184,13 +183,13 @@ subroutine output_crinfo(r, g, filename)
   open(unit=ilun,file=fileloc,form='formatted')
 
   ! Write run parameters
-  write(ilun,'("ncruvar       = ", I11)') ncruvar
-  write(ilun,'("ncrgrp       = ", I11)') ncrgrp
+  write(ilun,'("ncruvar     = ", I11)') ncruvar
+  write(ilun,'("ncrgrp      = ", I11)') ncrgrp
 
 
   ! Write physical parameters
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-  write(ilun,'("cr_c_fraction= ", 100(E15.7))') g%cr_c(r%levelmin:r%nlevelmax)*scale_t/c_cgs
+  write(ilun,'("cr_c_frac   = ", 100(E15.7))') g%cr_c(r%levelmin:r%nlevelmax)*scale_t/c_cgs
   write(ilun,*)
 
   ! Write photon group properties
