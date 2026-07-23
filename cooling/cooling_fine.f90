@@ -1,7 +1,10 @@
 module cooling_fine_module
+  use cooling_module, only: set_table, cooling_needs_update
 #ifdef _CUDA
   use gpu_runner, only: gpu_cooling
-  use nvtx
+  use cooling_device, only: gpu_upload_cooling_table
+#elif defined(_METAL)
+  use metal_runner, only: metal_cooling, metal_upload_cooling_table
 #endif
 contains
 !###########################################################
@@ -26,9 +29,27 @@ recursive subroutine r_cooling_fine(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_cooling(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_cooling(pst%s, ilevel)
 #else
      call cooling_fine(pst%s%r,pst%s%g,pst%s%m,pst%s%cool,pst%s%tables,ilevel)
 #endif
+
+     ! Compute new cooling table for cosmo runs
+#ifndef RTZ
+     if(pst%s%r%cooling.and.ilevel==pst%s%r%levelmin.and.pst%s%r%cosmo)then
+        if (cooling_needs_update(pst%s%cool, dble(pst%s%g%aexp))) then
+           if(pst%s%g%myid==1)write(*,*)'Computing new cooling table'
+           call set_table(pst%s%cool,dble(pst%s%g%aexp))
+#ifdef _CUDA
+           call gpu_upload_cooling_table(pst%s%cool)
+#elif defined(_METAL)
+           call metal_upload_cooling_table(pst%s%cool)
+#endif
+        endif
+     endif
+#endif
+
   endif
 
 end subroutine r_cooling_fine
@@ -42,7 +63,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   use hydro_parameters, only: nener, nion
   use rt_parameters, only: nrtgrp, smallnp
   use amr_commons, only: run_t, global_t, mesh_t
-  use cooling_module, only: cooling_t, solve_cooling, T2_min_fix, set_table
+  use cooling_module, only: cooling_t, solve_cooling, T2_min_fix
   use coolrates_module, only: neq_cooling_t
 #ifdef RTZ
   use rtz_cooling_module, only: rtz_solve_cooling
@@ -66,7 +87,8 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   integer,dimension(1:nvector)::ind_leaf
   real(kind=8),dimension(1:nvector)::nH,T2,delta_T2,ekk,err,emag
   real(kind=8),dimension(1:nvector)::T2min,Zsolar,boost
-!  logical,dimension(1:nvector)::cooling_on=.true.
+  real(kind=8)::factor1, factor2, factor3
+  !  logical,dimension(1:nvector)::cooling_on=.true.
 #ifdef RTZ
   real(kind=8),dimension(1:n_elements, 1:n_elements, 1:nvector):: xion
 #else
@@ -284,6 +306,13 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
                  T2min(i) = r%eos_T2*(nH(i)/nH_eos)**(r%eos_index-1.0d0)
               endif
            end do
+        else if(r%eos_type==5)then ! Second collapse
+           do i=1,nleaf
+            factor1 = sqrt(1 + (nH(i)/(3.866301516d-15*c%X/mH))**(2*0.4))
+            factor2 = (1 + (nH(i)/(3.866301516d-10*c%X/mH)))**(-0.3)
+            factor3 = (1 + (nH(i)/(3.866301516d-5*c%X/mH)))**0.56667
+            T2min(i) = r%eos_T2 * factor1 * factor2 * factor3
+           end do
         endif
 
         ! Compute thermal temperature by subtracting the polytrope
@@ -483,15 +512,8 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
      ! End loop over grid
   end do
   ! End loop over cells
-
-#ifndef RTZ
-  ! Compute new cooling table
-  if(r%cooling.and.ilevel==r%levelmin.and.r%cosmo)then
-     if(g%myid==1)write(*,*)'Computing new cooling table'
-     call set_table(c,dble(g%aexp))
-  endif
-#endif
 #endif
 
 end subroutine cooling_fine
+
 end module cooling_fine_module

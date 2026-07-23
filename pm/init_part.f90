@@ -9,6 +9,11 @@ recursive subroutine r_init_part(pst)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
+#ifdef _CUDA
+  use gpu_manager
+#elif defined(_METAL)
+  use metal_runner
+#endif
   implicit none
   type(pst_t)::pst
   !--------------------------------------------------------------------
@@ -22,10 +27,18 @@ recursive subroutine r_init_part(pst)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
      if(pst%s%r%part)then
-        call init_part(pst%s%r,pst%s%g,pst%s%p   )
+        call init_part(pst%s%r,pst%s%g,pst%s%m,pst%s%p)
+#ifdef _CUDA
+        call gpu_allocate_part(pst%s)
+#elif defined(_METAL)
+        call metal_allocate_part(pst%s)
+#endif
      endif
      if(pst%s%r%star)then
-        call init_star(pst%s%r,pst%s%g,pst%s%star)
+        call init_star(pst%s%r,pst%s%g,pst%s%m,pst%s%star)
+#ifdef _CUDA
+        call gpu_allocate_star(pst%s)
+#endif
      end if
      if(pst%s%r%sink)then
         call init_sink(pst%s%r,pst%s%g,pst%s%sink)
@@ -46,18 +59,19 @@ end subroutine r_init_part
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine init_part(r,g,p)
-  use amr_parameters, only: ndim
-  use amr_commons, only: run_t,global_t
+subroutine init_part(r,g,m,p)
+  use amr_parameters, only: ndim, twotondim, threetondim
+  use amr_commons, only: run_t,global_t,mesh_t
   use pm_parameters, only: PART_TYPE
   use pm_commons, only: part_t
   implicit none
   type(run_t)::r
   type(global_t)::g
+  type(mesh_t)::m
   type(part_t)::p
-  !---------------------------------
-  ! Allocate PART particle variables
-  !---------------------------------
+  !--------------------------------------------
+  ! Allocate PART particle variables on the CPU
+  !--------------------------------------------
   p%type=PART_TYPE
   allocate(p%xp    (r%npartmax,ndim))
   allocate(p%vp    (r%npartmax,ndim))
@@ -83,23 +97,25 @@ subroutine init_part(r,g,p)
   ! No particle just yet
   p%headp=1
   p%tailp=0
+
 end subroutine init_part
 !#########################################################################
 !#########################################################################
 !#########################################################################
 !#########################################################################
-subroutine init_star(r,g,p)
+subroutine init_star(r,g,m,p)
   use amr_parameters, only: ndim
-  use amr_commons, only: run_t,global_t
+  use amr_commons, only: run_t,global_t,mesh_t
   use pm_parameters, only: STAR_TYPE
   use pm_commons, only: part_t
   implicit none
   type(run_t)::r
   type(global_t)::g
+  type(mesh_t)::m
   type(part_t)::p
-  !-----------------------------------
-  ! Allocate star particle variables
-  !------------------------------------
+  !--------------------------------------------
+  ! Allocate star particle variables on the CPU
+  !--------------------------------------------
   p%type=STAR_TYPE
   allocate(p%xp    (r%nstarmax,ndim))
   allocate(p%vp    (r%nstarmax,ndim))
@@ -127,6 +143,7 @@ subroutine init_star(r,g,p)
   ! No particle just yet
   p%headp=1
   p%tailp=0
+
 end subroutine init_star
 !#########################################################################
 !#########################################################################

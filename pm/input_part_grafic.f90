@@ -24,7 +24,7 @@ subroutine m_input_part_grafic(pst)
       ! Compute total number of particles in file
       if(TRIM(s%r%initfile(s%r%levelmin)).NE.' ')then
          s%p%npart_tot=s%g%n1(s%r%levelmin)*s%g%n2(s%r%levelmin)*s%g%n3(s%r%levelmin)
-         write(*,*)'Found npart_tot=',s%p%npart_tot
+         write(*,'(A,I0)')' Found npart_tot= ',s%p%npart_tot
       else
          s%p%npart_tot=0
       endif
@@ -45,7 +45,7 @@ subroutine m_input_part_grafic(pst)
       ! Compute total number of particles in file
       if(TRIM(s%r%initfile(s%r%levelmin)).NE.' ')then
          s%trac%npart_tot=s%g%n1(s%r%levelmin)*s%g%n2(s%r%levelmin)*s%g%n3(s%r%levelmin)
-         write(*,*)'Found ntrac_tot=',s%trac%npart_tot
+         write(*,'(A,I0)')' Found ntrac_tot= ',s%trac%npart_tot
       else
          s%trac%npart_tot=0
       endif
@@ -66,7 +66,7 @@ subroutine m_input_part_grafic(pst)
      ! Compute total number of particles in file
      if(TRIM(s%r%initfile(s%r%levelmin)).NE.' ')then
         s%dust%npart_tot=s%g%n1(s%r%levelmin)*s%g%n2(s%r%levelmin)*s%g%n3(s%r%levelmin)
-        write(*,*)'Found ndust_tot=',s%dust%npart_tot
+        write(*,'(A,I0)')' Found ndust_tot= ',s%dust%npart_tot
      else
         s%dust%npart_tot=0
      endif
@@ -139,10 +139,10 @@ subroutine input_part_grafic(r,g,p,npart_tot)
   integer,dimension(1:g%ncpu)::npart_loc
   integer(kind=8)::ipart_grafic
   integer(kind=8),dimension(1:g%ncpu+1)::start_ind
-  real(kind=4),dimension(:,:),allocatable::init_plane,init_plane_x
-  character(LEN=80)::filename,filename_x
+  real(kind=4),dimension(:,:),allocatable::init_plane,init_plane_x,init_plane_m
+  character(LEN=80)::filename,filename_x,filename_m
   character(LEN=5)::nchar
-  logical::ok,error,keep_part,read_pos=.false.
+  logical::ok,error,keep_part,read_pos=.false.,read_mass=.false.
 
   !-------------------------------------------
   ! Mesh size at levelmin in normalised units
@@ -202,14 +202,21 @@ subroutine input_part_grafic(r,g,p,npart_tot)
   ! Allocate temporary arrays
   !--------------------------------------
   allocate(init_plane(1:g%n1(r%levelmin),1:g%n2(r%levelmin)))
+
   filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscx'
   INQUIRE(file=filename_x,exist=ok)
   read_pos=.false.
   if(ok)then
      read_pos=.true.
      allocate(init_plane_x(1:g%n1(r%levelmin),1:g%n2(r%levelmin)))
-  else
-     if(g%myid==1)write(*,*)'File '//TRIM(filename_x)//' not found.'
+  endif
+
+  filename_m=TRIM(r%initfile(r%levelmin))//'/ic_massc'
+  INQUIRE(file=filename_m,exist=ok)
+  read_mass=.false.
+  if(ok)then
+     read_mass=.true.
+     allocate(init_plane_m(1:g%n1(r%levelmin),1:g%n2(r%levelmin)))
   endif
 
   !--------------------------------------
@@ -221,8 +228,7 @@ subroutine input_part_grafic(r,g,p,npart_tot)
      if(idim==1)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcx'
      if(idim==2)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcy'
      if(idim==3)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcz'
-
-     if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)     
+     if(g%myid==1)write(*,*)'Reading '//TRIM(filename)
      open(10,file=filename,form='unformatted')
      rewind 10
      read(10) ! skip first line
@@ -231,18 +237,19 @@ subroutine input_part_grafic(r,g,p,npart_tot)
      end do
 
      ! If present, read higher order dark matter initial displacement field
+     if(idim==1)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscx'
+     if(idim==2)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscy'
+     if(idim==3)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscz'
      if(read_pos)then
-        if(idim==1)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscx'
-        if(idim==2)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscy'
-        if(idim==3)filename_x=TRIM(r%initfile(r%levelmin))//'/ic_poscz'
- 
-        if(g%myid==1)write(*,*)'Reading file '//TRIM(filename_x)
+        if(g%myid==1)write(*,*)'Reading '//TRIM(filename_x)
         open(11,file=filename_x,form='unformatted')
         rewind 11
         read(11) ! skip first line
         do i3=0,i3_min-1
            read(11) ! skip unnecessary planes
         end do
+     else
+        if(g%myid==1)write(*,*)'Missing '//TRIM(filename_x)
      end if
 
      ! Read useful planes
@@ -307,6 +314,38 @@ subroutine input_part_grafic(r,g,p,npart_tot)
         end if
      end do
   end do
+
+  ! If mass file present, read dark matter particle masses
+  if(read_mass)then
+     if(g%myid==1)write(*,*)'Reading '//TRIM(filename_m)
+     open(10,file=filename_m,form='unformatted')
+     rewind 10
+     read(10) ! skip first line
+     do i3=0,i3_min-1
+        read(10) ! skip unnecessary planes
+     end do
+     ipart=1
+     ipart_grafic=i3_min*plane_size
+     ! Loop over planes
+     do i3=i3_min,i3_max
+        read(10)((init_plane_m(i1,i2),i1=1,g%n1(r%levelmin)),i2=1,g%n2(r%levelmin))
+        do i2=1,g%n2(r%levelmin)
+           do i1=1,g%n1(r%levelmin)
+              keep_part=(ipart_grafic>=start_ind(g%myid).AND.ipart<=p%npart)
+              if(keep_part)then
+                 p%mp(ipart)=0.5d0**(3*r%levelmin)*init_plane_m(i1,i2)
+                 ipart=ipart+1
+              endif
+              ipart_grafic=ipart_grafic+1
+           end do
+        end do
+     end do
+     ! End loop over planes
+     close(10)
+     deallocate(init_plane_m)
+  else
+     if(g%myid==1)write(*,*)'Missing '//TRIM(filename_m)
+  endif
 
   ! Compute particle initial level
   do ipart=1,p%npart
@@ -473,7 +512,7 @@ subroutine input_trac_grafic(r,g,p,npart_tot)
       if(idim==2)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcy'
       if(idim==3)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcz'
  
-      if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)     
+      if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)
       open(10,file=filename,form='unformatted')
       rewind 10
       read(10) ! skip first line
@@ -713,7 +752,7 @@ subroutine input_dust_grafic(r,g,p,npart_tot)
      if(idim==2)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcy'
      if(idim==3)filename=TRIM(r%initfile(r%levelmin))//'/ic_velcz'
 
-     if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)     
+     if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)
      open(10,file=filename,form='unformatted')
      rewind 10
      read(10) ! skip first line

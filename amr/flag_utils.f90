@@ -6,7 +6,9 @@ module flag_utils
 #ifdef _CUDA
   use gpu_utils, only: nsubgrid
   use gpu_runner, only: gpu_init_flag, gpu_enforce_rules, gpu_user_flag, gpu_enforce_subgrid
-  use nvtx
+#elif defined(_METAL)
+  use metal_runner, only: metal_init_flag, metal_user_flag, metal_enforce_rules, &
+       metal_enforce_subgrid, metal_nsubgrid
 #endif
 contains
 
@@ -55,6 +57,10 @@ subroutine m_flag_fine(pst,ilevel,icount)
   if (nsubgrid > 1)then
      call r_ensure_subgrid(pst,ilevel,1)
   endif
+#elif defined(_METAL)
+  if (metal_nsubgrid() > 1)then
+     call r_ensure_subgrid(pst,ilevel,1)
+  endif
 #endif
 
   ! In case of adaptive time step ONLY, check for refinement rules
@@ -94,9 +100,13 @@ recursive subroutine r_init_flag(pst,ilevel,input_size,noct,output_size)
   else
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call nvtxStartRange("GPU Initflag", color=6)!teal
         call gpu_init_flag(pst%s, ilevel, nflag)
-        call nvtxEndRange()
+     else
+        call init_flag(pst%s,ilevel,nflag)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_init_flag(pst%s, ilevel, nflag)
      else
         call init_flag(pst%s,ilevel,nflag)
      endif
@@ -193,9 +203,13 @@ recursive subroutine r_ensure_subgrid(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call nvtxStartRange("GPU Enforce subgrid", color=6)!teal
         call gpu_enforce_subgrid(pst%s, ilevel)
-        call nvtxEndRange()
+     else
+        call ensure_subgrid(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_enforce_subgrid(pst%s, ilevel)
      else
         call ensure_subgrid(pst%s,ilevel)
      endif
@@ -222,19 +236,31 @@ subroutine ensure_subgrid(s,ilevel)
   ! This routine forces flag = 1 in the entire
   ! oct if one cell is flagged.
   !-------------------------------------------
-  integer :: igrid, ind
+  integer :: igrid, ind, iskip, nskip
   logical :: ok
 
   associate(g=>s%g, m=>s%m, mdl=>s%mdl)
 
-  do igrid = m%head(ilevel), m%tail(ilevel)
+#ifdef _CUDA
+  nskip = (nsubgrid/2) ** ndim
+#elif defined(_METAL)
+  nskip = metal_nsubgrid()
+  nskip = (nskip/2) ** ndim
+#else
+  nskip = 1
+#endif
+  do igrid = m%head(ilevel), m%tail(ilevel), nskip
      ok = .false.
-     do ind = 1, twotondim
-        ok = ok .or. (m%flag1(ind, igrid) == 1)
+     do iskip = 0, nskip - 1
+        do ind = 1, twotondim
+           ok = ok .or. (m%flag1(ind, igrid + iskip) == 1)
+        end do
      end do
      if (ok) then
-        do ind = 1, twotondim
-           m%flag1(ind, igrid) = 1
+        do iskip = 0, nskip - 1
+           do ind = 1, twotondim
+              m%flag1(ind, igrid + iskip) = 1
+           end do
         end do
      end if
   end do
@@ -323,10 +349,10 @@ recursive subroutine r_user_flag(pst,ilevel,input_size,noct,output_size)
   type(pst_t)::pst
   integer,VALUE::input_size
   integer::output_size
-  integer::ilevel,noct
+  integer::ilevel, noct
 
   integer::next_noct
-  integer::nflag
+  integer::nflag, level_lock
   integer::rID
 
   if(pst%nLower>0)then
@@ -335,18 +361,35 @@ recursive subroutine r_user_flag(pst,ilevel,input_size,noct,output_size)
      call mdl_get_reply(pst%s%mdl,rID,output_size,next_noct)
      noct=noct+next_noct
   else
+
+     ! Unlock levels progressively
+     if(pst%s%r%cosmo.and.pst%s%r%aexp_lock_refine>0d0)then
+        if(ilevel.GT.pst%s%g%nlevelmax_part+3)then
+           level_lock=pst%s%r%nlevelmax+int(log(pst%s%g%aexp/pst%s%r%aexp_lock_refine/2.0d0)/log(2d0))
+           if(ilevel.GE.level_lock)then
+              noct=pst%s%g%nflag
+              return
+           endif
+        endif
+     endif
+
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call nvtxStartRange("GPU Userflag", color=6)!teal
         call gpu_user_flag(pst%s, ilevel, nflag)
-        call nvtxEndRange()
      else
-        call user_flag(pst%s,ilevel,nflag)
+        call user_flag(pst%s, ilevel, nflag)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_user_flag(pst%s, ilevel, nflag)
+     else
+        call user_flag(pst%s, ilevel, nflag)
      endif
 #else
-     call user_flag(pst%s,ilevel,nflag)
+     call user_flag(pst%s, ilevel, nflag)
 #endif
      noct=nflag
+
   endif
 
 end subroutine r_user_flag
@@ -366,17 +409,6 @@ subroutine user_flag(s,ilevel,nflag)
   ! some user-defined physical criteria at the level ilevel. 
   ! -------------------------------------------------------------------
   integer::level_lock
-
-  ! Unlock levels progressively
-  if(s%r%cosmo.and.s%r%aexp_lock_refine>0d0)then
-     if(ilevel.GT.s%g%nlevelmax_part+3)then
-        level_lock=s%r%nlevelmax+int(log(s%g%aexp/s%r%aexp_lock_refine/2.0d0)/log(2d0))
-        if(ilevel.GE.level_lock)then
-           nflag=s%g%nflag
-           return
-        endif
-     endif
-  endif
 
   ! Refinement rules for the gravity solver
   if(s%r%poisson)call poisson_flag(s,ilevel)
@@ -415,9 +447,13 @@ recursive subroutine r_ensure_ref_rules(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call nvtxStartRange("GPU enforce rules", color=6)!teal
         call gpu_enforce_rules(pst%s, ilevel)
-        call nvtxEndRange()
+     else
+        call ensure_ref_rules(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_enforce_rules(pst%s, ilevel)
      else
         call ensure_ref_rules(pst%s,ilevel)
      endif

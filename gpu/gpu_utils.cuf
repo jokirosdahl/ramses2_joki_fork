@@ -4,12 +4,16 @@ module gpu_utils
   use cudafor
   implicit none
 
+  integer, parameter :: nthreads_y = 16
+
   integer, parameter :: nsubgrid = 1
   integer, parameter :: nsubgridsq = nsubgrid**2
   integer, parameter :: nsubgridtondim = nsubgrid**ndim
   integer, parameter :: nsubgridp2 = nsubgrid+2
   integer, parameter :: nsubgridp2sq = nsubgridp2**2
   integer, parameter :: subgridsize = nsubgridp2**ndim
+
+  logical :: gpu_debug = .false.
 
   !> @brief
   !> Contains a 6 by 6 by 6 subgrid of primitive variables. Intended to act as a subgrid
@@ -22,7 +26,7 @@ module gpu_utils
      real(kind=dp), dimension(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3) :: velocity_y
      real(kind=dp), dimension(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3) :: velocity_z
      real(kind=dp), dimension(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3) :: pressure
-     logical      , dimension(0:2*nsubgrid+3, 0:2*nsubgrid+3, 0:2*nsubgrid+3) :: refined
+     logical(kind=1), dimension(1:2*nsubgrid+2, 1:2*nsubgrid+2, 1:2*nsubgrid+2) :: refined
   end type subgrid_6x6x6cell_primitive
 
   !> @brief
@@ -57,14 +61,18 @@ contains
     integer, intent(in) :: line_number
     integer :: code
 
-    ! Sync and get code
-    code = cudaDeviceSynchronize()
+    if (gpu_debug) then
 
-    ! Check the code
-    if (code /= cudaSuccess) then
-       print *, "GPU_Error_Check: Failed in File: ", file_name, "At Line:", line_number, "With code: ", cudaGetErrorString(code)
-       error stop code
-    end if
+       ! Sync and get code
+       code = cudaDeviceSynchronize()
+
+       ! Check the code
+       if (code /= cudaSuccess) then
+          print *, "GPU_Error_Check: Failed in File: ", file_name, "At Line:", line_number, "With code: ", cudaGetErrorString(code)
+          error stop code
+       end if
+
+    endif
 #endif
   end subroutine GPU_Error_Check
   ! ==========================================================================

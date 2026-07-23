@@ -43,6 +43,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
   use gpu_manager, only: r_transfer_grid_host
 #endif
+#ifdef _METAL
+  use metal_runner, only: r_transfer_grid_host
+#endif
 
   implicit none
 
@@ -92,7 +95,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !--------------------------------
   ! Merging tree particle formation
   !--------------------------------
-  if(r%tree.and.ilevel==r%levelmin)then
+  if(r%tree.and.ilevel==r%levelmin.and.mod(g%nstep_coarse, r%nsteps_per_tree)==0)then
      call m_timer('tree - formation','start')
      call m_tree_formation(pst)
   endif
@@ -114,6 +117,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
            call r_transfer_grid_host(pst)
 #endif
+#ifdef _METAL
+           call r_transfer_grid_host(pst)
+#endif
            call m_dump_all(pst,.false.)
         endif
      endif
@@ -126,6 +132,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 #ifdef _CUDA
            call r_transfer_grid_host(pst)
 #endif
+#ifdef _METAL
+           call r_transfer_grid_host(pst)
+#endif
         call m_dump_all(pst,.true.)
         tprev=tcurr
      endif
@@ -133,6 +142,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         if(tcurr>r%run_time_hrs*3600-r%bkp_last_min*60)then
            call m_timer('backup','start')
 #ifdef _CUDA
+           call r_transfer_grid_host(pst)
+#endif
+#ifdef _METAL
            call r_transfer_grid_host(pst)
 #endif
            call m_dump_all(pst,.true.)
@@ -151,8 +163,8 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !--------------------------
   if(r%movie) then
      if(r%imov.le.r%imovout)then 
-        if((r%aendmov>0.and.g%aexp>=r%aendmov*dble(r%imov)/dble(r%imovout)) &
-             & .or.(r%tendmov>0.and.g%t>=r%tendmov*dble(r%imov)/dble(r%imovout)))then
+        if((r%aendmov>0.and.g%aexp>=(r%aendmov-r%astartmov)*dble(r%imov)/dble(r%imovout)+r%astartmov) &
+             & .or.(r%tendmov>0.and.g%t>=(r%tendmov-r%tstartmov)*dble(r%imov)/dble(r%imovout)+r%tstartmov))then
            call m_output_frame(pst)
         endif
      endif
@@ -232,7 +244,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !----------------------
   ! Compute new time step
   !----------------------
-  call m_timer('time step','start')
+  call m_timer('compute dt','start')
   call m_newdt_fine(pst,ilevel)
 
   !-----------------------

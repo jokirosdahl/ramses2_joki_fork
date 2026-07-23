@@ -1,5 +1,10 @@
 module move_fine_module
   use rho_fine_module, only: cic_weight, cic_index, tsc_weight, tsc_index, pcs_weight, pcs_index
+#ifdef _CUDA
+  use part_device, only: gpu_kick_drift_part, gpu_kick_drift_star
+#elif defined(_METAL)
+  use metal_runner, only: metal_kick_drift_part
+#endif
   use rng
   implicit none
   ! Module-level tracer RNG state
@@ -57,8 +62,20 @@ recursive subroutine r_kick_drift_part(pst,input_array,input_size,output_array,o
   else
      ilevel=input_array(1)
      action_part=input_array(2)
-     ! Force interpolation for various components (DM particles, star, sink, tree)
+     ! Force interpolation for various components (part, star, sink, tree...)
      ! based on their respective deposition schemes (CIC 1, TSC 2 or PCS 3)
+#ifdef _CUDA
+     if(pst%s%r%part)then
+        call gpu_kick_drift_part(pst%s, ilevel, action_part)
+     endif
+     if(pst%s%r%star)then
+        call gpu_kick_drift_star(pst%s, ilevel, action_part)
+     endif
+#elif defined(_METAL)
+     if(pst%s%r%part)then
+        call metal_kick_drift_part(pst%s, ilevel, action_part)
+     endif
+#else
      if(pst%s%r%part)then
         if(pst%s%r%part_force_interpolation_scheme==1)then
            call cic_kick_drift_part(pst%s,pst%s%p   ,ilevel,action_part)
@@ -131,6 +148,7 @@ recursive subroutine r_kick_drift_part(pst,input_array,input_size,output_array,o
            call tsc_kick_drift_dust_guiding_center(pst%s,pst%s%dust,ilevel,action_part) ! TSC guiding center
         endif
      endif
+#endif
   endif
 
 end subroutine r_kick_drift_part
@@ -179,7 +197,7 @@ subroutine cic_kick_drift_part(s,p,ilevel,action_part)
   end if
 
   ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
+  dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
 
   ! Deal with particles that left the computational domain

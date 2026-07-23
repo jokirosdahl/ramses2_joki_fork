@@ -1,4 +1,9 @@
 module newdt_fine_module
+#ifdef _CUDA
+  use part_device, only: gpu_newdt_part, gpu_newdt_star
+#elif defined(_METAL)
+  use metal_runner, only: metal_newdt_part
+#endif
 
 type :: out_newdt_part_t
   real(kind=8)::ekin,vmax
@@ -245,6 +250,20 @@ recursive subroutine r_newdt_part(pst,ilevel,input_size,output,output_size)
   else
      output%vmax=0.0d0
      output%ekin=0.0d0
+#ifdef _CUDA
+     if(pst%s%r%part)then
+        call gpu_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
+     endif
+     if(pst%s%r%star)then
+        call gpu_newdt_star(pst%s, ilevel, output%vmax, output%ekin)
+     endif
+     return
+#elif defined(_METAL)
+     if(pst%s%r%part)then
+        call metal_newdt_part(pst%s, ilevel, output%vmax, output%ekin)
+     endif
+     return
+#endif
      if(pst%s%r%part)then
         call newdt_part(pst%s%r,pst%s%g,pst%s%p   ,ilevel,output%ekin,output%vmax)
      endif

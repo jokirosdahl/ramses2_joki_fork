@@ -111,8 +111,12 @@ subroutine m_read_params(pst)
   real(kind=8)::bkp_time_hrs=2   ! Backup file frequency in hours
   real(kind=8)::run_time_hrs=0   ! Estimated run time in hrs
   real(kind=8)::bkp_last_min=10  ! Backup file before the end of run in min
-  integer::bkp_modulo=0       ! Use modulo for backup file count
-  integer::nfile=1          ! Number of file per snapshot. Use -1 for nfile=ncpu
+  integer::bkp_modulo=0          ! Use modulo for backup file count
+  integer::nfile=1               ! Number of file per snapshot. Use -1 for nfile=ncpu
+  logical::output_part=.true. ! Output particle data in regular dumps (default: true)
+  logical::output_grav=.true. ! Output gravity data in regular dumps (default: true)
+  logical::output_hydro=.true.! Output hydro data in regular dumps (default: true)
+  logical::output_amr=.true.  ! Output AMR data in regular dumps (default: true)
 
   ! Output times
   real(kind=8),dimension(1:MAXOUT)::aout=1.1  ! Output expansion factors
@@ -125,6 +129,7 @@ subroutine m_read_params(pst)
   ! Movie
   integer::imovout=0     ! Increment for output times
   integer::imov=1        ! Initialize
+  real(kind=8)::tstartmov=0d0,astartmov=0d0
   real(kind=8)::tendmov=0.,aendmov=0.
   logical::movie=.false.
   logical::zoom_only=.false.
@@ -141,6 +146,25 @@ subroutine m_read_params(pst)
   character(LEN=5)::proj_axis='z' ! x->x, y->y, projection along z
   integer,dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars=0
   character(len=5),dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars_txt=''
+  ! Movie camera and rendering options (per-projection, NMOV=5)
+  real(kind=8),dimension(1:5)::theta_camera=0d0
+  real(kind=8),dimension(1:5)::phi_camera=0d0
+  real(kind=8),dimension(1:5)::dtheta_camera=0d0
+  real(kind=8),dimension(1:5)::dphi_camera=0d0
+  real(kind=8),dimension(1:5)::tstart_theta_camera=0d0
+  real(kind=8),dimension(1:5)::tstart_phi_camera=0d0
+  real(kind=8),dimension(1:5)::tend_theta_camera=0d0
+  real(kind=8),dimension(1:5)::tend_phi_camera=0d0
+  real(kind=8),dimension(1:5)::focal_camera=0d0
+  real(kind=8),dimension(1:5)::dist_camera=0d0
+  real(kind=8),dimension(1:5)::ddist_camera=0d0
+  real(kind=8),dimension(1:5)::smooth_frame=1d0
+  real(kind=8),dimension(1:5)::varmin_frame=-1d60
+  real(kind=8),dimension(1:5)::varmax_frame=1d60
+  logical,dimension(1:5)::perspective_camera=.false.
+  logical,dimension(1:5)::zoom_only_frame=.false.
+  character(LEN=6),dimension(1:5)::shader_frame='square'
+  character(LEN=10),dimension(1:5)::method_frame='mean_mass'
 
   ! Refinement parameters for each level
   integer ,dimension(1:MAXLEVEL)::nexpand = 1 ! Number of mesh expansion
@@ -188,6 +212,8 @@ subroutine m_read_params(pst)
   logical::multiple=.false.
   character(LEN=20)::filetype='ascii'
   character(LEN=80),dimension(1:MAXLEVEL)::initfile=' '
+  real(kind=8)::ic_scale_l=1.0d0
+  real(kind=8)::ic_scale_v=1.0d0
   real(kind=8)::ic_scale_m=1.0d0
 
   ! Initial conditions hydro variables
@@ -316,7 +342,8 @@ subroutine m_read_params(pst)
 
   ! Poisson solver parameters
   logical :: gravity_test=.false. ! Use file rho_ana.f90 to test the Poisson solers.
-  real(kind=8)::epsilon=1.0D-4 ! Convergence criterion
+  real(kind=8)::epsilon=1.0D-4    ! Convergence criterion
+  integer :: nvcycle = -1         ! Desired number of V-cycles
   real(kind=8),dimension(1:10)::gravity_params=0.0 ! Gravity parameters
   integer :: gravity_type=0 ! Type of gravity calculations (see user guide)
   integer :: cic_levelmax=0 ! Maximum level for CIC dark matter interpolation
@@ -325,8 +352,10 @@ subroutine m_read_params(pst)
   ! level >=cg_levelmin uses conjugate gradient
   logical :: fast_solver=.false.   ! Fast solver with MPI pre-fetch (memory intensive)
   integer :: part_mass_deposition_scheme=1     ! part mass deposition schemes (CIC 1, TSC 2, PCS 3)
+  integer :: part_dep_algo=2                   ! part GPU CIC deposition algorithm
   integer :: part_force_interpolation_scheme=1 ! part force interpolation schemes (CIC 1, TSC 2, PCS 3)
   integer :: star_mass_deposition_scheme=1     ! star mass deposition schemes
+  integer :: star_dep_algo=2                   ! star GPU CIC deposition algorithm
   integer :: star_force_interpolation_scheme=1 ! star force interpolation schemes
   integer :: sink_mass_deposition_scheme=1     ! sink mass deposition schemes
   integer :: sink_force_interpolation_scheme=1 ! sink force interpolation schemes
@@ -387,7 +416,7 @@ subroutine m_read_params(pst)
   logical::isothermal=.false. ! Force temperature to eos value
   logical::haardt_madau=.false.
   logical::self_shielding=.false.
-  real(kind=8)::J21=0,a_spec=1,z_ave=0,z_reion=8.5
+  real(kind=8)::J21=0,a_spec=1,z_ave=0,z_reion=8.5,cooling_uvb_delta=0.05d0
   integer::eos_type=1 ! 1=isothermal, 2=polytrope, 3=isothermal+polytrope
   real(kind=8)::eos_nH=huge(1d0),eos_index=1,eos_T2=10
   real(kind=8)::T2max=huge(1d0)
@@ -454,6 +483,7 @@ subroutine m_read_params(pst)
   logical::output_peak_trac=.false.
   logical::output_peak_dust=.false.
   integer::rho_type_clump=1 ! 1: DM, 2: stars, 3: sinks, 4: gas
+  integer::nsteps_per_tree=1 ! Call clump finder for tree formation every n coarse steps
   real(kind=8)::relevance_threshold=2
   real(kind=8)::density_threshold=-1
   real(kind=8)::saddle_threshold=-1
@@ -564,29 +594,36 @@ subroutine m_read_params(pst)
   ! Output parameters
   namelist/output_params/foutput,aout,tout,output_mode &
        & ,tend,delta_tout,aend,delta_aout,gadget_output &
-       & ,run_time_hrs,bkp_time_hrs,bkp_last_min,bkp_modulo,nfile
+       & ,run_time_hrs,bkp_time_hrs,bkp_last_min,bkp_modulo,nfile &
+       & ,output_part,output_grav,output_hydro,output_amr
   ! Trajectory output parameters
   namelist/traj_params/ntrajectories,trajectories
   ! AMR grid basic parameters
   namelist/amr_params/levelmin,levelmax,ngridmax,ncachemax,ngridtot &
        & ,npartmax,nparttot,nexpand,boxlen
   ! Poisson solver parameters
-  namelist/poisson_params/epsilon,gravity_type,gravity_params &
+  namelist/poisson_params/epsilon,nvcycle,gravity_type,gravity_params &
        & ,cg_levelmin,cic_levelmax,fast_solver,gravity_test &
-       & ,part_mass_deposition_scheme,part_force_interpolation_scheme &
-       & ,star_mass_deposition_scheme,star_force_interpolation_scheme &
+       & ,part_mass_deposition_scheme,part_dep_algo,part_force_interpolation_scheme &
+       & ,star_mass_deposition_scheme,star_dep_algo,star_force_interpolation_scheme &
        & ,sink_mass_deposition_scheme,sink_force_interpolation_scheme &
        & ,tree_mass_deposition_scheme,tree_force_interpolation_scheme
   ! Movies parameters
   namelist/movie_params/levelmax_frame,nw_frame,nh_frame,ivar_frame &
        & ,xcentre_frame,ycentre_frame,zcentre_frame &
-       & ,deltax_frame,deltay_frame,deltaz_frame,movie,zoom_only &
-       & ,imovout,imov,tendmov,aendmov,proj_axis,movie_vars,movie_vars_txt
+       & ,deltax_frame,deltay_frame,deltaz_frame,movie,zoom_only,zoom_only_frame &
+       & ,imovout,imov,tstartmov,astartmov,tendmov,aendmov,proj_axis &
+       & ,movie_vars,movie_vars_txt &
+       & ,theta_camera,phi_camera,dtheta_camera,dphi_camera &
+       & ,tstart_theta_camera,tstart_phi_camera,tend_theta_camera,tend_phi_camera &
+       & ,focal_camera,dist_camera,ddist_camera &
+       & ,perspective_camera,smooth_frame,shader_frame,method_frame &
+       & ,varmin_frame,varmax_frame
   ! Initial conditions parameters
   namelist/init_params/filetype,initfile,multiple,nregion,region_type &
        & ,x_center,y_center,z_center,aexp_ini,omega_b,omega_m,omega_l,h0 &
        & ,length_x,length_y,length_z,exp_region,boxlen_ini &
-       & ,ic_scale_m &
+       & ,ic_scale_l,ic_scale_v,ic_scale_m &
 #if NENER>0
        & ,prad_region &
 #endif
@@ -660,6 +697,7 @@ subroutine m_read_params(pst)
   namelist/cooling_params/neq_chem,cooling,metal,isothermal,haardt_madau,J21 &
        & ,eos_type,eos_nH,eos_index,eos_T2, mu_mol, X_H, Y_He &
        & ,a_spec,self_shielding,z_ave,z_reion,T2max,cooling_ism &
+       & ,cooling_uvb_delta &
        & ,isHe, isH2, is_init_xion, neq_Tconst, upload_equilibrium_x &
        & ,rtz_cooling, rtz_equilibrium_test, rtz_include_collisional_ionization &
        & ,rtz_include_photoionization, rtz_include_cosmic_ray_ionization &
@@ -694,7 +732,7 @@ subroutine m_read_params(pst)
        & ,output_peak_trac,output_peak_dust &
        & ,relevance_threshold,density_threshold,saddle_threshold &
        & ,mass_threshold,purity_threshold,fraction_threshold &
-       & ,merger_tree,orphan,ntreemax,ntreetot,rho_type_clump
+       & ,merger_tree,orphan,ntreemax,ntreetot,rho_type_clump,nsteps_per_tree
   ! Lightcone parameters
   namelist/lightcone_params/lightcone,cone_z_min,cone_z_max,cone_opening_angle_y,cone_opening_angle_z &
        & ,cone_theta,cone_phi,cone_observer
@@ -722,15 +760,15 @@ subroutine m_read_params(pst)
   write(*,*)'_/    _/   _/    _/   _/    _/    _/_/_/   _/_/_/_/    _/_/_/  '
   write(*,*)'                        Version 3.0                            '
   write(*,*)'       written by Romain Teyssier (Princeton University)       '
-  write(*,*)'        (c) CEA 1999-2007, UZH 2008-2021, PU 2022-2025         '
+  write(*,*)'        (c) CEA 1999-2007, UZH 2008-2021, PU 2022-2026         '
   write(*,*)' '
 
-  write(*,'(" Working with ndim = ",I1)')ndim
+  write(*,'(" Working with ndim = ",I0)')ndim
 #ifdef GRAV
   write(*,'(" Using gravity solver")')
 #endif
 #ifdef HYDRO
-  write(*,'(" Using hydro solver with nvar = ",I3)')nvar
+  write(*,'(" Using hydro solver with nvar = ",I0)')nvar
   ! Check nvar is not too small
   if(nvar<5)then
      write(*,*)'You should have: nvar>=5'
@@ -739,7 +777,7 @@ subroutine m_read_params(pst)
   endif
 #endif
 #ifdef RT
-  write(*,'(" Using radiation solver with nrtgrp = ",I2)')nrtgrp
+  write(*,'(" Using radiation solver with nrtgrp = ",I0)')nrtgrp
 #endif
 #ifdef CRS
   write(*,'(" Using 2-moment cosmic rays solver with ncrgrp = ",I2)')ncrgrp
@@ -843,6 +881,16 @@ subroutine m_read_params(pst)
   if(nlevelmax<levelmin)then
      write(*,*)'Error in the namelist:'
      write(*,*)'levelmax should not be lower than levelmin'
+     nml_ok=.false.
+  end if
+  if(part_dep_algo<1 .or. part_dep_algo>3)then
+     write(*,*)'Error in the namelist:'
+     write(*,*)'part_dep_algo must be 1 (large), 2 (medium) or 3 (small)'
+     nml_ok=.false.
+  end if
+  if(star_dep_algo<1 .or. star_dep_algo>3)then
+     write(*,*)'Error in the namelist:'
+     write(*,*)'star_dep_algo must be 1 (large), 2 (medium) or 3 (small)'
      nml_ok=.false.
   end if
   if(ngridmax==0)then
@@ -1262,6 +1310,10 @@ subroutine m_read_params(pst)
   s%r%bkp_last_min=bkp_last_min
   s%r%bkp_modulo=bkp_modulo
   s%r%nfile=nfile
+  s%r%output_part=output_part
+  s%r%output_grav=output_grav
+  s%r%output_hydro=output_hydro
+  s%r%output_amr=output_amr
 
   s%r%levelmin=levelmin
   s%r%nlevelmax=nlevelmax
@@ -1287,14 +1339,17 @@ subroutine m_read_params(pst)
 
   s%r%gravity_test=gravity_test
   s%r%epsilon=epsilon
+  s%r%nvcycle=nvcycle
   s%r%gravity_type=gravity_type
   s%r%gravity_params=gravity_params
   s%r%cic_levelmax=cic_levelmax
   s%r%cg_levelmin=cg_levelmin
   s%r%fast_solver=fast_solver
   s%r%part_mass_deposition_scheme=part_mass_deposition_scheme
+  s%r%part_dep_algo=part_dep_algo
   s%r%part_force_interpolation_scheme=part_force_interpolation_scheme
   s%r%star_mass_deposition_scheme=star_mass_deposition_scheme
+  s%r%star_dep_algo=star_dep_algo
   s%r%star_force_interpolation_scheme=star_force_interpolation_scheme
   s%r%sink_mass_deposition_scheme=sink_mass_deposition_scheme
   s%r%sink_force_interpolation_scheme=sink_force_interpolation_scheme
@@ -1316,12 +1371,32 @@ subroutine m_read_params(pst)
   s%r%deltaz_frame=deltaz_frame
   s%r%movie=movie
   s%r%zoom_only=zoom_only
+  s%r%zoom_only_frame=zoom_only_frame
   s%r%imovout=imovout
   s%r%imov=imov
+  s%r%tstartmov=tstartmov
+  s%r%astartmov=astartmov
   s%r%tendmov=tendmov
   s%r%aendmov=aendmov
   s%r%proj_axis=proj_axis
   s%r%movie_vars_txt=movie_vars_txt
+  s%r%theta_camera=theta_camera
+  s%r%phi_camera=phi_camera
+  s%r%dtheta_camera=dtheta_camera
+  s%r%dphi_camera=dphi_camera
+  s%r%tstart_theta_camera=tstart_theta_camera
+  s%r%tstart_phi_camera=tstart_phi_camera
+  s%r%tend_theta_camera=tend_theta_camera
+  s%r%tend_phi_camera=tend_phi_camera
+  s%r%focal_camera=focal_camera
+  s%r%dist_camera=dist_camera
+  s%r%ddist_camera=ddist_camera
+  s%r%perspective_camera=perspective_camera
+  s%r%smooth_frame=smooth_frame
+  s%r%shader_frame=shader_frame
+  s%r%method_frame=method_frame
+  s%r%varmin_frame=varmin_frame
+  s%r%varmax_frame=varmax_frame
   if(s%r%movie)call set_movie_vars(s%r)
 
   ! Trajectory output params
@@ -1366,6 +1441,9 @@ subroutine m_read_params(pst)
   if(riemann=='hlld')s%r%riemann=solver_hlld
   if(riemann=='roe')s%r%riemann=solver_roe
   if(riemann=='upwind')s%r%riemann=solver_upwind
+#ifdef _METAL
+  if(riemann=='uct-hlld')s%r%riemann=solver_uct_hlld
+#endif
 #endif
 #ifdef MHD
   if(riemann2d=='none')riemann2d=riemann
@@ -1561,6 +1639,7 @@ subroutine m_read_params(pst)
   s%r%a_spec=a_spec
   s%r%z_ave=z_ave
   s%r%z_reion=z_reion
+  s%r%cooling_uvb_delta=cooling_uvb_delta
   s%r%eos_type=eos_type
   s%r%eos_nH=eos_nH
   s%r%eos_index=eos_index
@@ -1634,6 +1713,7 @@ subroutine m_read_params(pst)
   s%r%purity_threshold=purity_threshold
   s%r%fraction_threshold=fraction_threshold
   s%r%rho_type_clump=rho_type_clump
+  s%r%nsteps_per_tree=nsteps_per_tree
 
   s%r%lightcone = lightcone
   s%r%cone_z_min = cone_z_min

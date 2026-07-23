@@ -29,7 +29,7 @@ subroutine m_input_part_zoom(pst)
   call r_input_part_zoom(pst,dummy,1,output,3)
   pst%s%p%npart_tot=output%npart_tot
   pst%s%p%npart_max=output%npart_max
-  write(*,*)'Found npart_tot=',pst%s%p%npart_tot
+  write(*,'(A,I0)')'Found npart_tot= ',pst%s%p%npart_tot
 
 end subroutine m_input_part_zoom
 !#########################################################################
@@ -90,10 +90,11 @@ subroutine input_part_zoom(r,g,p,m)
   integer(kind=8),dimension(1:g%ncpu+1)::start_ind
   real(kind=8),allocatable,dimension(:,:,:)::init_array
   real(kind=8),allocatable,dimension(:,:,:)::init_array_x
+  real(kind=8),allocatable,dimension(:,:,:)::init_array_m
   real(kind=4),dimension(:,:),allocatable::init_plane
-  character(LEN=80)::filename,filename_x
+  character(LEN=80)::filename,filename_x,filename_m
   character(LEN=5)::nchar
-  logical::ok,error,keep_part,read_pos=.false.
+  logical::ok,error,keep_part,read_pos=.false.,read_mass=.false.
 
 #if NDIM>2
   
@@ -167,8 +168,13 @@ subroutine input_part_zoom(r,g,p,m)
      read_pos=.false.
      if(ok)then
         read_pos=.true.
-     else
-        if(g%myid==1)write(*,*)'File '//TRIM(filename_x)//' not found.'
+     endif
+
+     filename_m=TRIM(r%initfile(ilevel))//'/ic_massc'
+     INQUIRE(file=filename_m,exist=ok)
+     read_mass=.false.
+     if(ok)then
+        read_mass=.true.
      endif
 
      ! Allocate initial conditions array
@@ -177,6 +183,10 @@ subroutine input_part_zoom(r,g,p,m)
      if(read_pos)then
         allocate(init_array_x(i1_min:i1_max,i2_min:i2_max,i3_min:i3_max))
         init_array_x=0
+     endif
+     if(read_mass)then
+        allocate(init_array_m(i1_min:i1_max,i2_min:i2_max,i3_min:i3_max))
+        init_array_m=0
      endif
      allocate(init_plane(1:g%n1(ilevel),1:g%n2(ilevel)))
      
@@ -188,7 +198,7 @@ subroutine input_part_zoom(r,g,p,m)
         if(idim==2)filename=TRIM(r%initfile(ilevel))//'/ic_velcy'
         if(idim==3)filename=TRIM(r%initfile(ilevel))//'/ic_velcz'
 
-        if(g%myid==1)write(*,*)'Reading file '//TRIM(filename)           
+        if(g%myid==1)write(*,*)'Reading '//TRIM(filename)
         open(10,file=filename,form='unformatted')
         rewind 10
         read(10) ! skip first line
@@ -202,13 +212,12 @@ subroutine input_part_zoom(r,g,p,m)
         close(10)
                 
         ! Reading dark matter initial position field
+        if(idim==1)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscx'
+        if(idim==2)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscy'
+        if(idim==3)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscz'
         if(read_pos)then
-           if(idim==1)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscx'
-           if(idim==2)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscy'
-           if(idim==3)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscz'
-           
            ! Reading the displacement file
-           if(g%myid==1)write(*,*)'Reading file '//TRIM(filename_x)
+           if(g%myid==1)write(*,*)'Reading '//TRIM(filename_x)
            open(10,file=filename_x,form='unformatted')
            rewind 10
            read(10) ! skip first line
@@ -220,6 +229,8 @@ subroutine input_part_zoom(r,g,p,m)
               init_array_x(i1_min:i1_max,i2_min:i2_max,i3) = init_plane(i1_min:i1_max,i2_min:i2_max)
            end do
            close(10)
+        else
+           if(g%myid==1)write(*,*)'Missing '//TRIM(filename_x)
         end if
         
         ! Rescale initial displacement field to code units
@@ -257,9 +268,50 @@ subroutine input_part_zoom(r,g,p,m)
      end do
      ! End loop over dimensions
 
+     ! If mass file present, read dark matter particle masses
+     if(read_mass)then
+        if(g%myid==1)write(*,*)'Reading '//TRIM(filename_m)
+        open(10,file=filename_m,form='unformatted')
+        rewind 10
+        read(10) ! skip first line
+        do i3=1,i3_min-1
+           read(10)
+        end do
+        do i3=i3_min,i3_max
+           read(10) ((init_plane(i1,i2),i1=1,g%n1(ilevel)),i2=1,g%n2(ilevel))
+           init_array_m(i1_min:i1_max,i2_min:i2_max,i3) = init_plane(i1_min:i1_max,i2_min:i2_max)
+        end do
+        close(10)
+
+        ipart=ipart_old
+        do igrid=m%head(ilevel),m%tail(ilevel)
+           do ind=1,twotondim
+              xx1=(2*m%grid(igrid)%ckey(1)+MOD((ind-1)  ,2)+0.5)*dx
+              xx2=(2*m%grid(igrid)%ckey(2)+MOD((ind-1)/2,2)+0.5)*dx
+              xx3=(2*m%grid(igrid)%ckey(3)+MOD((ind-1)/4,2)+0.5)*dx
+              xx1=(xx1*(g%dxini(ilevel)/dx)-g%xoff1(ilevel))/g%dxini(ilevel)
+              xx2=(xx2*(g%dxini(ilevel)/dx)-g%xoff2(ilevel))/g%dxini(ilevel)
+              xx3=(xx3*(g%dxini(ilevel)/dx)-g%xoff3(ilevel))/g%dxini(ilevel)
+              i1=int(xx1)+1
+              i2=int(xx2)+1
+              i3=int(xx3)+1
+              ! Add a particle if we have a leaf cell
+              if(.not. m%grid(igrid)%refined(ind))then
+                 ipart=ipart+1
+                 p%mp(ipart)=0.5d0**(3*ilevel)*init_array_m(i1,i2,i3)
+              endif
+           end do
+           ! End loop over cells
+        end do
+        ! End loop over grids
+     else
+        if(g%myid==1)write(*,*)'Missing '//TRIM(filename_m)
+     endif
+
      ! Deallocate temporary array
      deallocate(init_plane,init_array)
      if(read_pos)deallocate(init_array_x)
+     if(read_mass)deallocate(init_array_m)
 
   end do
   ! End loop over levels

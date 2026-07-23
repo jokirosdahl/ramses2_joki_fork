@@ -1,7 +1,8 @@
 module upload_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_upload
-  use nvtx
+#elif defined(_METAL)
+  use metal_runner, only: metal_upload
 #endif
 contains
 !#########################################################################
@@ -50,9 +51,13 @@ recursive subroutine r_upload_fine(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call nvtxStartRange("GPU Upload", color=6)!teal
         call gpu_upload(pst%s,ilevel)
-        call nvtxEndRange()
+     else
+        call upload_fine(pst%s,ilevel)
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        call metal_upload(pst%s,ilevel)
      else
         call upload_fine(pst%s,ilevel)
      endif
@@ -233,7 +238,7 @@ subroutine upload_fine(s,ilevel)
            emag=0.0d0
 #ifdef MHD
            do idim=1,3
-              emag=emag+0.125d0*(m%bold(ind,idim,ioct)+m%bold(ind,idim+3,ioct))
+              emag=emag+0.125d0*(m%bold(ind,idim,ioct)+m%bold(ind,idim+3,ioct))**2
            end do
 #endif
            erad=0.0d0
@@ -252,7 +257,7 @@ subroutine upload_fine(s,ilevel)
         emag=0.0d0
 #ifdef MHD
         do idim=1,3
-           emag=emag+0.125d0*(m%bold(icell,idim,igrid)+m%bold(icell,idim+3,igrid))
+           emag=emag+0.125d0*(m%bold(icell,idim,igrid)+m%bold(icell,idim+3,igrid))**2
         end do
 #endif
         erad=0.0d0

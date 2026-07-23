@@ -3,6 +3,7 @@
 #############################################################################
 # Compilation time parameters
 COMPILER = GNU
+CUDA_ARCH = sm_80
 NDIM = 3
 MPI = 0
 HYDRO = 1
@@ -36,6 +37,11 @@ NHILBERT = 1
 NVECTOR = 32
 NPRE = 8
 PATCH =
+CUDA_PROFILE = 0
+PAPER = 0
+CUB_SORT_PART = 1
+CUB_SORT_REFINE = 1
+CUB_SCAN_REFINE = 1
 DEBUG = 0
 HDF5 = 0
 MPIF90 = mpif90
@@ -57,6 +63,7 @@ ifeq ($(CRS),1)
 endif
 NVAR := $(NHYDRO)+$(NENER)+$(NPSCAL)+$(NMETAL)+$(NION)
 #############################################################################
+# Collect git version and Makefile options
 GITBRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 GITHASH = $(shell git log --pretty=format:'%H' -n 1)
 GITREPO = $(shell git config --get remote.origin.url)
@@ -64,6 +71,8 @@ BUILDDATE = $(shell date +"%D-%T")
 BUILDCOMMAND = ${MAKE} ${MAKEFLAGS}
 DEFINES += -DNDIM=$(NDIM) -DNVAR=$(NVAR)
 DEFINES += $(EXTRA_DEFINES)
+#############################################################################
+# RTZ options
 ifeq ($(RTZ),1)
 DEFINES += -DN_HYDROGEN_IONS=$(N_HYDROGEN_IONS)
 DEFINES += -DN_HELIUM_IONS=$(N_HELIUM_IONS)
@@ -77,6 +86,8 @@ DEFINES += -DN_SULFUR_IONS=$(N_SULFUR_IONS)
 DEFINES += -DN_IRON_IONS=$(N_IRON_IONS)
 DEFINES += -DN_H2=$(N_H2)
 endif
+#############################################################################
+# Main compilation options
 ifneq ($(NION),0)
    DEFINES += -DNION=$(NION)
 endif
@@ -165,11 +176,27 @@ ifeq ($(COMPILER),INTEL)
    endif
 endif
 #############################################################################
-# NVHPC compiler
+# NVHPC compiler (optional -gpu=$(CUDA_ARCH),fastmath in FFLAGS and LIBS)
 ifeq ($(COMPILER),NVHPC)
-   FFLAGS = -mp -cpp -gpu=sm_80,sm_90,nordc -cuda $(DEFINES)
-   LIBS = -gpu=sm_80,sm_90,nordc -cuda -cudalib=nvtx
+   ifeq ($(PAPER),1)
+      DEFINES += -DPAPER
+   endif
+   ifneq ($(CUB_SORT_PART),0)
+      DEFINES += -DCUB_SORT_PART
+   endif
+   ifneq ($(CUB_SORT_REFINE),0)
+      DEFINES += -DCUB_SORT_REFINE
+   endif
+   ifneq ($(CUB_SCAN_REFINE),0)
+      DEFINES += -DCUB_SCAN_REFINE
+   endif
+   FFLAGS = -cpp -gpu=$(CUDA_ARCH) -cuda -cudalib=nvtx,curand $(DEFINES)
+   LIBS = -gpu=$(CUDA_ARCH) -cuda -cudalib=nvtx,curand -lstdc++
    GPU_PATH = ../gpu
+   ifeq ($(CUDA_PROFILE),1)
+      FFLAGS += -gpu=lineinfo,ptxinfo -Minstrument -traceback -gopt
+      LIBS += -gpu=lineinfo,ptxinfo -Minstrument -traceback -gopt
+   endif
    ifeq ($(MPI),1)
       F90 = $(MPIF90)
       FC = nvfortran
@@ -186,6 +213,56 @@ ifeq ($(COMPILER),NVHPC)
    else
       F90 += -O4
    endif
+endif
+#############################################################################
+# Metal compiler (Apple Silicon, always NPRE=4/float32)
+ifeq ($(COMPILER),METAL)
+   # _METAL define gates the Metal path in CPU source files.
+   # NPRE=4 is hardcoded: Apple GPU has no float64.
+   # No MPI support.
+   DEFINES     += -D_METAL -DNPRE=4 -DWITHOUTMPI
+   FFLAGS       = -cpp $(DEFINES)
+   F90          = gfortran -ffree-line-length-none -fimplicit-none
+   FC           = gfortran -ffree-line-length-none -fimplicit-none
+   ifeq ($(DEBUG),1)
+      F90       += -O0 -fcheck=bounds -g -fbacktrace -Wall
+      FFLAGS    += -g
+   else
+      F90       += -O3
+   endif
+   # Obj-C++ bridge
+   METAL_PATH   = ../metal
+   METAL_KPATH  = ../metal/kernels
+   CXX          = xcrun clang++
+   CXXFLAGS     = -std=c++17 -ObjC++ -fobjc-arc -O2 -I$(METAL_PATH)
+   ifeq ($(MHD),1)
+      CXXFLAGS += -DMHD
+   endif
+   ifeq ($(GRAV),1)
+      CXXFLAGS += -DGRAV
+   endif
+   ifeq ($(DEBUG),1)
+      CXXFLAGS  += -g -O0
+   endif
+   METALC       = xcrun -sdk macosx metal
+   METALLIB     = xcrun -sdk macosx metallib
+   METALFLAGS   = -std=metal3.1 -O2 -DNDIM=$(NDIM) "-DNVAR=($(NVAR))" -I$(METAL_PATH) -I$(METAL_KPATH)
+   ifeq ($(DEBUG),1)
+      METALFLAGS += -gline-tables-only -frecord-sources
+   endif
+   ifeq ($(HYDRO),1)
+      METALFLAGS += -DHYDRO
+   endif
+   ifeq ($(GRAV),1)
+      METALFLAGS += -DGRAV
+   endif
+   ifeq ($(MHD),1)
+      METALFLAGS += -DMHD
+   endif
+   # Link flags: Metal + Foundation frameworks, C++ runtime for the bridge
+   LIBS         = -framework Metal -framework Foundation -lstdc++
+   # metallib must sit next to the executable so the bridge can load it
+   METAL_METALLIB = ramses_kernels.metallib
 endif
 #############################################################################
 C = ifort
@@ -207,8 +284,7 @@ endif
 LIBS += $(LIBMPI) $(LIBFFTW)
 #############################################################################
 # Sources directories are searched in this exact order
-VPATH = $(PATCH):$(GPU_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:\
-../pm:../poisson:../amr:../clump:../mdl1:../rt:../cr:../lightcone
+VPATH = $(PATCH):$(GPU_PATH):$(METAL_PATH):../feedback:../sink:../star:../cooling:../turb:../hydro:../pm:../poisson:../amr:../clump:../mdl1:../rt:../cr:../lightcone
 #############################################################################
 # Modules
 MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o cr_parameters.o oct_commons.o \
@@ -220,9 +296,9 @@ MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o cr_parameters.o oct
 	 cosmic_ray_ionization_module.o photoionization_UVB_module.o dust_recombination_module.o \
 	 molecules_module.o charge_exchange_module.o rtz_module.o
 ifeq ($(RTZ),1)
-MODOBJ += rtz_coolrates_module.o rtz_cooling_module.o
+   MODOBJ += rtz_coolrates_module.o rtz_cooling_module.o
 else
-MODOBJ += neq_cooling_module.o 
+   MODOBJ += neq_cooling_module.o
 endif
 MODOBJ += init_neq_chem.o clfind_commons.o turb_commons.o mdl_commons.o mdl.o \
 	 cross_sections_module.o rt_spectra.o  \
@@ -230,7 +306,13 @@ MODOBJ += init_neq_chem.o clfind_commons.o turb_commons.o mdl_commons.o mdl.o \
 	 boundaries.o output_hydro.o output_poisson.o output_part.o output_rt.o output_cr.o \
 	 output_amr.o movie.o sort.o nbors_utils.o hydro_flag.o marshal.o
 ifeq ($(COMPILER),NVHPC)
-MODOBJ += gpu_utils.o gpu_hydro.o gpu_cooling.o gpu_rho.o gpu_mg.o gpu_refine.o gpu_flag.o gpu_runner.o gpu_manager.o
+   MODOBJ += cub_module_radix_sort_c.o cub_module_radix_sort_f.o \
+      cub_inclusive_scan_c.o cub_inclusive_scan_f.o gpu_utils.o gpu_hydro.o \
+      gpu_cooling.o gpu_star.o gpu_feedback.o gpu_rho.o gpu_mg.o gpu_refine.o gpu_flag.o gpu_turb.o gpu_runner.o \
+      gpu_part.o gpu_manager.o
+endif
+ifeq ($(COMPILER),METAL)
+   MODOBJ := metal_interface.o metal_bridge.o $(MODOBJ) metal_runner.o
 endif
 MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 rt_flux_module.o rt_godunov_fine.o rt_input_condinit.o rt_init_flow_fine.o rt_units.o  \
@@ -254,7 +336,7 @@ MODOBJ +=  multigrid_fine_coarse.o rho_fine.o upload.o init_xion.o \
 	 sink_evolution.o sink_merger.o task_manager.o rt_step.o cr_step.o amr_step.o \
 	 adaptive_loop.o write_gitinfo.o
 #############################################################################
-ramses:	$(MODOBJ) ramses.o
+ramses:	$(MODOBJ) ramses.o $(METAL_METALLIB)
 	$(F90) $(FFLAGS) $(MODOBJ) ramses.o -o $(EXEC)$(NDIM)d $(LIBS)
 #############################################################################
 test_cooling:	$(MODOBJ) test_cooling.o
@@ -263,16 +345,54 @@ test_cooling:	$(MODOBJ) test_cooling.o
 write_gitinfo.o: FORCE
 	$(FC) -O0 -cpp -DPATCH=\'"$(PATCH)"\' -DGITBRANCH=\'"$(GITBRANCH)"\' -DGITHASH=\'"$(GITHASH)"\' \
                 -DGITREPO=\'"$(GITREPO)"\' -DBUILDDATE=\'"$(BUILDDATE)"\' -DBUILDCOMMAND=\'"$(BUILDCOMMAND)"\' -c ../amr/write_gitinfo.f90 -o $@
+#############################################################################
+cub_inclusive_scan_c.o: cub_inclusive_scan.h cub_inclusive_scan.cu
+	nvcc -arch=$(CUDA_ARCH) -O3 -lineinfo -c $(GPU_PATH)/cub_inclusive_scan.cu -o cub_inclusive_scan_c.o
+#############################################################################
+cub_inclusive_scan_f.o: cub_inclusive_scan.cuf cub_inclusive_scan_c.o
+	nvfortran $(FFLAGS) -c cub_inclusive_scan_c.o $(GPU_PATH)/cub_inclusive_scan.cuf -o cub_inclusive_scan_f.o
+#############################################################################
+cub_module_radix_sort_c.o: cub_module_radix_sort.h cub_module_radix_sort.cu
+	nvcc -arch=$(CUDA_ARCH) -O3 -lineinfo -c $(GPU_PATH)/cub_module_radix_sort.cu -o cub_module_radix_sort_c.o
+#############################################################################
+cub_module_radix_sort_f.o: cub_module_radix_sort.cuf cub_module_radix_sort_c.o
+	nvfortran $(FFLAGS) -c cub_module_radix_sort_c.o $(GPU_PATH)/cub_module_radix_sort.cuf -o cub_module_radix_sort_f.o
+
 %.o:%.cuf
-	$(F90) $(FFLAGS) -c $^ -o $@ $(LIBS)
+	$(F90) $(FFLAGS) -c $< -o $@ $(LIBS)
 %.o:%.f90
-	$(F90) $(FFLAGS) -c $^ -o $@ $(LIBS)
+	$(F90) $(FFLAGS) -c $< -o $@ $(LIBS)
 %.o:%.c
-	$(C) $(CFLAGS) -c $^ -o $@
+	$(C) $(CFLAGS) -c $< -o $@
+#############################################################################
+# Metal-specific build rules
+metal_bridge.o: $(METAL_PATH)/metal_bridge.mm $(METAL_PATH)/metal_config.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+hydro.air: $(METAL_KPATH)/hydro.metal $(if $(filter 1,$(MHD)),$(METAL_KPATH)/mhd_uct.metal $(METAL_PATH)/metal_config.h) $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+refine.air: $(METAL_KPATH)/refine.metal $(METAL_PATH)/metal_types.h $(METAL_PATH)/metal_config.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+flag.air: $(METAL_KPATH)/flag.metal $(METAL_PATH)/metal_types.h $(METAL_PATH)/metal_config.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+scan.air: $(METAL_KPATH)/scan.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+rho.air: $(METAL_KPATH)/rho.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+mg.air: $(METAL_KPATH)/mg.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+cooling.air: $(METAL_KPATH)/cooling.metal $(METAL_PATH)/metal_types.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+part.air: $(METAL_KPATH)/part.metal $(METAL_PATH)/metal_types.h $(METAL_KPATH)/metal_utils.h
+	$(METALC) $(METALFLAGS) -c $< -o $@
+METAL_AIR = hydro.air refine.air flag.air scan.air rho.air mg.air cooling.air part.air
+ramses_kernels.metallib: $(METAL_AIR)
+	$(METALLIB) $^ -o $@
 FORCE:
 #############################################################################
+-include deps.mk
+#############################################################################
 clean :
-	rm -f *.o *.$(MOD)
+	rm -f *.o *.$(MOD) *.air *.metallib
 
 clobber: clean
 	-find . -type d -name "NDIM*" -prune -exec rm -rf '{}' \;

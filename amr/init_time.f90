@@ -193,8 +193,8 @@ subroutine init_file(mdl,r,g,m)
   ! Write initial conditions parameters
   if(g%myid==1)then
      do ilevel=r%levelmin,g%nlevelmax_part
-        write(*,'(" Initial conditions for level =",I4)')ilevel
-        write(*,'(" n1=",I4," n2=",I4," n3=",I4)') &
+        write(*,'(" Initial conditions for level ",I0)')ilevel
+        write(*,'(" n1= ",I0," n2= ",I0," n3= ",I0)') &
              & g%n1(ilevel),&
              & g%n2(ilevel),&
              & g%n3(ilevel)
@@ -250,9 +250,9 @@ subroutine init_cosmo(mdl,r,g)
         if(r%initfile(ilevel).ne.' ')then
            if(r%multiple)then
               call title(g%myid,nchar)
-              filename=TRIM(r%initfile(ilevel))//'/dir_deltab/ic_deltab.'//TRIM(nchar)
+              filename=TRIM(r%initfile(ilevel))//'/dir_deltab/ic_velcx.'//TRIM(nchar)
            else
-              filename=TRIM(r%initfile(ilevel))//'/ic_deltab'
+              filename=TRIM(r%initfile(ilevel))//'/ic_velcx'
            endif
            INQUIRE(file=filename,exist=ok)
            if(.not.ok)then
@@ -402,12 +402,12 @@ subroutine init_cosmo(mdl,r,g)
   ! Write initial conditions parameters
   do ilevel=r%levelmin,g%nlevelmax_part
      if(g%myid==1)then
-        write(*,'(" Initial conditions for level =",I4)')ilevel
+        write(*,'(" Initial conditions for level ",I0)')ilevel
         write(*,'(" dx=",1pe10.3," h-1 Mpc")')g%dxini(ilevel)*g%h0/100.
      endif
      if(.not.r%multiple)then
         if(g%myid==1)then
-           write(*,'(" n1=",I4," n2=",I4," n3=",I4)') &
+           write(*,'(" n1= ",I0," n2= ",I0," n3= ",I0)') &
                 & g%n1(ilevel),&
                 & g%n2(ilevel),&
                 & g%n3(ilevel)
@@ -417,9 +417,9 @@ subroutine init_cosmo(mdl,r,g)
                 & g%xoff3(ilevel)*g%h0/100.
         endif
      else
-        write(*,'(" myid=",I4," n1=",I4," n2=",I4," n3=",I4)') &
+        write(*,'(" myid= ",I0," n1= ",I0," n2= ",I0," n3= ",I0)') &
              & g%myid,g%n1(ilevel),g%n2(ilevel),g%n3(ilevel)
-        write(*,'(" myid=",I4," xoff=",1pe10.3," yoff=",1pe10.3," zoff=",1pe10.3," h-1 Mpc")') &
+        write(*,'(" myid= ",I0," xoff=",1pe10.3," yoff=",1pe10.3," zoff=",1pe10.3," h-1 Mpc")') &
              & g%myid,g%xoff1(ilevel)*g%h0/100.,&
              & g%xoff2(ilevel)*g%h0/100.,&
              & g%xoff3(ilevel)*g%h0/100.

@@ -14,7 +14,7 @@ parser.add_argument("--xcen", help="specify the region center x-coordinate")
 parser.add_argument("--ycen", help="specify the region center y-coordinate")
 parser.add_argument("--zcen", help="specify the region center z-coordinate")
 parser.add_argument("--rad", help="specify the region radius")
-parser.add_argument("--bin", help="specify the bin size in Myr")
+parser.add_argument("--bin", help="specify the bin size in Gyr")
 args = parser.parse_args()
 # path the the file
 path = args.path
@@ -49,7 +49,7 @@ center=np.array([xcenter,ycenter,zcenter])
 if dt==None:
     bin_size=0.1  #in Gyr
 else:
-    bin_size=float(dt)/1000
+    bin_size=float(dt)
 
 nout = args.nout
 print("Reading output number ",nout)
@@ -57,6 +57,10 @@ print("Reading output number ",nout)
 s=ram.rd_part(nout,path=path,prefix='star',center=center,radius=radius)
 i=ram.rd_info(nout,path=path)
 time=abs(s.birth_date*i.unit_t/i.aexp**2/(365*24*3600*1e9))
+if np.max(time) < bin_size:
+    print("Reduce bin size, bin=",bin_size," max(time)=",np.max(time))
+    exit()
+
 n_bin=int(np.max(time)/bin_size)
 bins=np.linspace(0,np.max(time),n_bin)
 unit_m=i.unit_d*i.unit_l**3/2e33/(bins[1]-bins[0])/1e9

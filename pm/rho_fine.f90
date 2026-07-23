@@ -1,6 +1,12 @@
 module rho_fine_module
 #ifdef _CUDA
-  use gpu_runner, only: gpu_multipole_leaf, gpu_multipole_split, gpu_reset_rho, gpu_cic_multipole
+  use gpu_runner, only: gpu_multipole_leaf, gpu_multipole_split, gpu_reset_rho, gpu_cic_multipole, gpu_cic_multipole2
+  use part_device, only: gpu_split_part, gpu_sort_part, gpu_cic_part_large, gpu_cic_part_medium, gpu_cic_part_small
+  use part_device, only: gpu_split_star, gpu_sort_star, gpu_cic_star_large, gpu_cic_star_medium, gpu_cic_star_small
+#endif
+#ifdef _METAL
+  use metal_runner, only: metal_multipole_leaf, metal_multipole_upload, metal_reset_rho, metal_cic_multipole2, &
+       metal_split_part, metal_sort_part, metal_cic_part_medium
 #endif
 contains
 !###############################################
@@ -168,12 +174,16 @@ recursive subroutine r_multipole_leaf_cells(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_multipole_leaf(pst%s, ilevel)
-     else
-        call multipole_leaf_cells(pst%s%r,pst%s%g,pst%s%m,ilevel)
+        return
      endif
-#else
-     call multipole_leaf_cells(pst%s%r,pst%s%g,pst%s%m,ilevel)
 #endif
+#ifdef _METAL
+     if(pst%s%m%data_on_device)then
+        call metal_multipole_leaf(pst%s, ilevel)
+        return
+     endif
+#endif
+     call multipole_leaf_cells(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
 
 end subroutine r_multipole_leaf_cells
@@ -282,12 +292,16 @@ recursive subroutine r_multipole_split_cells(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_multipole_split(pst%s, ilevel)
-     else
-        call multipole_split_cells(pst%s,ilevel)
+        return
      endif
-#else
-     call multipole_split_cells(pst%s,ilevel)
 #endif
+#ifdef _METAL
+     if(pst%s%m%data_on_device)then
+        call metal_multipole_upload(pst%s, ilevel)
+        return
+     endif
+#endif
+     call multipole_split_cells(pst%s,ilevel)
   endif
 
 end subroutine r_multipole_split_cells
@@ -455,12 +469,16 @@ recursive subroutine r_reset_rho(pst,ilevel,input_size)
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
         call gpu_reset_rho(pst%s, ilevel)
-     else
-        call reset_rho(pst%s%r,pst%s%g,pst%s%m,ilevel)
+        return
      endif
-#else
-     call reset_rho(pst%s%r,pst%s%g,pst%s%m,ilevel)
 #endif
+#ifdef _METAL
+     if(pst%s%m%data_on_device)then
+        call metal_reset_rho(pst%s, ilevel)
+        return
+     endif
+#endif
+     call reset_rho(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
 
 end subroutine r_reset_rho
@@ -518,13 +536,17 @@ recursive subroutine r_cic_multipole(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      if(pst%s%m%data_on_device)then
-        call gpu_cic_multipole(pst%s, ilevel)
-     else
-        call cic_multipole(pst%s,ilevel)
+        call gpu_cic_multipole2(pst%s, ilevel)
+        return
      endif
-#else
-     call cic_multipole(pst%s,ilevel)
 #endif
+#ifdef _METAL
+     if(pst%s%m%data_on_device)then
+        call metal_cic_multipole2(pst%s, ilevel)
+        return
+     endif
+#endif
+     call cic_multipole(pst%s,ilevel)
   endif
 
 end subroutine r_cic_multipole
@@ -674,6 +696,38 @@ recursive subroutine r_cic_part(pst,input_array,input_size)
   else
      ilevel=input_array(1)
      rtype=input_array(2)
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)then
+           if(pst%s%r%part_dep_algo==2)then
+              call gpu_cic_part_medium(pst%s, ilevel, rtype)
+           else if(pst%s%r%part_dep_algo==3)then
+              call gpu_cic_part_small(pst%s, ilevel, rtype)
+           else
+              call gpu_cic_part_large(pst%s, ilevel, rtype)
+           endif
+        endif
+        if(pst%s%r%star)then
+           if(pst%s%r%star_dep_algo==2)then
+              call gpu_cic_star_medium(pst%s, ilevel, rtype)
+           else if(pst%s%r%star_dep_algo==3)then
+              call gpu_cic_star_small(pst%s, ilevel, rtype)
+           else
+              call gpu_cic_star_large(pst%s, ilevel, rtype)
+           endif
+        endif
+        return
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)then
+           if(pst%s%r%part_dep_algo==2)then
+              call metal_cic_part_medium(pst%s, ilevel, rtype)
+           endif
+        endif
+        return
+     endif
+#endif
      ! Mass deposition for various components (DM particles, star, sink)
      ! based on their respective deposition schemes (CIC 1, TSC 2 or PCS 3)
      if(pst%s%r%part)then
@@ -685,7 +739,7 @@ recursive subroutine r_cic_part(pst,input_array,input_size)
            call pcs_part(pst%s,pst%s%p   ,ilevel,rtype)
         endif
      endif
-     if(pst%s%r%star)then 
+     if(pst%s%r%star)then
         if(pst%s%r%star_mass_deposition_scheme==1)then
            call cic_part(pst%s,pst%s%star,ilevel,rtype)
         elseif(pst%s%r%star_mass_deposition_scheme==2)then
@@ -1205,6 +1259,18 @@ recursive subroutine r_split_part(pst,ilevel,input_size)
      call r_split_part(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call gpu_split_part(pst%s, ilevel)
+        if(pst%s%r%star)call gpu_split_star(pst%s, ilevel)
+        return
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call metal_split_part(pst%s, ilevel)
+        return
+     endif
+#endif
      if(pst%s%r%part)call split_part(pst%s,pst%s%p   ,ilevel)
      if(pst%s%r%star)call split_part(pst%s,pst%s%star,ilevel)
      if(pst%s%r%sink)call split_part(pst%s,pst%s%sink,ilevel)
@@ -1411,6 +1477,13 @@ subroutine split_part(s,p,ilevel)
            mp_tmp=p%tm(ipart)
            p%tm(ipart)=p%tm(jpart)
            p%tm(jpart)=mp_tmp
+        endif
+        ! Swap potential (per-particle; must move with idp so the
+        ! gathered potential stays attached to its particle).
+        if(allocated(p%phip))then
+           mp_tmp=p%phip(ipart)
+           p%phip(ipart)=p%phip(jpart)
+           p%phip(jpart)=mp_tmp
         endif
         ! Swap levels
         levelp_tmp=p%levelp(ipart)
@@ -1946,6 +2019,18 @@ recursive subroutine r_sort_part(pst,ilevel,input_size)
      call r_sort_part(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call gpu_sort_part(pst%s, ilevel)
+        if(pst%s%r%star)call gpu_sort_star(pst%s, ilevel)
+        return
+     endif
+#elif defined(_METAL)
+     if(pst%s%m%data_on_device)then
+        if(pst%s%r%part)call metal_sort_part(pst%s, ilevel)
+        return
+     endif
+#endif
      if(pst%s%r%part)call sort_part(pst%s,pst%s%p   ,ilevel)
      if(pst%s%r%star)call sort_part(pst%s,pst%s%star,ilevel)
      if(pst%s%r%sink)call sort_part(pst%s,pst%s%sink,ilevel)

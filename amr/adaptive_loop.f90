@@ -21,6 +21,10 @@ subroutine adaptive_loop(pst)
   use clump_finder_module, only: m_clump_finder
 #ifdef _CUDA
   use gpu_manager, only: r_set_grid_device
+  use nvtx
+#endif
+#ifdef _METAL
+  use metal_runner, only: r_set_grid_device
 #endif
 
   implicit none
@@ -31,6 +35,14 @@ subroutine adaptive_loop(pst)
   integer::ilevel, dummy
   double precision::tt1,tt2
   real(kind=4)::core_mem
+#ifdef _METAL
+  real(kind=8), external :: wallclock
+#endif
+#ifdef _CUDA
+  character(len=32) :: str_step
+  integer step
+  step = 0
+#endif
 
   associate(r=>pst%s%r,g=>pst%s%g,mdl=>pst%s%mdl)
 
@@ -81,19 +93,22 @@ subroutine adaptive_loop(pst)
 
   ! Timing since startup
   tt2 = mdl_wtime(mdl)
-  print '(A,F14.7)',' Time elapsed since startup:',tt2-tt1
+  print '(A,F0.7)',' Time elapsed since startup: ',tt2-tt1
 
   ! Output mesh structure
   do ilevel=r%levelmin,r%nlevelmax
      if(pst%s%m%noct_tot(ilevel)>0)write(*,999)&
           & ilevel,pst%s%m%noct_tot(ilevel),pst%s%m%noct_min(ilevel),pst%s%m%noct_max(ilevel),pst%s%m%noct_tot(ilevel)/mdl_threads(mdl)
   end do
-999 format(' Level ',I2,' has ',I11,' grids (',3(I8,','),')')
+999 format(' Level ',I0,' has ',I0,' grids (',I0,',',I0,',',I0,')')
 
   g%nstep_coarse_old=g%nstep_coarse
 
 #ifdef _CUDA
   ! Copy entire grid from host to device
+  call r_set_grid_device(pst)
+#endif
+#ifdef _METAL
   call r_set_grid_device(pst)
 #endif
 
@@ -103,7 +118,7 @@ subroutine adaptive_loop(pst)
      tt1 = mdl_wtime(mdl)
      call r_balance_part(pst,r%levelmin,1,dummy,0)
      tt2 = mdl_wtime(mdl)
-     print '(A,F14.7)',' Time elapsed load balancing:',tt2-tt1
+     print '(A,F0.7)',' Time elapsed load balancing: ',tt2-tt1
      call m_clump_finder(pst,.true.,.false.)
      return
   endif
@@ -113,7 +128,17 @@ subroutine adaptive_loop(pst)
   done = .false.
   do while(.not.done) ! Main time loop
 
+#ifdef _CUDA
+     write(str_step,'(A,I0)'),"step_",step
+     call nvtxStartRange(trim(str_step), color=5)
+     step = step + 1
+#endif
+
+#ifdef _METAL
+     tt1 = wallclock()
+#else
      tt1 = mdl_wtime(mdl)
+#endif
 
      if(r%verbose)write(*,*)'Entering amr_step_coarse'
 
@@ -129,14 +154,21 @@ subroutine adaptive_loop(pst)
      ! New coarse time-step
      g%nstep_coarse=g%nstep_coarse+1
 
+#ifdef _METAL
+     tt2 = wallclock()
+#else
      tt2 = mdl_wtime(mdl)
+#endif
      if(mod(g%nstep_coarse,r%ncontrol)==0)then
-        if(.not. done)print '(A,F14.7)',' Time elapsed since last coarse step:',tt2-tt1
+        if(.not. done)print '(A,F0.7)',' Time elapsed since last coarse step: ',tt2-tt1
      endif
 
      call getmem(core_mem)
      call writemem(core_mem)
 
+#ifdef _CUDA
+     call nvtxEndRange()
+#endif
   end do
 
   call m_output_timer(.false.,'dummy')

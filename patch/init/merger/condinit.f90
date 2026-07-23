@@ -207,12 +207,12 @@ subroutine condinit(r,g,x,q,dx,nn)
   slabvol = pi * (rslab**2) * hslab
   denslab = (Mgaz_disk1 * HIfr) / slabvol
   
-  if(maxval(abs(xc1)) .GT. (r%boxlen/2.0D0))then
-     write(*,*)'Error: galactic center (1) coordinates must be in the box [', (-r%boxlen/2.0D0), ';', (r%boxlen/2.0D0), ']^3'
+  if(maxval(abs(xc1)) .GT. (minval(r%box_size(1:ndim))/2.0D0))then
+     write(*,*)'Error: galactic center (1) coordinates must be in the box [', (-r%box_size(1)/2.0D0), ';', (r%box_size(1)/2.0D0), ']^3'
      stop
   endif
-  if((maxval(abs(xc2)) .GT. (r%boxlen/2.0D0)) .AND. (Mgaz_disk2 .NE. 0.0D0))then
-     write(*,*)'Error: galactic center (2) coordinates must be in the box [', (-r%boxlen/2.0D0), ';', (r%boxlen/2.0D0), ']^3'
+  if((maxval(abs(xc2)) .GT. (minval(r%box_size(1:ndim))/2.0D0)) .AND. (Mgaz_disk2 .NE. 0.0D0))then
+     write(*,*)'Error: galactic center (2) coordinates must be in the box [', (-r%box_size(1)/2.0D0), ';', (r%box_size(1)/2.0D0), ']^3'
      stop
   endif
   
@@ -269,8 +269,8 @@ subroutine condinit(r,g,x,q,dx,nn)
   ! Loop over cells
   do i=1,nn
      do j=1,3
-        xx1(j)=x(i,j)-(xc1(j)+r%boxlen/2.0D0)
-        xx2(j)=x(i,j)-(xc2(j)+r%boxlen/2.0D0)
+        xx1(j)=x(i,j)-(xc1(j)+r%box_size(j)/2.0D0)
+        xx2(j)=x(i,j)-(xc2(j)+r%box_size(j)/2.0D0)
      enddo
      
      ! Compute angular velocity

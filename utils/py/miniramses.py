@@ -848,7 +848,7 @@ def rd_amr(nout,**kwargs):
         amr[ilevel].refined = np.zeros([2**ndim,amr[ilevel].ngrid],dtype=bool)
 
     iskip = np.zeros(nlevelmax, dtype=int)
-    nvar = ndim+2**ndim
+    nvar = ndim+1
 
     # Reading and storing data
     for icpu in cpulist:
@@ -873,8 +873,9 @@ def rd_amr(nout,**kwargs):
                 amr[ilevel].xg[idim,iskip[ilevel]:iskip[ilevel]+ncache] = transfer[idim]
 
             # Store cell refinement map
+            refined_int = transfer[ndim]
             for ind in range(0,2**ndim):
-                amr[ilevel].refined[ind,iskip[ilevel]:iskip[ilevel]+ncache] = transfer[ndim+ind]
+                amr[ilevel].refined[ind,iskip[ilevel]:iskip[ilevel]+ncache] = (refined_int >> ind) & 1
 
             offset = offset + ncache*nvar*4
             iskip[ilevel] = iskip[ilevel] + ncache
@@ -1255,23 +1256,25 @@ def rd_cell(nout,**kwargs):
     c = Cell(ndim,nvar)
     c.ncell = ncell
 
+    c.x = np.zeros([ndim, ncell])
+    c.u = np.zeros([nvar, ncell])
+    c.dx = np.zeros(ncell)
+    c.level = np.zeros(ncell, dtype=np.int8)
+
+    icell = 0
     for ilev in range(0,nlevelmax):
         dx = 0.5*boxlen/2**ilev
         for ind in range(0,2**ndim):
-            nc = np.count_nonzero(a[ilev].refined[ind] == False)
+            mask = a[ilev].refined[ind] == False
+            nc = np.count_nonzero(mask)
             if (nc > 0):
-                xc = np.zeros([ndim,nc])
                 for idim in range(0,ndim):
-                    xc[idim,:]= (2*a[ilev].xg[idim,np.where(a[ilev].refined[ind] == False)]+1+offset[idim,ind])*dx
-                c.x = np.append(c.x,xc,axis=1)
-                uc = np.zeros([nvar,nc])
+                    c.x[idim, icell:icell+nc] = (2*a[ilev].xg[idim,mask]+1+offset[idim,ind])*dx
                 for ivar in range(0,nvar):
-                    uc[ivar,:]= h[ilev].u[ivar,ind,np.where(a[ilev].refined[ind] == False)]
-                c.u = np.append(c.u,uc,axis=1)
-                dd = np.ones(nc)*dx
-                c.dx = np.append(c.dx,dd)
-                dd = np.ones(nc,dtype=np.int8) * ilev
-                c.level = np.append(c.level,dd)
+                    c.u[ivar, icell:icell+nc] = h[ilev].u[ivar,ind,mask]
+                c.dx[icell:icell+nc] = dx
+                c.level[icell:icell+nc] = ilev
+                icell = icell + nc
 
     # Filtering cells
     if ( not (center is None)  and not (radius is None) ):

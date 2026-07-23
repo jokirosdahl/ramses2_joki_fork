@@ -1,7 +1,8 @@
 module synchro_hydro_fine_module
 #ifdef _CUDA
   use gpu_runner, only: gpu_sync_hydro, gpu_grav_hydro
-  use nvtx
+#elif defined(_METAL)
+  use metal_runner, only: metal_sync_hydro, metal_grav_hydro
 #endif
 contains
 !################################################################
@@ -56,6 +57,8 @@ recursive subroutine r_synchro_hydro_fine(pst,input_array,input_size,output_arra
      dteff=transfer(input_array(2:3),dteff)
 #ifdef _CUDA
      call gpu_sync_hydro(pst%s, ilevel, dteff)
+#elif defined(_METAL)
+     call metal_sync_hydro(pst%s, ilevel, dteff)
 #else
      call synchro_hydro_fine(pst%s%r,pst%s%m,ilevel,dteff)
 #endif
@@ -141,6 +144,8 @@ recursive subroutine r_gravity_hydro_fine(pst,ilevel,input_size)
   else
 #ifdef _CUDA
      call gpu_grav_hydro(pst%s, ilevel)
+#elif defined(_METAL)
+     call metal_grav_hydro(pst%s, ilevel)
 #else
      call gravity_hydro_fine(pst%s%r,pst%s%g,pst%s%m,ilevel)
 #endif

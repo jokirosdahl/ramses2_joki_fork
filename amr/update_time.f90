@@ -26,6 +26,9 @@ subroutine m_update_time(pst,ilevel,done)
   real(kind=8)::dt,econs,mcons
   integer::i,itest
   type(in_broadcast_aexp_t)::in_broadcast_aexp
+#ifdef _METAL
+  real(kind=8), external :: wallclock
+#endif
   
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
@@ -33,7 +36,11 @@ subroutine m_update_time(pst,ilevel,done)
   dt=g%dtnew(ilevel)
   itest=0
 
+#ifdef _METAL
+  if(ttstart.eq.0.0) ttstart = wallclock()
+#else
   if(ttstart.eq.0.0) ttstart = mdl_wtime(mdl)
+#endif
 
   ! Update the outer lightcone shell boundary after restart
   if(g%first_coarse_restart)then 
@@ -82,7 +89,7 @@ subroutine m_update_time(pst,ilevel,done)
         do i=r%levelmin,r%nlevelmax
            if(m%noct_tot(i)>0)write(*,999)i,m%noct_tot(i),m%noct_min(i),m%noct_max(i),m%noct_tot(i)/g%ncpu
         end do
-999     format(' Level ',I2,' has ',I11,' grids (',3(I8,','),')')
+999     format(' Level ',I0,' has ',I0,' grids (',I0,',',I0,',',I0,')')
 
         !------------------------
         ! Output timing data
@@ -113,18 +120,29 @@ subroutine m_update_time(pst,ilevel,done)
         end if
         if(r%star)write(*,'(" Total mass in stars=",1PE14.7)')g%mass_star_tot
         if(r%sink)write(*,'(" Total mass in sinks=",1PE14.7)')g%mass_sink_tot
-777     format(' Main step=',i6,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2)
-778     format(' Main step=',i6,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2,' eint=',1pe9.2)
-779     format(' Main step=',i6,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2,' eint=',1pe9.2,' emag=',1pe9.2)
+777     format(' Main step= ',i0,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2)
+778     format(' Main step= ',i0,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2,' eint=',1pe9.2)
+779     format(' Main step= ',i0,' mcons=',1pe9.2,' econs=',1pe9.2,' epot=',1pe9.2,' ekin=',1pe9.2,' eint=',1pe9.2,' emag=',1pe9.2)
 
         !----------------------------------------------
         ! Output fine step information and used memory
         !----------------------------------------------
         if(r%part)then
+#if defined(_CUDA) || defined(_METAL)
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
+                & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
+                & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
+#else
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
+#endif
         else
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
+#if defined(_CUDA) || defined(_METAL)
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
+                & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
+#else
+                write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
+#endif
         endif
         itest=1
      end if
@@ -135,8 +153,12 @@ subroutine m_update_time(pst,ilevel,done)
      !---------------
      if(g%t>=r%tout(r%noutput).or.g%aexp>=r%aout(r%noutput).or.g%nstep_coarse>=r%nstepmax)then
         write(*,*)'Run completed'
+#ifdef _METAL
+        ttend = wallclock()
+#else
         ttend = mdl_wtime(mdl)
-        print '(A,F14.7)',' Total elapsed time:',ttend-ttstart
+#endif
+        print '(A,F0.7)',' Total elapsed time: ',ttend-ttstart
         done=.true.
         return
         !call mdl_abort(mdl)
@@ -151,14 +173,25 @@ subroutine m_update_time(pst,ilevel,done)
   if(mod(g%nstep,r%ncontrol)==0)then
      if(itest==0)then
         if(r%part)then
+#if defined(_CUDA) || defined(_METAL)
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
+                & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax)),&
+                & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
+#else
            write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
                 & real(100.0D0*dble(p%npart_max)/dble(r%npartmax+1))
+#endif
         else
-           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
+#if defined(_CUDA) || defined(_METAL)
+           write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax)),&
+                & real(100.0D0*dble(m%ifree_cache)/dble(m%ncachemax))
+#else
+                write(*,888)g%nstep,g%t,dt,g%aexp,real(100.0D0*dble(m%noct_used_max)/dble(m%ngridmax))
+#endif
         endif
      end if
   end if
-888 format(' Fine step=',i7,' t=',1pe12.5,' dt=',1pe10.3,' a=',1pe10.3,' mem=',0pF4.1,'% ',0pF4.1,'%')
+888 format(' Fine step= ',i0,' t=',1pe12.5,' dt=',1pe10.3,' a=',1pe10.3,' mem=',0pF0.1,'% ',0pF0.1,'% ',0pF0.1,'%')
  
   !------------------------
   ! Update time variables
@@ -193,6 +226,7 @@ subroutine m_update_time(pst,ilevel,done)
   call r_broadcast_aexp(pst,in_broadcast_aexp,storage_size(in_broadcast_aexp)/32)
 
   ! Update turbulent driving field
+  call m_timer('hydro - turbulence','start')
   if(r%turb)call r_update_turb(pst)
 
 end associate
@@ -266,18 +300,29 @@ subroutine writemem(usedmem)
      write(*,997)usedmem/1024.
   endif
 
-997 format(' Used memory:',F6.1,' kb')
-998 format(' Used memory:',F6.1,' Mb')
-999 format(' Used memory:',F6.1,' Gb')
+997 format(' Used memory: ',F0.1,' kb')
+998 format(' Used memory: ',F0.1,' Mb')
+999 format(' Used memory: ',F0.1,' Gb')
 
 end subroutine writemem
 
 subroutine getmem(outmem)
+  use iso_c_binding, only: c_long
   real::outmem
   character(len=300) :: dir, dir2, file
   integer::ind,j,nmem,read_status
   logical::file_exists
-  
+#ifdef _METAL
+  interface
+    function getmem_mac() bind(c, name='getmem_mac')
+      import c_long
+      integer(c_long) :: getmem_mac
+    end function getmem_mac
+  end interface
+  outmem = real(getmem_mac(), kind=4)
+  return
+#endif
+
   file='/proc/self/stat'
   inquire(file=file, exist=file_exists)
   if (file_exists) then

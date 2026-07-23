@@ -56,6 +56,10 @@ module amr_commons
      real(kind=8)::bkp_last_min=10  ! Backup file before the end of run in min
      integer::bkp_modulo=0       ! Use modulo for backup file count
      integer::nfile=1            ! Number of file used per snapshot. Use -1 for nfile=ncpu
+     logical::output_part=.true. ! Output particle data in dumps
+     logical::output_grav=.true. ! Output gravity data in dumps
+     logical::output_hydro=.true.! Output hydro data in dumps
+     logical::output_amr=.true.  ! Output AMR data in dumps
 
      ! Trajectory output parameters (per-step particle traces)
      integer::ntrajectories=0
@@ -87,14 +91,20 @@ module amr_commons
      ! Poisson solver parameters
      logical :: gravity_test=.false.  ! Use file rho_ana.f90 to test the Poisson solvers
      real(kind=8)::epsilon=1.0D-4     ! Convergence criterion for Poisson solvers
+     integer :: nvcycle = -1          ! Desired number of V-cycles
      real(kind=8),dimension(1:10)::gravity_params=0.0 ! Gravity parameters
      integer :: gravity_type=0     ! Type of force computation
      integer :: cic_levelmax=0     ! Maximum level for CIC dark matter interpolation
      integer :: cg_levelmin=999    ! Min level for CG solver
      logical :: fast_solver = .false. ! Fast solver with MPI pre-fetch (memory intensive)
      integer :: part_mass_deposition_scheme=1     ! part mass deposition schemes (CIC 1, TSC 2, PCS 3)
+     integer :: part_dep_algo=2                   ! part GPU CIC deposition algorithm
+     ! 1: large 27-offset
+     ! 2: medium shifted 8-offset (fastest, default)
+     ! 3: small shifted 8-offset prefix-sum)
      integer :: part_force_interpolation_scheme=1 ! part force interpolation schemes (CIC 1, TSC 2, PCS 3)
      integer :: star_mass_deposition_scheme=1     ! star mass deposition schemes
+     integer :: star_dep_algo=2                   ! star GPU CIC deposition algorithm
      integer :: star_force_interpolation_scheme=1 ! star force interpolation schemes
      integer :: sink_mass_deposition_scheme=1     ! sink mass deposition schemes
      integer :: sink_force_interpolation_scheme=1 ! sink force interpolation schemes
@@ -119,11 +129,32 @@ module amr_commons
      logical::zoom_only=.false.
      integer::imovout=0    ! Increment for output times
      integer::imov=1       ! Initialize
+     real(kind=8)::tstartmov=0d0
+     real(kind=8)::astartmov=0d0
      real(kind=8)::tendmov=0.
      real(kind=8)::aendmov=0.
      character(LEN=5)::proj_axis='z' ! x->x, y->y, projection along z
      integer,dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars=0
      character(len=5),dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars_txt=''
+     ! Movie camera and rendering options (per-projection, NMOV=5)
+     real(kind=8),dimension(1:5)::theta_camera=0d0
+     real(kind=8),dimension(1:5)::phi_camera=0d0
+     real(kind=8),dimension(1:5)::dtheta_camera=0d0
+     real(kind=8),dimension(1:5)::dphi_camera=0d0
+     real(kind=8),dimension(1:5)::tstart_theta_camera=0d0
+     real(kind=8),dimension(1:5)::tstart_phi_camera=0d0
+     real(kind=8),dimension(1:5)::tend_theta_camera=0d0
+     real(kind=8),dimension(1:5)::tend_phi_camera=0d0
+     real(kind=8),dimension(1:5)::focal_camera=0d0
+     real(kind=8),dimension(1:5)::dist_camera=0d0
+     real(kind=8),dimension(1:5)::ddist_camera=0d0
+     real(kind=8),dimension(1:5)::smooth_frame=1d0
+     real(kind=8),dimension(1:5)::varmin_frame=-1d60
+     real(kind=8),dimension(1:5)::varmax_frame=1d60
+     logical,dimension(1:5)::perspective_camera=.false.
+     logical,dimension(1:5)::zoom_only_frame=.false.
+     character(LEN=6),dimension(1:5)::shader_frame='square'
+     character(LEN=10),dimension(1:5)::method_frame='mean_mass'
 
      ! Hydro solver parameters
      real(kind=8)::gamma=1.4d0
@@ -245,6 +276,8 @@ module amr_commons
      character(LEN=20)::filetype='ascii'
      logical::multiple=.false.
      character(LEN=80),dimension(1:MAXLEVEL)::initfile=' '
+     real(kind=8)::ic_scale_l=1.0d0
+     real(kind=8)::ic_scale_v=1.0d0
      real(kind=8)::ic_scale_m=1.0d0
 
      ! Boundary conditions parameters
@@ -288,7 +321,7 @@ module amr_commons
      logical::isothermal=.false.
      logical::haardt_madau=.false.
      logical::self_shielding=.false.
-     real(kind=8)::J21=0d0,a_spec=1d0,z_ave=0d0,z_reion=8.5d0
+     real(kind=8)::J21=0d0,a_spec=1d0,z_ave=0d0,z_reion=8.5d0,cooling_uvb_delta=0.05d0
      integer::eos_type=1 ! 1=isothermal, 2=polytrope, 3=isothermal+polytrope
      real(kind=8)::eos_nH=1d50,eos_index=1d0,eos_T2=10d0
      real(kind=8)::T2max
@@ -354,6 +387,7 @@ module amr_commons
      logical::output_peak_trac=.false.
      logical::output_peak_dust=.false.
      integer::rho_type_clump=1
+     integer::nsteps_per_tree=1
      real(kind=8)::relevance_threshold=2
      real(kind=8)::density_threshold=-1
      real(kind=8)::saddle_threshold=-1

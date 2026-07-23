@@ -140,7 +140,8 @@ function worker_init(mdl) result(pst)
                             r_cic_multipole,r_cic_part,r_reset_rho
   use phi_fine_cg_module, only: r_cmp_pAp_cg,r_cmp_r2_cg,r_cmp_residual_cg,r_cmp_rhs_norm,&
                                 r_make_initial_phi,r_recurrence_on_p,r_recurrence_x_and_r
-  use multigrid_fine_commons, only: r_init_mg,r_build_mg,r_cleanup_mg,r_make_mask,r_make_bc_rhs
+  use multigrid_fine_commons, only: r_init_mg,r_build_mg,r_cleanup_mg,r_make_mask,r_make_bc_rhs,&
+                                r_cmp_rhs_norm2
   use multigrid_fine_coarse, only: r_restrict_mask,r_cmp_residual_mg,r_cmp_residual_norm2,r_restrict_residual,&
                                 r_reset_correction,r_set_scan_flag,r_gauss_seidel_mg,r_interpolate_and_correct
 #endif
@@ -164,8 +165,10 @@ function worker_init(mdl) result(pst)
   use cr_input_condinit_module, only: r_cr_input_condinit
   use cr_upload_module, only: r_cr_upload_fine
   use output_cr_module, only: r_output_cr
-#ifdef _CUDA
+#if defined(_CUDA)
   use gpu_manager, only: r_set_grid_device, r_transfer_grid_host
+#elif defined(_METAL)
+  use metal_runner, only: r_set_grid_device, r_transfer_grid_host
 #endif
   use turb_driving, only: r_drive_turb
   use turb_hydro_module, only: r_turb_hydro
@@ -304,6 +307,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_INTERPOLATE_AND_CORRECT,pst,C_FUNLOC(r_interpolate_and_correct),1,0,"interpolate_and_correct")
   call mdl_add_service(pst%s%mdl,MDL_SET_SCAN_FLAG,          pst,C_FUNLOC(r_set_scan_flag),2,0,"set_scan_flag")
   call mdl_add_service(pst%s%mdl,MDL_CMP_RESIDUAL_NORM2,     pst,C_FUNLOC(r_cmp_residual_norm2),1,2,"cmp_residual_norm2")
+  call mdl_add_service(pst%s%mdl,MDL_CMP_RHS_NORM2,          pst,C_FUNLOC(r_cmp_rhs_norm2),1,2,"cmp_rhs_norm2")
 #endif
   call mdl_add_service(pst%s%mdl,MDL_INIT_RT,                pst,C_FUNLOC(r_init_rt),0,0,"init_rt")
   call mdl_add_service(pst%s%mdl,MDL_RT_UPLOAD_FINE,         pst,C_FUNLOC(r_rt_upload_fine),1,0,"rt_upload_fine")
@@ -327,7 +331,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
   call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
   call mdl_add_service(pst%s%mdl,MDL_BROADCAST_CR_C,         pst,C_FUNLOC(r_broadcast_cr_c),24,0,"broadcast_cr_c")
-#ifdef _CUDA
+#if defined(_CUDA) || defined(_METAL)
   call mdl_add_service(pst%s%mdl,MDL_SET_GRID_DEVICE,        pst,C_FUNLOC(r_set_grid_device),0,0,"set_grid_device")
   call mdl_add_service(pst%s%mdl,MDL_TRANSFER_GRID_HOST,     pst,C_FUNLOC(r_transfer_grid_host),0,0,"transfer_grid_host")
 #endif
