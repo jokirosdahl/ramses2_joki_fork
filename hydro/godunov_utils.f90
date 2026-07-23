@@ -239,7 +239,7 @@ subroutine cmpdt(r,uu,bb,gg,dx,dt)
   
   real(kind=8)::dtcell,smallp
   real(kind=8)::b2,a2,c2,cfast2,ctot,grav
-  integer::idim,igrp
+  integer::idim
 #if NENER>0
   integer::irad
 #endif

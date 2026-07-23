@@ -23,7 +23,7 @@ subroutine boundana(r,g,x,u,dx,ibound,ncell)
   ! U is in user (aka code) units.
   ! ibound is the index of the boundary region defined in the namelist.
   !================================================================
-  integer::ivar,i
+  integer::i
 
   if(r%cr_test_setup=='streaming_triangle') then
      do i=1,ncell

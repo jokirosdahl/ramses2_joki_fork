@@ -420,6 +420,7 @@ subroutine condinit(r,g,x,q,dx,nn)
      q(1:nn,r%imetal)=r%z_ave*0.02
   endif
 
+#ifdef CRS
   if(r%cr_test_setup=='streaming_triangle') then
      q(1:nn,6)=(2d0-1d0*sqrt((x(1:nn,1)-r%box_size(1)*0.5d0)**2))/3.
   else if(r%cr_test_setup=='diffusion') then
@@ -448,6 +449,7 @@ subroutine condinit(r,g,x,q,dx,nn)
         endif
      end do
   endif
+#endif
 
 
 end subroutine condinit
