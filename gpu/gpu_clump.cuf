@@ -10,7 +10,7 @@ module clump_device
   implicit none
 
   interface atomiccas
-     attributes(device) integer(kind=8) function atomiccas(val, cmp, xchg)
+     attributes(device) integer(kind=8) function atomiccas(val, cmp, xchg) bind(c, name='atomicCAS')
        import :: dp
        real(kind=dp) :: val
        integer(kind=8), value :: cmp, xchg
