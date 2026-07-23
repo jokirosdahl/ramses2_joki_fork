@@ -422,7 +422,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u3 = u3-slopeM*0.5d0*dx            
 
      meandiffv = 0.5*( lmax(i,j-1,k,2) + lmax(i,j,k,2) )
-     a2 = min(meandiffv, lmax(i,j-1,k,2))
+     a2 = min(-meandiffv, lmax(i,j-1,k,2))
      a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,2))
      a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
@@ -482,7 +482,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u3 = u3-slopeM*0.5d0*dx            
 
      meandiffv = 0.5*( lmax(i,j,k-1,3) + lmax(i,j,k,3) )
-     a2 = min(meandiffv, lmax(i,j,k-1,3))
+     a2 = min(-meandiffv, lmax(i,j,k-1,3))
      a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,3))
      a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
