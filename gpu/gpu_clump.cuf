@@ -526,6 +526,7 @@ contains
 
     itest = gid
     root_idx = parent_d(itest)
+    if (root_idx == 0) return ! unlabeled cell: flag1 stays 0
     peak_id = is_peak_scan(root_idx)
 
     igrid = grid_d(itest)
@@ -606,10 +607,12 @@ contains
     if (gid <= ntest) then
        itest = gid
        p = parent_d(itest)
-       gp = parent_d(p)
-       if (p /= gp) then
-          parent_d(itest) = gp
-          info = atomicadd(block_nmove, 1)
+       if (p > 0) then ! p=0 means unlabeled (densest neighbor not a test cell)
+          gp = parent_d(p)
+          if (p /= gp) then
+             parent_d(itest) = gp ! gp=0 propagates the zero label
+             info = atomicadd(block_nmove, 1)
+          endif
        endif
     endif
 
@@ -687,37 +690,11 @@ contains
   end subroutine init_saddle_arrays_kernel
 
   ! =========================================================================
-  ! Device Subroutine: Double-precision Atomic Maximum using atomicCAS
-  ! =========================================================================
-  attributes(device) subroutine atomicmax_dp(address, val, update_nbor, nbor_address, nbor_val)
-    real(kind=dp), intent(inout) :: address
-    real(kind=dp), intent(in) :: val
-    logical, intent(in) :: update_nbor
-    integer, intent(inout) :: nbor_address
-    integer, intent(in) :: nbor_val
-
-    real(kind=dp) :: assumed_real, expected_real, old_real
-
-    old_real = address
-    do
-       if (val <= old_real) exit
-       assumed_real = old_real
-       expected_real = val
-       old_real = atomiccas(address, assumed_real, expected_real)
-       if (old_real == assumed_real) then
-          if (update_nbor) nbor_address = nbor_val
-          exit
-       endif
-    enddo
-
-  end subroutine atomicmax_dp
-
-  ! =========================================================================
   ! CUDA Kernel: Scan neighbors and identify saddle points
   ! =========================================================================
   attributes(global) subroutine collect_saddle_kernel( &
        flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
-       rho, grid, periodic, box_ckey_min, box_ckey_max, threshold, hash_key, hash_val, hash_size, ntest)
+       rho, grid, periodic, box_ckey_min, box_ckey_max, threshold, hash_key, hash_val, hash_size, ntest, pass)
     integer, device :: flag1(1:twotondim, *)
     integer, device :: grid_d(*), cell_d(*), level_d(*)
     real(kind=dp), device :: saddle_dens_d(*)
@@ -729,7 +706,7 @@ contains
     real(kind=dp), value :: threshold
     integer(kind=8), device :: hash_key(*)
     integer(kind=4), device :: hash_val(*)
-    integer, value :: hash_size, ntest
+    integer, value :: hash_size, ntest, pass
 
     integer :: itest, gid, tid
     integer :: ilevel, igrid, ind, igridn, icelln
@@ -738,7 +715,7 @@ contains
     integer :: ckey_nbor(3)
     integer(kind=8) :: hash_nbor(0:3)
     integer :: peak_cen, peak_nbor, ipeak
-    real(kind=dp) :: dens_cen, dens_ave
+    real(kind=dp) :: dens_cen, dens_ave, dens_old
     logical :: ok
 
     tid = threadIdx%x
@@ -818,7 +795,15 @@ contains
                 if (ok) then
                    dens_ave = 0.5d0 * (dens_cen + rho(icelln, igridn))
                    ipeak = peak_cen
-                   call atomicmax_dp(saddle_dens_d(ipeak), dens_ave, .true., saddle_nbor_d(ipeak), peak_nbor)
+                   if (pass == 1) then
+                      ! Pass 1: max-reduce the saddle density only
+                      dens_old = atomicmax(saddle_dens_d(ipeak), dens_ave)
+                   else
+                      ! Pass 2: the winning density claims the neighbor (ties arbitrary)
+                      if (dens_ave > threshold .and. dens_ave == saddle_dens_d(ipeak)) then
+                         saddle_nbor_d(ipeak) = peak_nbor
+                      endif
+                   endif
                 endif
              endif
           end do
@@ -836,7 +821,7 @@ contains
     type(ramses_t) :: sim
     integer, intent(in) :: ntest, npeak
 
-    integer :: block_size, grid_size, grid_size_peaks
+    integer :: block_size, grid_size, grid_size_peaks, ipass
 
     if (ntest == 0) return
 
@@ -849,11 +834,13 @@ contains
 
     grid_size = (ntest + block_size - 1) / block_size
 
-    ! Collect densest saddle points and corresponding peak id
-    call collect_saddle_kernel<<<grid_size, block_size>>>( &
-         flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
-         rho, grid, periodic, box_ckey_min, box_ckey_max, real(sim%c%density_threshold, kind=dp), &
-         hash_key, hash_val, sim%m%hash_size, ntest)
+    ! Two passes: max-reduce saddle density, then match it to store the neighbor id
+    do ipass = 1, 2
+       call collect_saddle_kernel<<<grid_size, block_size>>>( &
+            flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
+            rho, grid, periodic, box_ckey_min, box_ckey_max, real(sim%c%density_threshold, kind=dp), &
+            hash_key, hash_val, sim%m%hash_size, ntest, ipass)
+    end do
 
   end subroutine gpu_collect_saddle
 
@@ -903,7 +890,7 @@ contains
     integer, value :: npeak, action_code
     integer, device :: nmove
 
-    integer :: ipeak, gid, tid, jpeak, global_peak_id, info, p, merge_target
+    integer :: ipeak, gid, tid, jpeak, global_peak_id, info, merge_target
     integer :: merge_to, current_merge
     real(kind=dp) :: relevance_val
     logical :: do_merge
@@ -920,19 +907,10 @@ contains
 
     if (gid <= npeak) then
        ipeak = gid
+       ! No path compression: dead peaks must keep their per-level parent
        current_merge = new_peak_d(ipeak)
        merge_to = current_merge
 
-       ! 1. Path compression / pointer jumping
-       p = new_peak_d(current_merge)
-       if (current_merge /= p) then
-          new_peak_d(ipeak) = p
-          current_merge = p
-          merge_to = p
-          info = atomicadd(block_nmove, 1)
-       endif
-
-       ! 2. Neighborhood merge propagation
        if (alive_d(ipeak) > 0) then
           do_merge = .false.
           if (action_code == 1) then ! 'relevance'

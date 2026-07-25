@@ -87,7 +87,11 @@ contains
     call filter_collision(pst%s, ilevel, n_count_total, n_valid_mergers)
     if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'Valid mergers after filtering:', n_valid_mergers
 
-    ! Step 7: Execute mergers
+    ! Step 7: Break merger chains (defer conflicting pairs to next call)
+    call break_merger_chains(n_count_total, n_valid_mergers)
+    if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'Valid mergers after chain breaking:', n_valid_mergers
+
+    ! Step 8: Execute mergers
     if(n_valid_mergers > 0) then
        call execute_mergers(pst%s, pst%s%sink, n_count_total)
     endif
@@ -157,11 +161,9 @@ contains
           if(igridn==0)cycle
 
           weight = vol(j)
-          if(weight > 0.0d0) then
-             new_id = int(p%idp(ipart), kind=4)
-             if(new_id < m%flag1(icelln,igridn)) then
-                m%flag1(icelln,igridn) = new_id
-             endif
+          new_id = int(p%idp(ipart), kind=4)
+          if(new_id < m%flag1(icelln,igridn)) then
+             m%flag1(icelln,igridn) = new_id
           endif
        end do
     end do
@@ -256,8 +258,6 @@ contains
     type(msg_int4)::dummy_int4
 
     associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-
-    if(s%r%accretion_type==0)return
 
     if(r%verbose .and. g%myid == 1)write(*,*)'Collecting collision pairs (using TSC)...'
 
@@ -517,6 +517,33 @@ contains
     end do
 
   end subroutine filter_collision
+
+  !==============================================================================
+  ! Break merger chains. Conflicting pairs are invalidated.
+  !==============================================================================
+  subroutine break_merger_chains(n_total, n_valid)
+    implicit none
+    integer::n_total, n_valid
+
+    integer::i, k
+
+    do i = 1, n_total
+       if(all_id1(i) == 0) cycle
+       do k = 1, i-1
+          if(all_id1(k) /= 0 .and. all_id2(k) == all_id1(i)) then
+             all_id1(i) = 0
+             all_id2(i) = 0
+             exit
+          endif
+       end do
+    end do
+
+    n_valid = 0
+    do i = 1, n_total
+       if (all_id1(i) /= 0) n_valid = n_valid + 1
+    end do
+
+  end subroutine break_merger_chains
 
   !==============================================================================
   ! Execute valid mergers (set masses to zero for merged sinks)
