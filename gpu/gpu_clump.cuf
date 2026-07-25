@@ -35,7 +35,6 @@ module clump_device
   integer, device, allocatable, dimension(:)         :: level_d
   integer, device, allocatable, dimension(:)         :: nbor_grid_d
   integer, device, allocatable, dimension(:)         :: nbor_cell_d
-  integer, device, allocatable, dimension(:)         :: isort_d
   integer, device, allocatable, dimension(:)         :: is_peak_d
   integer, device, allocatable, dimension(:)         :: is_peak_scan_d
   integer, device, allocatable, dimension(:)         :: parent_d
@@ -88,7 +87,6 @@ contains
     if (.not. allocated(level_d))          allocate(level_d(1:ntestmax))
     if (.not. allocated(nbor_grid_d))      allocate(nbor_grid_d(1:ntestmax))
     if (.not. allocated(nbor_cell_d))      allocate(nbor_cell_d(1:ntestmax))
-    if (.not. allocated(isort_d))          allocate(isort_d(1:ntestmax))
     if (.not. allocated(is_peak_d))        allocate(is_peak_d(1:ntestmax))
     if (.not. allocated(is_peak_scan_d))   allocate(is_peak_scan_d(1:ntestmax))
     if (.not. allocated(parent_d))         allocate(parent_d(1:ntestmax))
@@ -134,7 +132,6 @@ contains
     if (allocated(level_d))          deallocate(level_d)
     if (allocated(nbor_grid_d))      deallocate(nbor_grid_d)
     if (allocated(nbor_cell_d))      deallocate(nbor_cell_d)
-    if (allocated(isort_d))          deallocate(isort_d)
     if (allocated(is_peak_d))        deallocate(is_peak_d)
     if (allocated(is_peak_scan_d))   deallocate(is_peak_scan_d)
     if (allocated(parent_d))         deallocate(parent_d)
@@ -302,6 +299,7 @@ contains
     integer, intent(out) :: ntest
 
     integer :: num_octs, head_idx, num_total_cells
+    integer(kind=8) :: num_total_cells8
     integer :: block_y, grid_x
     type(dim3) :: block_dim, grid_dim
     integer, device :: total_test_d
@@ -323,7 +321,12 @@ contains
 
     ! 3. Compute inclusive prefix scan on flag1
     if (num_octs > 0) then
-       num_total_cells = (sim%m%ifree - 1) * twotondim
+       num_total_cells8 = int(sim%m%ifree - 1, kind=8) * twotondim
+       if (num_total_cells8 > huge(1_4)) then
+          write(*,*) 'gpu_collect_test: cell count exceeds 32-bit gpu_scan limit'
+          stop
+       endif
+       num_total_cells = int(num_total_cells8, kind=4)
        call gpu_scan(flag1, 1, num_total_cells, total_test_d)
        ntest = total_test_d
     else
