@@ -6,25 +6,27 @@ module clump_device
   use gpu_utils
   use cudafor
   use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val, &
-       uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off, d_skip
+       uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off, d_skip, &
+       sink_xp, sink_levelp, sink_pid, sink_vp, sink_fp, sink_mp, sink_tp, sink_idp, swap_local
+  use part_device, only: dtnew_part_d
   implicit none
 
   ! 56-neighbor half-cell offsets in CPU scan order (ii fastest, inner 2x2x2 skipped)
   real(kind=dp), parameter, dimension(3, 56) :: xnbor_const = reshape((/ &
-       & -0.75_dp,-0.75_dp,-0.75_dp, -0.25_dp,-0.75_dp,-0.75_dp,  0.25_dp,-0.75_dp,-0.75_dp,  0.75_dp,-0.75_dp,-0.75_dp, &
-       & -0.75_dp,-0.25_dp,-0.75_dp, -0.25_dp,-0.25_dp,-0.75_dp,  0.25_dp,-0.25_dp,-0.75_dp,  0.75_dp,-0.25_dp,-0.75_dp, &
-       & -0.75_dp, 0.25_dp,-0.75_dp, -0.25_dp, 0.25_dp,-0.75_dp,  0.25_dp, 0.25_dp,-0.75_dp,  0.75_dp, 0.25_dp,-0.75_dp, &
-       & -0.75_dp, 0.75_dp,-0.75_dp, -0.25_dp, 0.75_dp,-0.75_dp,  0.25_dp, 0.75_dp,-0.75_dp,  0.75_dp, 0.75_dp,-0.75_dp, &
-       & -0.75_dp,-0.75_dp,-0.25_dp, -0.25_dp,-0.75_dp,-0.25_dp,  0.25_dp,-0.75_dp,-0.25_dp,  0.75_dp,-0.75_dp,-0.25_dp, &
-       & -0.75_dp,-0.25_dp,-0.25_dp,  0.75_dp,-0.25_dp,-0.25_dp, -0.75_dp, 0.25_dp,-0.25_dp,  0.75_dp, 0.25_dp,-0.25_dp, &
-       & -0.75_dp, 0.75_dp,-0.25_dp, -0.25_dp, 0.75_dp,-0.25_dp,  0.25_dp, 0.75_dp,-0.25_dp,  0.75_dp, 0.75_dp,-0.25_dp, &
-       & -0.75_dp,-0.75_dp, 0.25_dp, -0.25_dp,-0.75_dp, 0.25_dp,  0.25_dp,-0.75_dp, 0.25_dp,  0.75_dp,-0.75_dp, 0.25_dp, &
-       & -0.75_dp,-0.25_dp, 0.25_dp,  0.75_dp,-0.25_dp, 0.25_dp, -0.75_dp, 0.25_dp, 0.25_dp,  0.75_dp, 0.25_dp, 0.25_dp, &
-       & -0.75_dp, 0.75_dp, 0.25_dp, -0.25_dp, 0.75_dp, 0.25_dp,  0.25_dp, 0.75_dp, 0.25_dp,  0.75_dp, 0.75_dp, 0.25_dp, &
-       & -0.75_dp,-0.75_dp, 0.75_dp, -0.25_dp,-0.75_dp, 0.75_dp,  0.25_dp,-0.75_dp, 0.75_dp,  0.75_dp,-0.75_dp, 0.75_dp, &
-       & -0.75_dp,-0.25_dp, 0.75_dp, -0.25_dp,-0.25_dp, 0.75_dp,  0.25_dp,-0.25_dp, 0.75_dp,  0.75_dp,-0.25_dp, 0.75_dp, &
-       & -0.75_dp, 0.25_dp, 0.75_dp, -0.25_dp, 0.25_dp, 0.75_dp,  0.25_dp, 0.25_dp, 0.75_dp,  0.75_dp, 0.25_dp, 0.75_dp, &
-       & -0.75_dp, 0.75_dp, 0.75_dp, -0.25_dp, 0.75_dp, 0.75_dp,  0.25_dp, 0.75_dp, 0.75_dp,  0.75_dp, 0.75_dp, 0.75_dp  &
+       & -0.75_dp,-0.75_dp,-0.75_dp,-0.25_dp,-0.75_dp,-0.75_dp, 0.25_dp,-0.75_dp,-0.75_dp, 0.75_dp,-0.75_dp,-0.75_dp, &
+       & -0.75_dp,-0.25_dp,-0.75_dp,-0.25_dp,-0.25_dp,-0.75_dp, 0.25_dp,-0.25_dp,-0.75_dp, 0.75_dp,-0.25_dp,-0.75_dp, &
+       & -0.75_dp, 0.25_dp,-0.75_dp,-0.25_dp, 0.25_dp,-0.75_dp, 0.25_dp, 0.25_dp,-0.75_dp, 0.75_dp, 0.25_dp,-0.75_dp, &
+       & -0.75_dp, 0.75_dp,-0.75_dp,-0.25_dp, 0.75_dp,-0.75_dp, 0.25_dp, 0.75_dp,-0.75_dp, 0.75_dp, 0.75_dp,-0.75_dp, &
+       & -0.75_dp,-0.75_dp,-0.25_dp,-0.25_dp,-0.75_dp,-0.25_dp, 0.25_dp,-0.75_dp,-0.25_dp, 0.75_dp,-0.75_dp,-0.25_dp, &
+       & -0.75_dp,-0.25_dp,-0.25_dp, 0.75_dp,-0.25_dp,-0.25_dp,-0.75_dp, 0.25_dp,-0.25_dp, 0.75_dp, 0.25_dp,-0.25_dp, &
+       & -0.75_dp, 0.75_dp,-0.25_dp,-0.25_dp, 0.75_dp,-0.25_dp, 0.25_dp, 0.75_dp,-0.25_dp, 0.75_dp, 0.75_dp,-0.25_dp, &
+       & -0.75_dp,-0.75_dp, 0.25_dp,-0.25_dp,-0.75_dp, 0.25_dp, 0.25_dp,-0.75_dp, 0.25_dp, 0.75_dp,-0.75_dp, 0.25_dp, &
+       & -0.75_dp,-0.25_dp, 0.25_dp, 0.75_dp,-0.25_dp, 0.25_dp,-0.75_dp, 0.25_dp, 0.25_dp, 0.75_dp, 0.25_dp, 0.25_dp, &
+       & -0.75_dp, 0.75_dp, 0.25_dp,-0.25_dp, 0.75_dp, 0.25_dp, 0.25_dp, 0.75_dp, 0.25_dp, 0.75_dp, 0.75_dp, 0.25_dp, &
+       & -0.75_dp,-0.75_dp, 0.75_dp,-0.25_dp,-0.75_dp, 0.75_dp, 0.25_dp,-0.75_dp, 0.75_dp, 0.75_dp,-0.75_dp, 0.75_dp, &
+       & -0.75_dp,-0.25_dp, 0.75_dp,-0.25_dp,-0.25_dp, 0.75_dp, 0.25_dp,-0.25_dp, 0.75_dp, 0.75_dp,-0.25_dp, 0.75_dp, &
+       & -0.75_dp, 0.25_dp, 0.75_dp,-0.25_dp, 0.25_dp, 0.75_dp, 0.25_dp, 0.25_dp, 0.75_dp, 0.75_dp, 0.25_dp, 0.75_dp, &
+       & -0.75_dp, 0.75_dp, 0.75_dp,-0.25_dp, 0.75_dp, 0.75_dp, 0.25_dp, 0.75_dp, 0.75_dp, 0.75_dp, 0.75_dp, 0.75_dp  &
        /), (/3, 56/))
 
   ! -------------------------------------------------------------
@@ -70,6 +72,7 @@ module clump_device
   real(kind=dp), device, allocatable, dimension(:)   :: halo_mass_d
   real(kind=dp), device, allocatable, dimension(:,:) :: mass_bin_d
   real(kind=dp), device, allocatable, dimension(:,:) :: phi_clump_d
+  integer, device, allocatable, dimension(:)         :: nsink_d
 
 contains
 
@@ -120,7 +123,7 @@ contains
     if (.not. allocated(halo_mass_d))      allocate(halo_mass_d(1:nclumpmax))
     if (.not. allocated(mass_bin_d))       allocate(mass_bin_d(1:nbin, 1:nclumpmax))
     if (.not. allocated(phi_clump_d))      allocate(phi_clump_d(1:nbin, 1:nclumpmax))
-
+    if (.not. allocated(nsink_d))          allocate(nsink_d(1:nclumpmax))
   end subroutine gpu_allocate_clump
 
   ! =========================================================================
@@ -164,6 +167,7 @@ contains
     if (allocated(halo_mass_d))      deallocate(halo_mass_d)
     if (allocated(mass_bin_d))       deallocate(mass_bin_d)
     if (allocated(phi_clump_d))      deallocate(phi_clump_d)
+    if (allocated(nsink_d))          deallocate(nsink_d)
   end subroutine gpu_deallocate_clump
 
   ! =========================================================================
@@ -198,7 +202,6 @@ contains
 
     ! Smooth density field
     rho(cell_idx, oct_idx) = 0.5d0 * rho(cell_idx, oct_idx) + 0.5d0 * rho(father_cell_idx, father_idx)
-
   end subroutine smooth_rho_kernel
 
   ! =========================================================================
@@ -224,7 +227,6 @@ contains
           call smooth_rho_kernel<<<grid_dim, block_dim>>>(rho, nref, grid, father, head_idx, num_octs)
        endif
     enddo
-
   end subroutine gpu_smooth_rho
 
   ! =========================================================================
@@ -251,7 +253,6 @@ contains
     else
        flag1(cell_idx, oct_idx) = 0
     endif
-
   end subroutine flag_test_cells_kernel
 
   ! =========================================================================
@@ -285,7 +286,6 @@ contains
        level_d(idx) = grid(oct_idx)%lev
        dens_d(idx) = rho(cell_idx, oct_idx)
     endif
-
   end subroutine scatter_test_cells_kernel
 
   ! =========================================================================
@@ -342,7 +342,6 @@ contains
        call scatter_test_cells_kernel<<<grid_dim, block_dim>>>(grid_d, cell_d, level_d, dens_d, &
             & flag1, rho, grid, threshold, head_idx, num_octs)
     endif
-
   end subroutine gpu_collect_test
 
   ! =========================================================================
@@ -375,7 +374,6 @@ contains
     key = offset + ix + iy*nx + iz*nx*nx
 
     igridn = hash_get(hash_key, hash_val, hash_size, key)
-
   end subroutine get_parent_cell_device
 
   ! =========================================================================
@@ -519,7 +517,6 @@ contains
           nbor_cell_d(itest) = 0
        endif
     endif
-
   end subroutine collect_peak_kernel
 
   ! =========================================================================
@@ -541,14 +538,13 @@ contains
 
     ! Launch peak detection kernel
     call collect_peak_kernel<<<grid_size, block_size>>>( &
-         grid_d, cell_d, level_d, nbor_grid_d, nbor_cell_d, is_peak_d, &
-         rho, grid, periodic, box_ckey_min, box_ckey_max, hash_key, hash_val, sim%m%hash_size, ntest)
+         & grid_d, cell_d, level_d, nbor_grid_d, nbor_cell_d, is_peak_d, &
+         & rho, grid, periodic, box_ckey_min, box_ckey_max, hash_key, hash_val, sim%m%hash_size, ntest)
 
     ! Compute prefix scan to count total peaks
     is_peak_scan_d = is_peak_d
     call gpu_scan(is_peak_scan_d, 1, ntest, total_peaks_d)
     npeak = total_peaks_d
-
   end subroutine gpu_collect_peak
 
   ! =========================================================================
@@ -605,7 +601,6 @@ contains
     igrid = grid_d(itest)
     ind = cell_d(itest)
     flag1(ind, igrid) = itest
-
   end subroutine map_indices_kernel
 
   ! =========================================================================
@@ -630,7 +625,6 @@ contains
     else
        parent_d(itest) = itest
     endif
-
   end subroutine init_parent_kernel
 
   ! =========================================================================
@@ -669,7 +663,6 @@ contains
           info = atomicadd(nmove, block_nmove)
        endif
     endif
-
   end subroutine pointer_jump_kernel
 
   ! =========================================================================
@@ -711,9 +704,8 @@ contains
     flag1 = 0
     flag2 = 0
     call map_final_labels_kernel<<<grid_size, block_size>>>( &
-         flag1, peak_grid_d, peak_cell_d, peak_level_d, max_dens_d, &
-         parent_d, grid_d, cell_d, level_d, rho, is_peak_scan_d, is_peak_d, ntest)
-
+         & flag1, peak_grid_d, peak_cell_d, peak_level_d, max_dens_d, &
+         & parent_d, grid_d, cell_d, level_d, rho, is_peak_scan_d, is_peak_d, ntest)
   end subroutine gpu_collect_patch
 
 
@@ -733,7 +725,6 @@ contains
     ipeak = gid
     saddle_dens_d(ipeak) = density_threshold
     saddle_nbor_d(ipeak) = 0
-
   end subroutine init_saddle_arrays_kernel
 
   ! =========================================================================
@@ -876,7 +867,6 @@ contains
           endif
        endif
     endif
-
   end subroutine collect_saddle_kernel
 
   ! =========================================================================
@@ -897,7 +887,7 @@ contains
 
     ! Initialize saddle density to threshold and saddle neighbor to 0
     call init_saddle_arrays_kernel<<<grid_size_peaks, block_size>>>( &
-         saddle_dens_d, saddle_nbor_d, real(sim%c%density_threshold, kind=dp), npeak)
+         & saddle_dens_d, saddle_nbor_d, real(sim%c%density_threshold, kind=dp), npeak)
 
     ! 56 threads per test cell, so block size 224 (4 cells per block)
     grid_size = (ntest + 3) / 4
@@ -905,11 +895,10 @@ contains
     ! Two passes: max-reduce saddle density, then match it to store the neighbor id
     do ipass = 1, 2
        call collect_saddle_kernel<<<grid_size, 224>>>( &
-            flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
-            rho, grid, periodic, box_ckey_min, box_ckey_max, real(sim%c%density_threshold, kind=dp), &
-            hash_key, hash_val, sim%m%hash_size, ntest, ipass)
+            & flag1, grid_d, cell_d, level_d, saddle_dens_d, saddle_nbor_d, &
+            & rho, grid, periodic, box_ckey_min, box_ckey_max, real(sim%c%density_threshold, kind=dp), &
+            & hash_key, hash_val, sim%m%hash_size, ntest, ipass)
     end do
-
   end subroutine gpu_collect_saddle
 
   ! =========================================================================
@@ -943,7 +932,6 @@ contains
        endif
        lev_peak_d(ipeak) = -1
     endif
-
   end subroutine init_merge_kernel
 
   ! =========================================================================
@@ -1015,7 +1003,6 @@ contains
           info = atomicadd(nmove, block_nmove)
        endif
     endif
-
   end subroutine propagate_merge_kernel
 
   ! =========================================================================
@@ -1040,7 +1027,6 @@ contains
        ipeak = global_peak_id
        flag1(ind, igrid) = new_peak_d(ipeak)
     endif
-
   end subroutine update_flag1_kernel
 
   ! =========================================================================
@@ -1066,7 +1052,6 @@ contains
           info = atomicadd(nzero, 1)
        endif
     endif
-
   end subroutine update_alive_kernel
 
   ! =========================================================================
@@ -1241,8 +1226,8 @@ contains
 
     ! 1. Initialize merge arrays
     call init_merge_kernel<<<grid_size_peaks, block_size>>>( &
-         new_peak_d, tidal_dens_d, lev_peak_d, alive_d, max_dens_d, relevance_d, &
-         real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), npeak, action_code)
+         & new_peak_d, tidal_dens_d, lev_peak_d, alive_d, max_dens_d, relevance_d, &
+         & real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), npeak, action_code)
 
     ! 2. Outer loop: Merge hierarchy depth
     nzero_h = npeak
@@ -1258,8 +1243,9 @@ contains
        do while (nmove_h > 0)
           nmove_d = 0
           call propagate_merge_kernel<<<grid_size_peaks, block_size>>>( &
-               new_peak_d, tidal_dens_d, alive_d, max_dens_d, saddle_dens_d, saddle_nbor_d, &
-               real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), npeak, action_code, nmove_d)
+               & new_peak_d, tidal_dens_d, alive_d, max_dens_d, saddle_dens_d, saddle_nbor_d, &
+               & real(sim%c%relevance_threshold, kind=dp), real(sim%c%saddle_threshold, kind=dp), &
+               & npeak, action_code, nmove_d)
           nmove_h = nmove_d
           iter = iter + 1
        end do
@@ -1272,7 +1258,7 @@ contains
        ! 2.4 Update alive status of merged peaks
        nzero_d = 0
        call update_alive_kernel<<<grid_size_peaks, block_size>>>( &
-            new_peak_d, alive_d, lev_peak_d, idepth, npeak, nzero_d)
+            & new_peak_d, alive_d, lev_peak_d, idepth, npeak, nzero_d)
        nzero_h = nzero_d
        idepth = idepth + 1
     end do
@@ -1303,11 +1289,10 @@ contains
        ! Compute hierarchical clump properties
        do ilev = 0, idepth - 2
           call hierarchical_properties_kernel<<<grid_size_peaks, block_size>>>( &
-               new_peak_d, lev_peak_d, clump_mass_d, clump_vol_d, n_cells_d, min_dens_d, halo_mass_d, &
-               real(sim%c%fraction_threshold, kind=dp), ilev, idepth, npeak)
+               & new_peak_d, lev_peak_d, clump_mass_d, clump_vol_d, n_cells_d, min_dens_d, halo_mass_d, &
+               & real(sim%c%fraction_threshold, kind=dp), ilev, idepth, npeak)
        end do
     endif
-
   end subroutine gpu_merge_clumps
 
   ! =========================================================================
@@ -1361,7 +1346,6 @@ contains
 #ifdef GRAV
     peak_acc_d(1:ndim, ipeak) = f(ind, 1:ndim, igrid)
 #endif
-
   end subroutine init_peak_properties_kernel
 
   ! =========================================================================
@@ -1379,7 +1363,7 @@ contains
     integer, value :: ntest
 
     integer :: itest, gid, tid, ilevel, igrid, ind, peak_nr, info
-    integer(kind=8) :: global_peak_id
+    integer :: global_peak_id
     real(kind=dp) :: d, nr, dx_loc, vol
 
     tid = threadIdx%x
@@ -1406,7 +1390,6 @@ contains
        info = atomicadd(clump_mass_d(peak_nr), vol * nr)
        info = atomicadd(clump_vol_d(peak_nr), vol)
     endif
-
   end subroutine accumulate_clump_properties_kernel
 
   ! =========================================================================
@@ -1426,7 +1409,6 @@ contains
 
     ipeak = gid
     clump_rad_d(ipeak) = (clump_mass_d(ipeak) * 3.0d0 / (4.0d0 * pi * tidal_dens_d(ipeak)))**(1.0d0 / 3.0d0)
-
   end subroutine finalize_clump_properties_kernel
 
   ! =========================================================================
@@ -1448,19 +1430,18 @@ contains
 
     ! 1. Launch peak properties initialization
     call init_peak_properties_kernel<<<grid_size_peaks, block_size>>>( &
-         peak_pos_d, peak_vel_d, peak_acc_d, peak_grid_d, peak_cell_d, peak_level_d, &
-         min_dens_d, n_cells_d, clump_mass_d, clump_vol_d, &
-         uold, f, grid, sim%r%boxlen, d_skip, npeak, rtype)
+         & peak_pos_d, peak_vel_d, peak_acc_d, peak_grid_d, peak_cell_d, peak_level_d, &
+         & min_dens_d, n_cells_d, clump_mass_d, clump_vol_d, &
+         & uold, f, grid, sim%r%boxlen, d_skip, npeak, rtype)
 
     ! 2. Accumulate properties from cells
     call accumulate_clump_properties_kernel<<<grid_size_test, block_size>>>( &
-         flag1, flag2, grid_d, cell_d, level_d, n_cells_d, min_dens_d, clump_mass_d, clump_vol_d, &
-         rho, nref, sim%r%boxlen, ntest)
+         & flag1, flag2, grid_d, cell_d, level_d, n_cells_d, min_dens_d, clump_mass_d, clump_vol_d, &
+         & rho, nref, sim%r%boxlen, ntest)
 
     ! 3. Finalize clump properties
     call finalize_clump_properties_kernel<<<grid_size_peaks, block_size>>>( &
-         clump_rad_d, clump_mass_d, tidal_dens_d, npeak)
-
+         & clump_rad_d, clump_mass_d, tidal_dens_d, npeak)
   end subroutine gpu_compute_clump_properties
 
   ! =========================================================================
@@ -1505,6 +1486,377 @@ contains
        call gpu_merge_clumps(sim, 'saddleden', sim%c%ntest, sim%c%npeak)
     endif
 
+    ! 9. Map sinks to peaks
+    call gpu_particle_peak_id(sim)
+
+    ! 10. Count sinks inside each peak
+    call gpu_sink_in_peak(sim)
   end subroutine gpu_sink_clump
+
+  ! =========================================================================
+  ! CUDA Kernel: Map sink particles to their grid cells and retrieve peak IDs
+  ! =========================================================================
+  attributes(global) subroutine gpu_particle_peak_id_kernel(nsink, boxlen, hash_size)
+    integer, value :: nsink
+    real(kind=dp), value :: boxlen
+    integer, value :: hash_size
+    
+    integer :: ipart, gid, tid, idim, igrid, icell
+    integer(kind=8) :: hash_cell(0:3)
+    real(kind=dp) :: dx_loc
+    integer :: global_peak_id
+    integer :: ckey(3)
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > nsink) return
+
+    ipart = gid
+
+    ! Find parent cell at particle's level using coordinate spacing
+    dx_loc = boxlen / (2**sink_levelp(ipart))
+    do idim = 1, ndim
+       ckey(idim) = int(sink_xp(ipart, idim) / dx_loc)
+    end do
+
+    hash_cell(0) = sink_levelp(ipart) + 1
+    hash_cell(1:ndim) = ckey(1:ndim)
+
+    ! Look up parent cell coordinates in the spatial hash table
+    call get_parent_cell_device(hash_cell, igrid, icell, hash_key, hash_val, hash_size)
+
+    global_peak_id = 0
+    if (igrid > 0) then
+       global_peak_id = flag2(icell, igrid)
+    endif
+
+    sink_pid(ipart) = global_peak_id
+  end subroutine gpu_particle_peak_id_kernel
+
+  ! =========================================================================
+  ! Host Driver: Map sink particles to peak IDs on GPU
+  ! =========================================================================
+  subroutine gpu_particle_peak_id(sim)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+
+    integer :: block_size, grid_size
+
+    if (sim%sink%npart == 0) return
+
+    block_size = 256
+    grid_size = (sim%sink%npart + block_size - 1) / block_size
+
+    call gpu_particle_peak_id_kernel<<<grid_size, block_size>>>( &
+         & sim%sink%npart, real(sim%r%boxlen, kind=dp), sim%m%hash_size)
+  end subroutine gpu_particle_peak_id
+
+  ! =========================================================================
+  ! CUDA Kernel: Map each active sink to its peak and increment sink count
+  ! =========================================================================
+  attributes(global) subroutine gpu_count_sinks_kernel(nsink)
+    integer, value :: nsink
+    integer :: ipart, gid, tid
+    integer :: global_peak_id
+    integer :: peak_nr, info
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > nsink) return
+
+    ipart = gid
+    global_peak_id = sink_pid(ipart)
+
+    if (global_peak_id > 0) then
+       peak_nr = int(global_peak_id)
+       info = atomicadd(nsink_d(peak_nr), 1)
+    endif
+  end subroutine gpu_count_sinks_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Accumulate sink counts hierarchically from merged sub-peaks
+  ! =========================================================================
+  attributes(global) subroutine gpu_hierarchical_sink_count_kernel(npeak, ilev)
+    integer, value :: npeak
+    integer, value :: ilev
+    integer :: ipeak, gid, tid, jpeak, info
+    integer :: merge_to
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    ipeak = gid
+
+    if (lev_peak_d(ipeak) == ilev) then
+       merge_to = new_peak_d(ipeak)
+       ! Check if merged into a different parent peak
+       if (merge_to /= ipeak) then
+          jpeak = int(merge_to)
+          info = atomicadd(nsink_d(jpeak), nsink_d(ipeak))
+       endif
+    endif
+  end subroutine gpu_hierarchical_sink_count_kernel
+
+  ! =========================================================================
+  ! Host Driver: Count sinks in each peak/clump and propagate hierarchically
+  ! =========================================================================
+  subroutine gpu_sink_in_peak(sim)
+    use ramses_commons, only: ramses_t
+    implicit none
+    type(ramses_t) :: sim
+
+    integer :: block_size, grid_size_sinks, grid_size_peaks
+    integer :: ilev
+
+    if (sim%c%npeak == 0) return
+
+    block_size = 256
+    grid_size_sinks = (sim%sink%npart + block_size - 1) / block_size
+    grid_size_peaks = (sim%c%npeak + block_size - 1) / block_size
+
+    ! 1. Clear device sink counters
+    nsink_d = 0
+
+    ! 2. Count sinks in each peak
+    if (sim%sink%npart > 0) then
+       call gpu_count_sinks_kernel<<<grid_size_sinks, block_size>>>(sim%sink%npart)
+    endif
+
+    ! 3. Count sinks hierarchically in each halo (if saddle threshold is active)
+    if (sim%c%saddle_threshold > 0.0d0) then
+       do ilev = 0, sim%c%merge_levelmax
+          call gpu_hierarchical_sink_count_kernel<<<grid_size_peaks, block_size>>>(sim%c%npeak, ilev)
+       end do
+    endif
+
+    ! 4. Copy updated sink counts back to the host
+    if (allocated(sim%c%nsink)) then
+       sim%c%nsink(1:sim%c%npeak) = nsink_d(1:sim%c%npeak)
+    endif
+  end subroutine gpu_sink_in_peak
+
+  ! =========================================================================
+  ! CUDA Kernel: Evaluate sink formation sites on the GPU
+  ! =========================================================================
+  attributes(global) subroutine count_sink_site_kernel( &
+       & npeak, relevance_threshold, mass_threshold, &
+       & nstar_threshold, mseed, boxlen, prefix_sum)
+    integer, value :: npeak
+    real(kind=8), value :: relevance_threshold, mass_threshold
+    real(kind=8), value :: nstar_threshold, mseed, boxlen
+    integer(kind=4), device :: prefix_sum(*)
+
+    integer :: gid, tid, jpeak
+#ifdef HYDRO
+    integer :: ind, igrid, ilevel
+    real(kind=dp) :: dgas, dx_loc, vol_loc
+#endif
+    logical :: ok
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    jpeak = gid
+    ok = .true.
+
+    ! 1. Check if peak is a halo
+    if (ind_halo_d(jpeak) /= jpeak) ok = .false.
+    ! 2. Relevance threshold check
+    if (relevance_d(jpeak) <= relevance_threshold) ok = .false.
+    ! 3. Clump mass threshold check
+    if (clump_mass_d(jpeak) <= mass_threshold) ok = .false.
+    ! 4. Ensure no existing sinks in the peak
+    if (nsink_d(jpeak) > 0) ok = .false.
+    ! 5. Hydro-specific conditions
+#ifdef HYDRO
+    if (ok) then
+       ind = peak_cell_d(jpeak)
+       igrid = peak_grid_d(jpeak)
+       dgas = uold(ind, 1, igrid)
+       ilevel = peak_level_d(jpeak)
+       dx_loc = boxlen / (2**ilevel)
+       vol_loc = dx_loc**ndim
+       ! 6. Star forming cell check
+       if (dgas <= nstar_threshold) ok = .false.
+       ! 7. Enough gas mass available check
+       if (mseed > 0.75d0 * dgas * vol_loc) ok = .false.
+    endif
+#endif
+
+    if (ok) then
+       prefix_sum(jpeak) = 1
+    else
+       prefix_sum(jpeak) = 0
+    endif
+  end subroutine count_sink_site_kernel
+
+  ! =========================================================================
+  ! CUDA Kernel: Map qualifying peak indices to compacted sink indices
+  ! =========================================================================
+  attributes(global) subroutine compute_sink_swap_table(swap_local, prefix_sum, npeak)
+    integer(kind=4), device :: swap_local(*)
+    integer(kind=4), device :: prefix_sum(*)
+    integer, value :: npeak
+
+    integer :: gid, tid, jpeak, previous_sum, has_site, sink_idx
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid > npeak) return
+
+    jpeak = gid
+
+    if (jpeak > 1) then
+       previous_sum = prefix_sum(jpeak - 1)
+    else
+       previous_sum = 0
+    endif
+
+    has_site = prefix_sum(jpeak) - previous_sum
+
+    if (has_site > 0) then
+       sink_idx = 1 + previous_sum
+       swap_local(sink_idx) = jpeak
+    endif
+  end subroutine compute_sink_swap_table
+
+  ! =========================================================================
+  ! CUDA Kernel: Spawn sink particles on the GPU
+  ! =========================================================================
+  attributes(global) subroutine sink_formation_kernel( &
+       & swap_local, head_part, npart_new, npart_tot_old, &
+       & mseed, texp, dtnew_d, boxlen, nsinkmax)
+    integer(kind=4), device :: swap_local(*)
+    integer, value :: head_part, npart_new
+    integer(kind=8), value :: npart_tot_old
+    real(kind=8), value :: mseed, texp, boxlen
+    real(kind=8), device :: dtnew_d(*)
+    integer, value :: nsinkmax
+
+    integer :: sink_idx, gid, tid, jpeak, ilevel, idim
+#ifdef HYDRO
+    integer :: ind, igrid
+#endif
+    real(kind=dp) :: dx_loc
+
+    tid = threadIdx%x
+    gid = tid + (blockIdx%x - 1) * blockDim%x
+    if (gid >= npart_new) return
+
+    jpeak = swap_local(1 + gid)
+    sink_idx = head_part + gid
+
+    ilevel = peak_level_d(jpeak)
+    dx_loc = boxlen / (2**ilevel)
+
+    ! Position from peak COM
+    sink_xp(sink_idx, 1) = peak_com_d(1, jpeak)
+    sink_xp(sink_idx, 2) = peak_com_d(2, jpeak)
+    sink_xp(sink_idx, 3) = peak_com_d(3, jpeak)
+
+    ! Velocity (with dt half-step correction from acceleration)
+    sink_vp(sink_idx, 1) = peak_vel_d(1, jpeak) - peak_acc_d(1, jpeak) * 0.5d0 * dtnew_d(ilevel)
+    sink_vp(sink_idx, 2) = peak_vel_d(2, jpeak) - peak_acc_d(2, jpeak) * 0.5d0 * dtnew_d(ilevel)
+    sink_vp(sink_idx, 3) = peak_vel_d(3, jpeak) - peak_acc_d(3, jpeak) * 0.5d0 * dtnew_d(ilevel)
+
+    ! Acceleration force
+    sink_fp(sink_idx, 1) = peak_acc_d(1, jpeak)
+    sink_fp(sink_idx, 2) = peak_acc_d(2, jpeak)
+    sink_fp(sink_idx, 3) = peak_acc_d(3, jpeak)
+
+    ! Mass and birth properties
+    sink_mp(sink_idx) = 0.0d0
+#ifdef HYDRO
+    sink_mp(sink_idx) = mseed
+    ind = peak_cell_d(jpeak)
+    igrid = peak_grid_d(jpeak)
+    ! Subtract density from cell gas variables
+    uold(ind, 1, igrid) = uold(ind, 1, igrid) - mseed / (dx_loc**ndim)
+#endif
+    sink_tp(sink_idx) = texp
+    sink_levelp(sink_idx) = ilevel
+    sink_idp(sink_idx) = npart_tot_old + 1 + gid
+  end subroutine sink_formation_kernel
+
+  ! =========================================================================
+  ! Host Driver: Count sinks in each peak/clump and propagate hierarchically
+  ! =========================================================================
+  subroutine gpu_sink_formation(sim, msink_loc)
+    use nvtx
+    use constants, only: M_sun
+    use ramses_commons, only: ramses_t
+    type(ramses_t), intent(inout) :: sim
+    real(kind=8), intent(inout) :: msink_loc
+
+    real(kind=8) :: scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v, scale_m
+    real(kind=8) :: mseed
+    integer :: num_threads, num_blocks
+    integer :: npart_new
+    integer(kind=4), device :: npart_new_d
+    integer :: head_part
+
+    msink_loc = 0.0d0
+
+    if (sim%c%npeak <= 0) return
+
+    ! 1. Calculate physical constants and mseed on host
+    call units(sim%r, sim%g, scale_l, scale_t, scale_d, scale_v, scale_nH, scale_T2)
+    scale_m = scale_d * scale_l**3
+    mseed = sim%r%sink_mseed * M_sun / scale_m
+
+    num_threads = 256
+    num_blocks = (sim%c%npeak + num_threads - 1) / num_threads
+
+    ! 2. Evaluate formation sites on GPU
+    call nvtxStartRange("Count Sink Formation Sites", color=5)!red
+    call count_sink_site_kernel<<<num_blocks, num_threads>>>( &
+         & sim%c%npeak, &
+         & sim%c%relevance_threshold, sim%c%mass_threshold, &
+         & sim%r%sink_nstar_frac * sim%r%n_star, mseed, real(sim%r%boxlen, kind=dp), &
+         & prefix_sum)
+    call GPU_Error_Check(__FILE__, __LINE__)
+    call nvtxEndRange()
+
+    ! 3. Run prefix sum on prefix_sum to get target offsets
+    call gpu_scan(prefix_sum, 1, sim%c%npeak, npart_new_d)
+    npart_new = npart_new_d
+
+    if (npart_new > 0) then
+       ! Check memory constraints
+       head_part = sim%sink%npart + 1
+       if (head_part + npart_new - 1 > sim%r%nsinkmax) then
+          write(*,*) 'Not enough memory for sink particles on GPU'
+          stop
+       endif
+
+       ! 4. Fill swap table
+       call compute_sink_swap_table<<<num_blocks, num_threads>>>( &
+            & swap_local, prefix_sum, sim%c%npeak)
+       call GPU_Error_Check(__FILE__, __LINE__)
+
+       ! 5. Copy time step to device
+       dtnew_part_d = sim%g%dtnew
+
+       ! 6. Launch spawning kernel
+       num_blocks = (npart_new + num_threads - 1) / num_threads
+       call nvtxStartRange("Create New Sink Particles", color=5)!red
+       call sink_formation_kernel<<<num_blocks, num_threads>>>( &
+            & swap_local, head_part, npart_new, sim%sink%npart_tot, &
+            & mseed, sim%g%texp, dtnew_part_d, &
+            & sim%r%boxlen, sim%r%nsinkmax)
+       call GPU_Error_Check(__FILE__, __LINE__)
+       call nvtxEndRange()
+
+       ! 7. Update host-side metadata
+       sim%sink%npart = sim%sink%npart + npart_new
+       sim%sink%npart_tot = sim%sink%npart_tot + npart_new
+       sim%sink%tailp(sim%r%nlevelmax) = sim%sink%tailp(sim%r%nlevelmax) + npart_new
+
+       msink_loc = real(npart_new, kind=8) * mseed
+    endif
+  end subroutine gpu_sink_formation
 
 end module clump_device

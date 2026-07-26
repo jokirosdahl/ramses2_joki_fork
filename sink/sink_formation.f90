@@ -1,4 +1,7 @@
 module sink_formation_module
+#ifdef _CUDA
+  use clump_device, only: gpu_sink_formation, gpu_sink_clump
+#endif
 
   type :: out_sink_formation_t
      real(kind=8)::mass
@@ -118,7 +121,11 @@ recursive subroutine r_sink_formation(pst,ilevel,input_size,output,output_size)
      call mdl_get_reply(pst%s%mdl,rID,output_size,next_output)
      output%mass=output%mass+next_output%mass
   else
+#ifdef _CUDA
+     call gpu_sink_formation(pst%s,output%mass)
+#else
      call sink_formation(pst%s%r,pst%s%g,pst%s%m,pst%s%sink,pst%s%c,output%mass)
+#endif
   endif
 
 end subroutine r_sink_formation
@@ -340,7 +347,11 @@ recursive subroutine r_sink_clump(pst,ilevel,input_size)
      call r_sink_clump(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+#ifdef _CUDA
+     call gpu_sink_clump(pst%s)
+#else
      call sink_clump(pst%s)
+#endif
   endif
   
 end subroutine r_sink_clump
