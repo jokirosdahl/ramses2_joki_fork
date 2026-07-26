@@ -7,7 +7,8 @@ module clump_device
   use cudafor
   use gpu_runner, only: grid, father, flag1, flag2, rho, nref, gpu_scan, hash_key, hash_val, &
        uold, f, periodic, box_ckey_min, box_ckey_max, ckey_max, key_off, d_skip, &
-       sink_xp, sink_levelp, sink_pid, sink_vp, sink_fp, sink_mp, sink_tp, sink_idp, swap_local
+       sink_xp, sink_levelp, sink_pid, sink_vp, sink_fp, sink_mp, sink_tp, sink_idp, swap_local, &
+       prefix_sum
   use part_device, only: dtnew_part_d
   implicit none
 
@@ -1815,7 +1816,7 @@ contains
     call count_sink_site_kernel<<<num_blocks, num_threads>>>( &
          & sim%c%npeak, &
          & sim%c%relevance_threshold, sim%c%mass_threshold, &
-         & sim%r%sink_nstar_frac * sim%r%n_star, mseed, real(sim%r%boxlen, kind=dp), &
+         & sim%r%sink_nstar_frac * sim%r%n_star, mseed, sim%r%boxlen, &
          & prefix_sum)
     call GPU_Error_Check(__FILE__, __LINE__)
     call nvtxEndRange()
