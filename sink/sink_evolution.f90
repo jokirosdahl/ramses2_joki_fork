@@ -168,6 +168,9 @@ contains
     macc_loc=0
     do ipart = p%headp(ilevel), p%tailp(ilevel)
 
+       ! Skip zero-mass (merged/defunct) sinks
+       if(p%mp(ipart)<=0.0d0)cycle
+
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Sink Accretion
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -193,10 +196,10 @@ contains
                &            dMBH_overdt,dMED_overdt,tan_theta,fbk_mom_agn,fbk_ener_agn)
        endif
 
-       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Save sink data at a high cadence if needed
-       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-       if(output_file)then
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+        if(output_file .and. p%idp(ipart) < 100000)then
           if(r%agn)then
              call dump_sink_data_fine_AGN(s,p,ipart,ilevel,scale_l,scale_t,scale_d, &
                   &                       dMBH_overdt,dMED_overdt,rho_inf,cs_gas, &
