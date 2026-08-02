@@ -157,13 +157,13 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   !-------------------------------------------------------------------
 #ifndef WITHOUTMPI
   integer::info
-  integer,dimension(1:g%ncpu)::nsite_cpu_tot,nsink_cpu_tot
+  integer,dimension(1:g%ncpu)::nsink_cpu_tot
 #endif
   real(kind=8)::dx,vol,scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,scale_m
-  integer(kind=8),dimension(0:g%ncpu)::nsite_cum,nsink_cum
-  integer,dimension(1:g%ncpu)::nsite_cpu,nsink_cpu
-  integer::i,j,icpu,ilevel,nsite,nsink,nsink_loc,peak_nr,igrid,ind
-  real(kind=8)::purity,mgas,mseed,dgas,dseed
+  integer(kind=8),dimension(0:g%ncpu)::nsink_cum
+  integer,dimension(1:g%ncpu)::nsink_cpu
+  integer::i,j,icpu,ilevel,nsink,nsink_loc,peak_nr,igrid,ind
+  real(kind=8)::purity,mgas,mseed,dgas,dseed,mass_frac
   logical::ok
 
 #if NDIM>2
@@ -172,9 +172,8 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   scale_m=scale_d*scale_l**3
   mseed=r%sink_mseed*M_sun/scale_m
   !---------------------------
-  ! Count sink formation sites
+  ! Flag sink formation sites
   !---------------------------
-  nsite=0
   c%form_sink=0
   ! Loop over peaks
   do j=1,c%npeak
@@ -191,7 +190,7 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
      if(c%relevance(j)<=c%relevance_threshold)ok=.false.
      if(c%clump_mass(j)<=c%mass_threshold)ok=.false.
      if(c%nsink(j)>0)ok=.false.
-#if HYDRO
+#ifdef HYDRO
      dgas=m%uold(ind,1,igrid)
      if(dgas<=r%sink_nstar_frac*r%n_star)ok=.false.
      mgas=m%uold(ind,1,igrid)*vol
@@ -199,21 +198,6 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
 #endif
      ! Set sink formation flag
      if(ok)c%form_sink(j)=1
-     if(ok)nsite=nsite+1
-  end do
-
-  !---------------------------------------------------------
-  ! Compute number of sink formation sites across all CPUs.
-  !---------------------------------------------------------
-  nsite_cpu=0
-  nsite_cpu(g%myid)=nsite
-#ifndef WITHOUTMPI
-  call MPI_ALLREDUCE(nsite_cpu,nsite_cpu_tot,g%ncpu,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,info)
-  nsite_cpu=nsite_cpu_tot
-#endif
-  nsite_cum=0
-  do icpu=1,g%ncpu
-     nsite_cum(icpu)=nsite_cum(icpu-1)+int(nsite_cpu(icpu),kind=8)
   end do
 
   !--------------------------
@@ -234,6 +218,9 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
         if(p%npart>r%nsinkmax)then
            write(*,*)'Not enough memory for sink particle'
            write(*,*)'Increase nsinkmax in the namelist'
+#ifndef WITHOUTMPI
+           call MPI_ABORT(MPI_COMM_WORLD,1,info)
+#endif
            stop
         endif
         ! Compute sink particle position from peak position
@@ -244,6 +231,10 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
         p%vp(p%npart,1)=c%peak_vel(j,1)-c%peak_acc(j,1)*0.5d0*g%dtnew(c%peak_level(j))
         p%vp(p%npart,2)=c%peak_vel(j,2)-c%peak_acc(j,2)*0.5d0*g%dtnew(c%peak_level(j))
         p%vp(p%npart,3)=c%peak_vel(j,3)-c%peak_acc(j,3)*0.5d0*g%dtnew(c%peak_level(j))
+        ! Set initial angular momentum to zero
+        p%jp(p%npart,1)=0.0d0
+        p%jp(p%npart,2)=0.0d0
+        p%jp(p%npart,3)=0.0d0
         ! Compute sink particle old force from peak acceleration
         p%fp(p%npart,1)=c%peak_acc(j,1)
         p%fp(p%npart,2)=c%peak_acc(j,2)
@@ -253,7 +244,8 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
 #ifdef HYDRO
         p%mp(p%npart)=mseed
         dseed=mseed/vol
-        m%uold(ind,1,igrid)=m%uold(ind,1,igrid)-dseed
+        mass_frac=1.0d0-dseed/m%uold(ind,1,igrid)
+        m%uold(ind,1:nvar,igrid)=m%uold(ind,1:nvar,igrid)*mass_frac
         msink_loc=msink_loc+mseed
 #endif
         ! Compute sink particle birth time using proper time

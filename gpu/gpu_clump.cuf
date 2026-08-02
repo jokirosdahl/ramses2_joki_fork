@@ -1484,9 +1484,7 @@ contains
     sim%c%fraction_threshold  = sim%r%sink_fraction_threshold
 
     ! 2. Smooth density field
-    if(sim%r%rho_type_sink .NE. 4)then
-       call gpu_smooth_rho(sim)
-    endif
+    call gpu_smooth_rho(sim)
 
     ! 3. Collect test cells above threshold
     call gpu_collect_test(sim, sim%c%ntest)

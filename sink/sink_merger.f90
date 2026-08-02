@@ -148,7 +148,7 @@ contains
 
        ! Compute TSC weights
        do j=1,ndim
-          xcen(j) = p%xp(ipart,j)/dx_loc
+          xcen(j) = (p%xp(ipart,j)+m%skip(j))/dx_loc
        end do
        call sink_B_spline_weights_TSC(s,xcen(1:ndim),xBHnei,ckeynei,vol,ilevel)
 
@@ -161,6 +161,11 @@ contains
           if(igridn==0)cycle
 
           weight = vol(j)
+          ! flag1 is 32-bit: make sure the sink id fits
+          if(p%idp(ipart) > int(huge(1),kind=8))then
+             write(*,*)'sink_id_deposition: sink id exceeds 32-bit range'
+             call mdl_abort(mdl)
+          endif
           new_id = int(p%idp(ipart), kind=4)
           if(new_id < m%flag1(icelln,igridn)) then
              m%flag1(icelln,igridn) = new_id
@@ -276,7 +281,7 @@ contains
        if(p%mp(ipart) <= 0.0d0) cycle
 
        do j=1,ndim
-          xcen(j) = p%xp(ipart,j)/dx_loc
+          xcen(j) = (p%xp(ipart,j)+m%skip(j))/dx_loc
        end do
 
        call sink_B_spline_weights_TSC(s,xcen(1:ndim),xBHnei,ckeynei,vol,ilevel)
@@ -302,8 +307,7 @@ contains
        if(neighbor_id_min < my_id) then
           n_local = n_local + 1
           if(n_local <= ncollision_max) then
-             write(*,*)'NBOR ID', neighbor_id_min
-             write(*,*)'SINK ID', my_id
+             if(r%verbose)write(*,*)'Sink collision pair:', neighbor_id_min, my_id
              id1(n_local) = neighbor_id_min
              id2(n_local) = my_id
           endif
@@ -323,6 +327,7 @@ contains
   !==============================================================================
   subroutine gather_all_collisions(s, n_local, n_total)
     use ramses_commons, only: ramses_t
+    use mdl_module, only: mdl_abort
     type(ramses_t) :: s
     integer::n_local
     integer::n_total
@@ -338,7 +343,7 @@ contains
     if(n_total > ncollision_max) then
        write(*,*)'Too many collisions'
        write(*,*)'Increase ncollision_max'
-       stop
+       call mdl_abort(s%mdl)
     endif
 #ifndef WITHOUTMPI
     call MPI_ALLGATHER(n_local, 1, MPI_INTEGER, recvcounts, 1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
@@ -466,10 +471,11 @@ contains
     type(ramses_t)::s
     integer::ilevel, n_total, n_filtered
 
-    integer::i
+    integer::i, idim
     real(kind=8)::dx_loc, factG
-    real(kind=8)::dx, dy, dz, separation, dvx, dvy, dvz, vel_squared
+    real(kind=8)::separation, dvx, dvy, dvz, vel_squared
     real(kind=8)::total_mass, binding_criteria
+    real(kind=8),dimension(1:3)::dpos
 
     dx_loc = s%r%boxlen/2**ilevel
     factG = 1.0d0
@@ -486,10 +492,15 @@ contains
        endif
 
        ! Physical check inlined
-       dx = pos1(1, i) - pos2(1, i)
-       dy = pos1(2, i) - pos2(2, i)
-       dz = pos1(3, i) - pos2(3, i)
-       separation = sqrt(dx*dx + dy*dy + dz*dz)
+       ! Use the minimum-image convention across periodic boundaries
+       do idim = 1, 3
+          dpos(idim) = pos1(idim, i) - pos2(idim, i)
+          if(s%r%periodic(idim))then
+             if(dpos(idim) >  0.5d0*s%r%box_size(idim)) dpos(idim) = dpos(idim) - s%r%box_size(idim)
+             if(dpos(idim) < -0.5d0*s%r%box_size(idim)) dpos(idim) = dpos(idim) + s%r%box_size(idim)
+          endif
+       end do
+       separation = norm2(dpos)
 
        if (separation < dx_loc) then
           dvx = vel1(1, i) - vel2(1, i)
@@ -556,10 +567,10 @@ contains
     type(part_t)::p
     integer::n_total
 
-    integer::i, j, myrank
+    integer::i, j, myrank, idim
     integer::id_keep, id_delete
     real(kind=8)::m1, m2, total_mass
-    real(kind=8),dimension(1:3)::com_position, com_velocity
+    real(kind=8),dimension(1:3)::com_position, com_velocity, rel
 
     myrank = s%g%myid
 
@@ -575,7 +586,20 @@ contains
        m2 = mass2(i)
        total_mass = m1 + m2
 
-       com_position(1:3) = (m1 * pos1(1:3, i) + m2 * pos2(1:3, i)) / total_mass
+       ! Compute the center of mass using the minimum-image offset of
+       ! sink 2 relative to sink 1, then wrap back into the box
+       do idim = 1, 3
+          rel(idim) = pos2(idim, i) - pos1(idim, i)
+          if(s%r%periodic(idim))then
+             if(rel(idim) >  0.5d0*s%r%box_size(idim)) rel(idim) = rel(idim) - s%r%box_size(idim)
+             if(rel(idim) < -0.5d0*s%r%box_size(idim)) rel(idim) = rel(idim) + s%r%box_size(idim)
+          endif
+          com_position(idim) = pos1(idim, i) + m2 * rel(idim) / total_mass
+          if(s%r%periodic(idim))then
+             if(com_position(idim) <  0.0d0              ) com_position(idim) = com_position(idim) + s%r%box_size(idim)
+             if(com_position(idim) >= s%r%box_size(idim) ) com_position(idim) = com_position(idim) - s%r%box_size(idim)
+          endif
+       end do
        com_velocity(1:3) = (m1 * vel1(1:3, i) + m2 * vel2(1:3, i)) / total_mass
 
 #if NDIM==3
