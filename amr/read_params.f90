@@ -671,9 +671,12 @@ subroutine m_read_params(pst)
        & ,rtz_primary_cosmic_ray_ionization_rate, rtz_include_HM12_UVB, isH2_rtz &
        & ,rtz_max_cool_timestep, rtz_eqm_min_its
   ! Tracer particles parameters
-  namelist/trac_params/trac,ntracmax,ntractot,ntrac_per_cell,trac_interpolation_scheme,part_subcell_positions,tracer_kick_pdf
+  namelist/trac_params/trac,ntracmax,ntractot,ntrac_per_cell,trac_interpolation_scheme,&
+       & part_subcell_positions,tracer_kick_pdf
   namelist/dust_params/dust,ndustmax,ndusttot,ndust_per_cell,dust_to_gas_mass_ratio,&
-  & grain_size_parameter,grain_charge_parameter,dust_mass_deposition_scheme,dust_force_interpolation_scheme,dust_gyro_factor,analytic_dust_force
+       & grain_size_parameter,grain_charge_parameter,&
+       & dust_mass_deposition_scheme,dust_force_interpolation_scheme,dust_gyro_factor,&
+       & analytic_dust_force
   ! Star particles and star formation recipe
   namelist/star_params/star,nstarmax,nstartot,T2_star,n_star,eps_star,seed,m_star,sf_model
   ! Sink particles and black hole parameters

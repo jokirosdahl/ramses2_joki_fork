@@ -596,8 +596,8 @@ contains
           endif
           com_position(idim) = pos1(idim, i) + m2 * rel(idim) / total_mass
           if(s%r%periodic(idim))then
-             if(com_position(idim) <  0.0d0              ) com_position(idim) = com_position(idim) + s%r%box_size(idim)
-             if(com_position(idim) >= s%r%box_size(idim) ) com_position(idim) = com_position(idim) - s%r%box_size(idim)
+             if(com_position(idim) <  0.0d0             ) com_position(idim) = com_position(idim) + s%r%box_size(idim)
+             if(com_position(idim) >= s%r%box_size(idim)) com_position(idim) = com_position(idim) - s%r%box_size(idim)
           endif
        end do
        com_velocity(1:3) = (m1 * vel1(1:3, i) + m2 * vel2(1:3, i)) / total_mass

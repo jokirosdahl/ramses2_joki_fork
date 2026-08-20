@@ -37,6 +37,8 @@ We describe the meaning and default values of the namelist variables in each of 
 
 [Clump finder parameters](./clump_params.md): Parameters controlling the clump finder.
 
+[Sink particle parameters](./sink_params.md): Parameters controlling sink particle formation, accretion and AGN feedback.
+
 
 
 
