@@ -146,6 +146,7 @@ module mdl_parameters
      enumerator::MDL_CR_SOURCE_TERMS
      enumerator::MDL_SET_CRUNEW
      enumerator::MDL_SET_CRUOLD
+     enumerator::MDL_CONSERVE_CR_FLUX
   end enum
 
   ! Maximum number of cpus

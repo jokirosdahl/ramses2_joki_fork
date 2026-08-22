@@ -125,6 +125,7 @@ subroutine set_crunew(r,m,ilevel)
   ! For CR energies, stored in NENER
   do i=m%head(ilevel),m%tail(ilevel)
      m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)=m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)
+     m%unew(:,5,i)=m%uold(:,5,i)
   end do
 
   ! And for CR fluxes, stored in cruold
@@ -184,7 +185,6 @@ subroutine set_cruold(r, g, m, ilevel)
   else
      sqrt3=1.0d0
   endif
-   
  ! Set cruold to crunew
 #ifdef CRS
   if (r%cr_reduced_flux_correction) then
@@ -219,10 +219,88 @@ subroutine set_cruold(r, g, m, ilevel)
   ! CR energies, stored in NENER
   do i=m%head(ilevel),m%tail(ilevel)
      m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)=m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)
+     m%uold(:,5,i)=m%unew(:,5,i)
   end do
 
 
 end subroutine set_cruold
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+recursive subroutine r_conserve_cr_flux(pst,ilevel,input_size)
+  use mdl_module
+  use ramses_commons, only: pst_t
+  use mdl_parameters
+  implicit none
+  type(pst_t)::pst
+  integer,VALUE::input_size
+  integer::ilevel
+  integer::rID
+
+  if (.not. pst%s%r%cr_reduced_flux_correction) return
+
+  if(pst%nLower>0)then
+     rID = mdl_send_request(pst%s%mdl,MDL_CONSERVE_CR_FLUX,pst%iUpper+1,input_size,0,ilevel)
+     call r_conserve_cr_flux(pst%pLower,ilevel,input_size)
+     call mdl_get_reply(pst%s%mdl,rID,0)
+  else
+     call conserve_cr_flux(pst%s%r, pst%s%g, pst%s%m, ilevel)
+  endif
+
+end subroutine r_conserve_cr_flux
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine conserve_cr_flux(r, g, m, ilevel)
+  use cr_parameters, only: ncrgrp, smallecr
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: run_t, global_t, mesh_t
+  implicit none
+  type(run_t) :: r
+  type(global_t) :: g
+  type(mesh_t) :: m
+  integer :: ilevel
+  real(kind=8)::Ecrc,fred,sqrt3
+  !---------------------------------------------------------
+  ! This routine sets array cruold to its new value crunew 
+  ! after the hydro step.
+  !---------------------------------------------------------
+  integer :: i, j, ig, iE, iFlx
+
+  if(r%cr_isotropic_pressure)then
+     sqrt3=sqrt(3d0)
+  else
+     sqrt3=1.0d0
+  endif
+
+#ifdef CRS
+  if (r%cr_reduced_flux_correction) then
+     ! Make a CR conservation fix
+     do ig = 1, ncrgrp
+        iE = r%iecr+ig-1
+        iFlx = 1 + (ig-1)*ndim
+        do i = m%head(ilevel), m%tail(ilevel)
+           do j = 1, twotondim
+              ! No negative CR densities:
+              m%uold(j,iE,i) = max(m%uold(j,iE,i),smallecr)
+              Ecrc=m%uold(j,iE,i)*g%cr_c(ilevel)
+              ! Reduced flux, should always be .le. 1
+              fred = sqrt(sum((m%cruold(j,iFlx:iFlx+ndim-1,i))**2))/Ecrc*sqrt3
+              if(fred .gt. 1d0) then ! Too big so normalize
+                 m%cruold(j,iFlx:iFlx+ndim-1,i) &
+                      = m%uold(j,iFlx:iFlx+ndim-1,i)/fred
+              endif
+           end do
+        end do
+     end do
+     ! End CR conservation fix
+  endif
+
+#endif
+
+end subroutine conserve_cr_flux
 !###########################################################
 !###########################################################
 !###########################################################
@@ -318,8 +396,8 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
   ind_oct=ind_grid
   h%inkernel=.false.
 
-  ! Loop over 3x3x3 neighboring father cells using 7 passes
-  do ipass = 1, 1+2*ndim
+  ! Loop over 3x3x3 neighboring father cells using 27 passes
+  do ipass = 1, threetondim
 
   if(ipass == 1)then
      ii1min = i1min+1; ii1max = i1max-1
@@ -332,24 +410,28 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
      kk1min = kk1min+1; kk1max = kk1max-1
 #endif
   endif
-  if(ipass == 2)then
+  if(MOD(ipass,3) == 2)then ! ipass = 2, 5, 8, 11, 14, 17, 20, 23, 26
      ii1min = i1min; ii1max = i1min
   endif
-  if(ipass == 3)then
+  if(MOD(ipass,3) == 0)then ! ipass = 3, 6, 9, 12, 15, 18, 21, 24, 27
      ii1min = i1max; ii1max = i1max
   endif
-  if(ipass == 4)then
+  if(MOD(ipass,9) == 4)then ! ipass = 4, 13, 22
      ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1min; jj1max = j1min
   endif
-  if(ipass == 5)then
+  if(MOD(ipass,9) == 7)then ! ipass = 7, 16, 25
+     ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1max; jj1max = j1max
   endif
-  if(ipass == 6)then
+  if(ipass == 10)then
+     ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1min+1; jj1max = j1max-1
      kk1min = k1min; kk1max = k1min
   endif
-  if(ipass == 7)then
+  if(ipass == 19)then
+     ii1min = i1min+1; ii1max = i1max-1
+     jj1min = j1min+1; jj1max = j1max-1
      kk1min = k1max; kk1max = k1max
   endif
 

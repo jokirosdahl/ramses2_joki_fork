@@ -159,7 +159,7 @@ function worker_init(mdl) result(pst)
   use update_rt_c_module, only: r_rt_neq_updates
   use rt_star_feedback, only: r_star_rt_feedback
   use init_cr_module, only: r_init_cr
-  use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
+  use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold,r_conserve_cr_flux
   use cr_source_terms_module, only: r_cr_source_terms
   use update_cr_c_module, only: r_cr_updates, r_broadcast_cr_c
   use cr_input_condinit_module, only: r_cr_input_condinit
@@ -329,6 +329,7 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_CR_SOURCE_TERMS,        pst,C_FUNLOC(r_cr_source_terms),1,0,"cr_source_terms")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUNEW,             pst,C_FUNLOC(r_set_crunew),1,0,"set_crunew")
   call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
+  call mdl_add_service(pst%s%mdl,MDL_CONSERVE_CR_FLUX,       pst,C_FUNLOC(r_conserve_cr_flux),1,0,"conserve_cr_flux")
   call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
   call mdl_add_service(pst%s%mdl,MDL_BROADCAST_CR_C,         pst,C_FUNLOC(r_broadcast_cr_c),24,0,"broadcast_cr_c")
 #if defined(_CUDA) || defined(_METAL)
