@@ -114,18 +114,18 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   type(cr_kernel_t)::kcr
   integer,intent(in)::iGrp
   real(kind=8),intent(in)::cr_c, dt
-  real(kind=8)::dx, Ecr, va, gmone_div_twodx_inv
+  real(kind=8)::dx, Ecr, va, gmone_div_twodx
   integer::i, j, k, idim, nedge, iEgrp
   real(kind=8),dimension(1:3)::bcell, gradpcr, Dcr_vec
   real(kind=8)::norm,bdotgradp,cosp,sinp,cost,sint,bxby,Dcr_dir
   !------------------------------------------------------------------------
   associate(if2=>kcr%if2, jf2=>kcr%jf2, kf2=>kcr%kf2)
-  gmone_div_twodx_inv=(r%gamma_rad(r%iEcr-r%inener+igrp)-1.0)/(2d0*dx)
+  gmone_div_twodx=(r%gamma_rad(r%iEcr-r%inener+igrp)-1.0)/(2d0*dx)
   iEgrp = r%iEcr+(iGrp-1)
 
   ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
   ! default. All dimension indices go from 0 to N+1.
-  ! We only need to calculate tensors for those cells which have faces to
+  ! We only need to calculate wavespeeds for those cells which have faces to
   ! the NXNXN center cells, so by skipping the 'corners' we are reduced
   ! to fewer cells to calculate (by half for the default N=2).
   do k = kfcr1, kf2
@@ -170,12 +170,12 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
      if(r%cr_streaming_diffusion .and. r%cr_v_alfven.gt.0.0) va = r%cr_v_alfven
 
      ! Calculate grad Pcr
-     gradpcr(1) = (kcr%uloc(i+1,j  ,k  ,iEgrp) - kcr%uloc(i-1,j  ,k  ,iEgrp)) * gmone_div_twodx_inv
+     gradpcr(1) = (kcr%uloc(i+1,j  ,k  ,iEgrp) - kcr%uloc(i-1,j  ,k  ,iEgrp)) * gmone_div_twodx
 #if NDIM>1 
-     gradpcr(2) = (kcr%uloc(i  ,j+1,k  ,iEgrp) - kcr%uloc(i  ,j-1,k  ,iEgrp)) * gmone_div_twodx_inv
+     gradpcr(2) = (kcr%uloc(i  ,j+1,k  ,iEgrp) - kcr%uloc(i  ,j-1,k  ,iEgrp)) * gmone_div_twodx
 #endif
 #if NDIM>2
-     gradpcr(3) = (kcr%uloc(i  ,j  ,k+1,iEgrp) - kcr%uloc(i  ,j  ,k-1,iEgrp)) * gmone_div_twodx_inv
+     gradpcr(3) = (kcr%uloc(i  ,j  ,k+1,iEgrp) - kcr%uloc(i  ,j  ,k-1,iEgrp)) * gmone_div_twodx
 #endif
 
      ! Calculate B dot grad Pcr
@@ -309,14 +309,14 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 
   ! Compute flux tensors for all the cells with correction
   call cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
-  ! Wavespeeds in each cell
+  ! Wavespeeds in each cell (kcr%lmax)
   call cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 
   ! Solve for 1D flux in X direction
   !----------------------------------------------------------------------
   dtdx=dt/dx
   do i=if1,if2                                 !
-  do j=jf1,jf2                                 !        each cell in grid
+  do j=jf1,jf2                                 !  each cell in grid (1-3)
   do k=kf1,kf2                                 !
      if(ndim.gt.1 .and. j.eq.jf2) cycle
      if(ndim.gt.2 .and. k.eq.kf2) cycle
@@ -361,7 +361,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u3 = u3-slopeM*0.5d0*dx            
 
      meandiffv = 0.5*( lmax(i-1,j,k,1) + lmax(i,j,k,1) )
-     a2 = min(-meandiffv, lmax(i-1,j,k,1))
+     a2 = min(-meandiffv, -lmax(i-1,j,k,1))
      a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,1))
      a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
@@ -422,7 +422,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u3 = u3-slopeM*0.5d0*dx            
 
      meandiffv = 0.5*( lmax(i,j-1,k,2) + lmax(i,j,k,2) )
-     a2 = min(-meandiffv, lmax(i,j-1,k,2))
+     a2 = min(-meandiffv, -lmax(i,j-1,k,2))
      a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,2))
      a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
@@ -482,7 +482,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u3 = u3-slopeM*0.5d0*dx            
 
      meandiffv = 0.5*( lmax(i,j,k-1,3) + lmax(i,j,k,3) )
-     a2 = min(-meandiffv, lmax(i,j,k-1,3))
+     a2 = min(-meandiffv, -lmax(i,j,k-1,3))
      a2 = max(a2, -cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
      a3 = max(meandiffv, lmax(i,j,k,3))
      a3 = min(a3, cr_c*sqrt(r%gamma_rad(iEcr-r%inener+igrp)-1.0))
