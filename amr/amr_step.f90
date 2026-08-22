@@ -34,7 +34,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   use lightcone_module, only: m_output_lightcone
   use rt_godunov_fine_module, only: r_set_rtunew,r_set_emissivity
   use rt_step_module, only: m_rt_step
-  use cr_godunov_fine_module, only: r_set_crunew
+  use cr_godunov_fine_module, only: r_set_crunew, r_conserve_cr_flux
   use cr_step_module, only: m_cr_step
   use sink_evolution_module, only: r_sink_evolution, out_accretion_t
   use sink_merger_module, only: r_sink_merger
@@ -383,6 +383,8 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         ! Set uold equal to unew
         call m_timer('hydro - set uold','start')
         call r_set_uold(pst,ilevel,1)
+
+        if(r%cr)call r_conserve_cr_flux(pst,ilevel,1)
 
         ! Add gravity source terms to uold with half time step
         ! to complete the time step with old force (will be removed later)
