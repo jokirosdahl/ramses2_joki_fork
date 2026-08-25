@@ -982,7 +982,14 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif  
 #endif
-
+#ifndef MHD
+  if(cr)then
+     write(*,*)'You are trying to use the cr solver but'
+     write(*,*)'the code was compiled with MHD=0'
+     write(*,*)'Please recompile with MHD=1'
+     call mdl_abort(s%mdl)
+  endif  
+#endif
 
   !----------------------------
   ! Read hydro parameters 
