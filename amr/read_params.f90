@@ -954,6 +954,20 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif
 #endif
+#ifdef RT
+  if(.not. rt)then
+     write(*,*)'You are not using the rt solver but'
+     write(*,*)'the code was compiled with RT=1'
+     write(*,*)'This is just a warning and RAMSES will continue'
+  endif
+#else
+  if(rt)then
+     write(*,*)'You are trying to use the rt solver but'
+     write(*,*)'the code was compiled with RT=0'
+     write(*,*)'Please recompile with RT=1'
+     call mdl_abort(s%mdl)
+  endif
+#endif
 #ifdef CRS
   if(.not. cr)then
      write(*,*)'You are not using the cr solver but'
@@ -962,7 +976,7 @@ subroutine m_read_params(pst)
   endif
 #else
   if(cr)then
-     write(*,*)'You are using the cr solver but'
+     write(*,*)'You are trying to use the cr solver but'
      write(*,*)'the code was compiled with CR=0'
      write(*,*)'Please recompile with CR=1'
      call mdl_abort(s%mdl)
