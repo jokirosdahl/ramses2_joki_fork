@@ -274,6 +274,10 @@ contains
 #ifdef MHD
     real(kind=8)::bx,by,bz,emag
 #endif   
+#if NENER>0
+    real(kind=8)::erad
+    integer::irad
+#endif
    
 #ifdef HYDRO
 #if NDIM==3
@@ -347,7 +351,7 @@ contains
 #endif
 
 #if NENER>0
-       ! Deal with RT
+       ! Deal with NENER
        erad = 0.0d0
        do irad=1,nener
           erad = erad + m%uold(icelln,5+irad,igridn)
