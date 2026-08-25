@@ -46,7 +46,8 @@ subroutine m_input_part(pst)
   call r_mass_min_part(pst,pst%s%r%levelmin,1,mp_min,2)
   call r_broadcast_mp_min(pst,mp_min,2)
 
-  ! Check if we should turn on radiation advection and update rt groups
+  ! Check if we should turn on radiation or CR advection 
+  ! and update rt groups
   call r_check_part_emission(pst)
 
 end subroutine m_input_part
@@ -145,7 +146,7 @@ end subroutine r_npart_max
 !#########################################################################
 recursive subroutine r_check_part_emission(pst)
 
-! Check if we should turn on radiation advection from stellar particles
+  ! Check if to turn on radiation or cr advection from stellar particles
   use mdl_module
   use ramses_commons, only: pst_t
   use SED_module, only: update_SED_group_props
@@ -161,8 +162,9 @@ recursive subroutine r_check_part_emission(pst)
      call r_check_part_emission(pst%pLower)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
+
      ! Check if radiadion advection should be turned on
-     if(r%rt .and. r%star .and. .not. r%rt_advect            &
+     if(r%rt .and. r%star .and. .not. r%rt_advect                         &
         .and. pst%s%star%npart_tot .gt. 0) then
         if(g%myid==1) then
           write(*,*) 'Stellar radiation is emitted and advected'
@@ -173,6 +175,16 @@ recursive subroutine r_check_part_emission(pst)
            call update_SED_group_props(r, g, pst%s%sed, pst%s%star)
         endif
      endif
+
+     ! Check if CR advection should be turned on
+     if(r%cr .and. sum(r%fecr).gt.0.0 .and. .not. r%cr_advect            &
+        .and. pst%s%star%npart_tot .gt. 0) then
+        if(g%myid==1) then
+          write(*,*) 'Cosmic rays are emitted and advected'
+        endif
+        r%cr_advect=.true.
+     endif
+
   endif
 
   end associate

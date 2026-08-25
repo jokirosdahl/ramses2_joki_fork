@@ -56,6 +56,20 @@ recursive subroutine r_star_formation(pst,ilevel,input_size,output,output_size)
         endif
      endif
 
+     ! Check if CR advection should be turned on
+     if(pst%s%r%cr .and. .not. pst%s%r%cr_advect .and. pst%s%star%npart_tot .gt. 0) then
+        if(pst%s%g%myid==1) then
+          write(*,*) '*****************************************'
+          if(pst%s%r%cosmo) then
+            write(*,*) 'CR advection turned on at a=',pst%s%g%aexp
+          else
+            write(*,*) 'CR advection turned on at t=',pst%s%g%t
+          endif
+          write(*,*) '*****************************************'
+        endif
+        pst%s%r%cr_advect=.true.
+     endif
+
   endif
 
 end subroutine r_star_formation
