@@ -452,10 +452,10 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      u2(1) = uin(i, j, k-1, iEcr+iGrp-1)
      u3(1) = uin(i, j, k,   iEcr+iGrp-1)
      u4(1) = uin(i, j, k+1, iEcr+iGrp-1)
-     u1(2:ndim+1) = crin(i, j, k-2, 1+(iGrp-1)*ndim:1+iGrp*ndim)
-     u2(2:ndim+1) = crin(i, j, k-1, 1+(iGrp-1)*ndim:1+iGrp*ndim)
-     u3(2:ndim+1) = crin(i, j, k,   1+(iGrp-1)*ndim:1+iGrp*ndim)
-     u4(2:ndim+1) = crin(i, j, k+1, 1+(iGrp-1)*ndim:1+iGrp*ndim)
+     u1(2:ndim+1) = crin(i, j, k-2, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u2(2:ndim+1) = crin(i, j, k-1, 1+(iGrp-1)*ndim:iGrp*ndim)
+     u3(2:ndim+1) = crin(i, j, k,   1+(iGrp-1)*ndim:iGrp*ndim)
+     u4(2:ndim+1) = crin(i, j, k+1, 1+(iGrp-1)*ndim:iGrp*ndim)
 
      slopeLM = (f3-f2)/dx
      slopeRM = (f4-f3)/dx
