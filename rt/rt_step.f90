@@ -141,6 +141,7 @@ subroutine m_rt_update_time(pst,ilevel,t,dt)
   in_broadcast_aexp%t=g%t
   in_broadcast_aexp%texp=g%texp
   in_broadcast_aexp%aexp=g%aexp
+  in_broadcast_aexp%aexp_old=g%aexp_old
   in_broadcast_aexp%hexp=g%hexp
   call r_broadcast_aexp(pst,in_broadcast_aexp,storage_size(in_broadcast_aexp)/32)
 
