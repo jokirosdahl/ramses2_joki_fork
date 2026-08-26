@@ -191,7 +191,7 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
      if(c%clump_mass(j)<=c%mass_threshold)ok=.false.
      if(c%nsink(j)>0)ok=.false.
 #ifdef HYDRO
-     dgas=m%uold(ind,1,igrid)
+     dgas=m%uold(ind,1,igrid)*scale_nH
      if(dgas<=r%sink_nstar_frac*r%n_star)ok=.false.
      mgas=m%uold(ind,1,igrid)*vol
      if(mseed>0.75*mgas)ok=.false.
