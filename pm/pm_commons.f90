@@ -9,7 +9,7 @@ module pm_commons
      integer(kind=8):: npart_tot=0 ! Total number of particles in all processors
      integer :: npart_max=0 ! Maximum number of particles in all processors
      integer :: step_counter ! Step counter for high frequency csv dump
-     integer :: init_counter=.false. ! Step counter initialized
+     logical :: init_counter=.false. ! Step counter initialized
      integer :: nvaralloc ! Number of allocated variables
      integer :: norphan_peak ! Number of orphan particles outside of peak patch
      integer :: norphan_halo ! Number of orphan particles outside of halo patch
