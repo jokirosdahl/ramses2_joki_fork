@@ -810,7 +810,7 @@ contains
                       ! contribute to the weight normalization)
                       if(igridn==0)cycle
 
-                      call psy_function(acc_ratio.gt.r%agn_fbk_mode_switch_threshold,r_rel,local_weight)
+                      call psy_function(quasar_mode,r_rel,local_weight)
                       weight_fb_nei(iBHnei) = local_weight
                       total_weight = total_weight + local_weight
 
