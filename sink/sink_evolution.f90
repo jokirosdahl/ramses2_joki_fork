@@ -77,7 +77,7 @@ contains
 #if NDIM==3
     associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
-    if(r%verbose)write(*,*)'Entering sink_evolution...'
+    if(g%myid==1.and.r%verbose)write(*,*)'Entering sink_evolution...'
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Check if high frequency dump

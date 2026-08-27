@@ -59,23 +59,23 @@ contains
 
     integer::n_count_local, n_count_total, n_valid_mergers
 
-    if(pst%s%r%verbose) write(*,*) 'Entering sink merger...' 
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Entering sink merger...'
 
     ! Step 1: Deposit sink IDs to grid
     call sink_id_deposition(pst%s, pst%s%sink, ilevel)
 
     ! Step 2: Collect local collisions
     call collect_collisions(pst%s, pst%s%sink, ilevel, n_count_local)
-    if(pst%s%r%verbose) write(*,*) 'Proc:', pst%s%g%myid
-    if(pst%s%r%verbose) write(*,*) 'Local collision count:', n_count_local
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Proc:', pst%s%g%myid
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Local collision count:', n_count_local
 
     ! Step 3: Gather all collisions across MPI ranks
     call gather_all_collisions(pst%s, n_count_local, n_count_total)
     if(n_count_total == 0) then
-       if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'No collisions detected'
+       if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'No collisions detected'
        return
     endif
-    if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'Total collision count:', n_count_total
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Total collision count:', n_count_total
 
     ! Step 4: Deduplicate collision list
     call deduplicate_collisions(n_count_total)
@@ -85,7 +85,7 @@ contains
 
     ! Step 6: Apply filtering using merging criteria
     call filter_collision(pst%s, ilevel, n_count_total, n_valid_mergers)
-    if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'Valid mergers after filtering:', n_valid_mergers
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Valid mergers after filtering:', n_valid_mergers
 
     ! Step 7: Break merger chains (defer conflicting pairs to next call)
     call break_merger_chains(n_count_total, n_valid_mergers)
@@ -96,7 +96,7 @@ contains
        call execute_mergers(pst%s, pst%s%sink, n_count_total)
     endif
 
-    if(pst%s%r%verbose .and. pst%s%g%myid == 1) write(*,*) 'Sink merger process complete, executed:', n_valid_mergers
+    if(pst%s%g%myid==1.and.pst%s%r%verbose) write(*,*) 'Sink merger process complete, executed:', n_valid_mergers
 
   end subroutine sink_merger
 

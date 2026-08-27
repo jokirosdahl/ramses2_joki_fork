@@ -683,12 +683,12 @@ subroutine m_read_params(pst)
   namelist/sink_params/sink,nsinkmax,nsinktot,rho_type_sink,sink_descent,fudge_descent &
        & ,sink_relevance_threshold,sink_density_threshold,sink_saddle_threshold &
        & ,sink_mass_threshold,sink_purity_threshold,sink_fraction_threshold &
+       & ,sink_nstar_frac,sink_mseed,sink_delta_tout &
        & ,sink_form,sink_merge,verbose_sink,sink_dump,drag_sink
   ! Black Hole accretion parameters
   namelist/sink_accretion_params/accretion_type,acc_sink_boost,bondi_use_vrel,use_rho_inf &
        & ,eddington_cap,sink_b_spline_order,bondi_use_gas_mass,use_bondi_lambda &
-       & ,t_start_black_hole,use_local_bondi_rate,static_sink,sink_delta_tout &
-       & ,sink_nstar_frac,sink_mseed &
+       & ,t_start_black_hole,use_local_bondi_rate,static_sink &
        & ,fix_sink_mass,eddington_floor,mass_weighting,momentum_conserving
   ! AGN Feedback parameters
   namelist/sink_feedback_params/agn,agn_feedback_radius,agn_weighting_scheme,epsilon_rad &
