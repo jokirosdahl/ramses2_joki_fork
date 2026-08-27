@@ -723,7 +723,7 @@ contains
     integer::i,j,k,ii,jj,kk,icelln,igridn,ind,idim,ivar,iBHnei
     real(kind=8)::d,e,ethermal,r_rel,rho_gas_fb,energy_agn
     real(kind=8),dimension(1:ndim)::vv
-    logical::ok,ok_blast_agn
+    logical::ok,ok_blast_agn,quasar_mode
     real(kind=8)::acc_ratio,jet_mass,local_weight,total_weight,jet_speed
     real(kind=8)::fbk_mass_agn_loc,fbk_mom_agn_loc,fbk_ener_agn_loc
     real(kind=8),dimension(1:ndim)::jet_direction
@@ -764,6 +764,9 @@ contains
        acc_ratio = dMBH_overdt/dMED_overdt
        acc_ratio = max(acc_ratio, 0.0d0)
 
+       ! Check if quasar mode
+       quasar_mode = (acc_ratio.gt.r%agn_fbk_mode_switch_threshold) .or. (norm2(p%jp(ipart,:)) .le. 0.0d0)
+
        ! Compute the jet direction
        jet_direction(1:ndim) = p%jp(ipart,1:ndim) / (norm2(p%jp(ipart,:)) + tiny(0.0d0))
 
@@ -789,7 +792,7 @@ contains
 
                    ! Compute the weight of the cell in question
                    ok=.false.
-                   if(acc_ratio.gt.r%agn_fbk_mode_switch_threshold)then
+                   if(quasar_mode)then
                       ok=.true.
                    else
                       cone_dist = dot_product(x_rel(1:ndim),jet_direction(1:ndim))
@@ -871,8 +874,7 @@ contains
              if (r%agn_use_mass_weighting) weight = weight * d / rho_gas_fb
 
              ! Proceed with the feedback
-             if(acc_ratio.gt.r%agn_fbk_mode_switch_threshold)then
-
+             if(quasar_mode)then
                 ! Quasar mode (energy)
                 ! Get the local feedback quantities (accounting for weightings)
                 fbk_ener_agn_loc = fbk_ener_agn * weight / vol_loc
@@ -886,8 +888,11 @@ contains
                 fbk_mom_agn_loc  = fbk_mom_agn  * weight / vol_loc
 
                 ! Now we inject the actual feedback (note, all energy is due to work done)
-                m%unew(icelln,2:4,igridn) = m%unew(icelln,2:4,igridn) + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:))*jet_direction(1:ndim)/(r_rel+tiny(0.0d0))
-                m%unew(icelln,5,igridn)   = m%unew(icelln,5,igridn)   + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:)/(r_rel+tiny(0.0d0)))*dot_product(jet_direction(1:ndim), vv(1:ndim))
+                m%unew(icelln,2:4,igridn) = m%unew(icelln,2:4,igridn) &
+                     & + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:))*jet_direction(1:ndim)/(r_rel+tiny(0.0d0))
+                m%unew(icelln,5,igridn)   = m%unew(icelln,5,igridn)   &
+                     & + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:)/(r_rel+tiny(0.0d0)))* &
+                     & dot_product(jet_direction(1:ndim), vv(1:ndim))
 
              end if
 
