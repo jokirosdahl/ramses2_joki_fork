@@ -487,7 +487,7 @@ subroutine m_read_params(pst)
   real(kind=8)::sink_fraction_threshold=2d0
   real(kind=8)::sink_nstar_frac=-1 ! Gas density threshold in units of SF density
   real(kind=8)::sink_delta_tout=0 ! Time interval in code units between each sink high frequency dump
-  real(kind=8)::sink_mseed ! Sink seed mass in solar masses
+  real(kind=8)::sink_mseed=1e6 ! Sink seed mass in solar masses
   logical::sink_form=.false.
   logical::sink_merge=.false.
   logical::sink_refine=.false.
