@@ -60,8 +60,8 @@ contains
     ! Written by Nicholas Choustikov (Apr 2025)
     !==================================================================
     ! Local variables
-    real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,factG ! Units
-    real(kind=8)::dx_loc,vol_loc
+    real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,factG,unit_yr ! Units
+    real(kind=8)::dx_loc,vol_loc,current_time
     integer::nBHnei,nBH_fb_nei
     real(kind=8)::jet_angle,tan_theta,lambda_sonic
     integer::kk,jj,ii,ipart,istep,idim
@@ -84,9 +84,16 @@ contains
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     output_file = .false.
     if(r%sink_delta_tout>0)then
+       unit_yr = 3600*24*365.25
+       ! proper time in Myr (careful in cosmology it is negative)
+       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
        istep = int(g%t / r%sink_delta_tout)
+       if (.not. p%init_counter) then
+          p%step_counter = istep - 1
+          p%init_counter = .true.
+       endif
        if(istep > p%step_counter)then
-          p%step_counter = p%step_counter + 1
+          p%step_counter = istep
           output_file = .true.
        endif
     endif
