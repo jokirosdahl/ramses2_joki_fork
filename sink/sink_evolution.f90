@@ -79,25 +79,6 @@ contains
 
     if(g%myid==1.and.r%verbose)write(*,*)'Entering sink_evolution...'
 
-    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    ! Check if high frequency dump
-    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    output_file = .false.
-    if(r%sink_delta_tout>0)then
-       unit_yr = 3600*24*365.25
-       ! proper time in Myr (careful in cosmology it is negative)
-       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
-       istep = int(g%t / r%sink_delta_tout)
-       if (.not. p%init_counter) then
-          p%step_counter = istep - 1
-          p%init_counter = .true.
-       endif
-       if(istep > p%step_counter)then
-          p%step_counter = istep
-          output_file = .true.
-       endif
-    endif
-
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Get all units, constants and cell sizes
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -126,6 +107,28 @@ contains
     ! Mesh spacing in that level
     dx_loc=r%boxlen/2**ilevel
     vol_loc=dx_loc**ndim
+
+    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ! Check if high frequency dump
+    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    output_file = .false.
+    if(r%sink_delta_tout>0)then
+       unit_yr = 3600*24*365.25
+       ! proper time in Myr (careful in cosmology it is negative)
+       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
+       istep = int(current_time / r%sink_delta_tout)
+       if (.not. p%init_counter) then
+          p%step_counter = istep - 1
+          p%init_counter = .true.
+       endif
+       if(istep > p%step_counter)then
+          p%step_counter = istep
+          output_file = .true.
+       endif
+       if(g%myid==1.and.r%verbose)then
+          write(*,*)output_file,istep,p%step_counter
+       endif
+    endif
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Prepare for the B-spline interpolation
@@ -159,6 +162,9 @@ contains
        jet_angle = min(jet_angle, 180d0)
        tan_theta = tan(pi/180d0*jet_angle/2) ! tangent of half of the opening angle
     end if
+    if(g%myid==1.and.r%verbose)then
+       write(*,*)nBHnei, nBH_fb_nei
+    endif
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Open Cache
@@ -193,6 +199,7 @@ contains
                &              factG,lambda_sonic,dmacc_loc,dMBH_overdt,dMED_overdt, &
                &              rho_inf,cs_gas,vel_gas,rho_av_all)
           macc_loc = macc_loc + dmacc_loc
+          write(*,*)dMED_overdt, rho_inf, cs_gas
        endif
 
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1236,7 +1243,7 @@ contains
     open(unit=unit,file=filename,form='formatted',status='unknown',position='append')
 
     ! Write data to the sink file
-    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%t*scale_t/unit_yr, &
+    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%texp*scale_t/g%aexp**2/unit_yr, &
          & ',',g%dtnew(ilevel)*scale_t/unit_yr,',',p%mp(ipart)*scale_m/unit_msun,&
          & ',',dMBH_overdt*unit_dotM,',',dMED_overdt*unit_dotM,&
          & ',',rho_inf*scale_d,',',cs_gas*scale_v,&
@@ -1315,7 +1322,7 @@ contains
     open(unit=unit,file=filename,form='formatted',status='unknown',position='append')
 
     ! Write data to the sink file
-    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%t*scale_t/unit_yr,&
+    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%texp*scale_t/g%aexp**2/unit_yr,&
          & ',',g%dtnew(ilevel)*scale_t/unit_yr,',',p%mp(ipart)*scale_m/unit_msun,&
          & ',',dMBH_overdt*unit_dotM,',',dMED_overdt*unit_dotM,&
          & ',',rho_inf*scale_d,',',cs_gas*scale_v,&
