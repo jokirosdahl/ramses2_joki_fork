@@ -281,7 +281,6 @@ subroutine tree_clump(s)
   !----------------------------------------------------------------------
   call collect_test(s)
   if(s%c%ntest_tot==0)return
-
   !----------------------------------------------------------------------
   ! Count and collect all density peaks.
   ! We also compute for each test particle the coordinates of its
