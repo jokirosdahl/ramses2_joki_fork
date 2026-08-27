@@ -25,7 +25,16 @@ module merger_parameters
   real(dp)::Zgas = 1.0
   real(dp)::HIfr = 0.0D0
   real(dp)::rslab = 1.0D0
-  real(dp)::hslab = 1.0d0
+  real(dp)::hslab = 1.0D0
+#ifdef MHD
+  ! Magnetic Field Setup
+  real(dp)::B_ave = 0.0D0
+  character(len=16)::mag_topology='toroidal' ! magnetic topology: 
+                                             ! 'constant' (along x-axis)
+                                             ! 'toroidal'
+                                             ! 'dipole'
+                                             ! 'quadrupole'
+#endif
 
 end module merger_parameters
 
@@ -61,6 +70,9 @@ subroutine read_merger_params(g)
        & ,typ_radius1, typ_radius2, cut_radius1, cut_radius2 &
        & ,typ_height1, typ_height2, cut_height1, cut_height2 &
        & ,rad_profile, Vcirc_dat_file1, Vcirc_dat_file2 &
+#ifdef MHD
+       & ,B_ave, mag_topology &
+#endif
        & ,gal_axis1, gal_axis2, Vgal1, Vgal2, Zgas, HIfr, rslab, hslab
 
   CALL getarg(1,infile)
@@ -162,12 +174,12 @@ subroutine condinit(r,g,x,q,dx,nn)
   ! Q(:,:) are in user (aka code) units.
   !================================================================
   integer::ivar,i, ind_gal,j
-  real(dp)::v,M,rho,dzz,zint, HH, rdisk, dpdr,dmax
+  real(dp)::v,M,rho,dzz,HH, rdisk, dpdr,dmax
   real(dp)::rc, rr, rr1, rr2, abs_z, hcar1, hcar2, hcut1, hcut2
   real(dp), dimension(3)::vgal, axe_rot, xx1, xx2, xx, xx_rad, xc1, xc2, vg1, vg2
-  real(dp)::rgal, sum,sum2,dmin,zmin,zmax,pi,tol
+  real(dp)::rgal,dmin,pi
   real(dp)::scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2,M_b,az,eps
-  real(dp)::rmin,rmax,a2,aa,Vcirc, HH_max, rcar1, rcar2, rcut1, rcut2,rhohalo,phalo
+  real(dp)::a2,aa,Vcirc, HH_max, rcar1, rcar2, rcut1, rcut2,rhohalo,phalo
   real(dp)::rho_0_1, rho_0_2, rho_0, weight, da1, Vrot,vflowx,vflowy,vflowz
   real(dp)::slabvol,GaFr,denslab
   logical, save:: init_nml=.false.
@@ -374,6 +386,7 @@ subroutine condinit(r,g,x,q,dx,nn)
            q(i,r%ientropy)=q(i,5)/q(i,1)**r%gamma
         endif
      endif
+     q(i,6:) = 0d0
   enddo
 
 contains
