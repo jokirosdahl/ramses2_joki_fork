@@ -14,6 +14,8 @@ module part_device
        & xp, vp, mp, phip, levelp, sortp, idp, &
        & star_xp, star_vp, star_mp, star_tp, star_zp, star_phip, &
        & star_levelp, star_sortp, star_idp, &
+       & sink_xp, sink_vp, sink_mp, sink_tp, sink_phip, sink_fp, &
+       & sink_levelp, sink_sortp, sink_idp, &
        & xp_swap, isp_swap, idp_swap, &
        & gpu_scan, gpu_scan_dp, d_skip
 #if defined(CUB_SORT_PART)
@@ -29,10 +31,7 @@ module part_device
   private :: warp_reduce_min,     block_reduce_min
   private :: warp_reduce_max,     block_reduce_max
 
-  ! Persistent device copies of the per-level time steps, consumed by
-  ! kick_drift_part_kernel. Kept at module scope (one static allocation of
-  ! MAXLEVEL doubles) so gpu_kick_drift_part does not allocate/free a device
-  ! array on every call -- only the H2D refresh in the dispatcher remains.
+  ! Persistent device copies of the per-level time steps
   real(kind=8), device, dimension(1:MAXLEVEL) :: dtnew_part_d, dtold_part_d
 
 contains
@@ -119,7 +118,7 @@ subroutine ensure_scan_capacity_part(min_capacity, part_dep_algo)
      else
         allocate(partial_sums_dp_2(1:gs2))
      endif
-   endif !(part_dep_algo == 3)
+   endif
 
 end subroutine ensure_scan_capacity_part
 
@@ -699,6 +698,154 @@ subroutine gpu_split_star(sim, ilevel)
 
 end subroutine gpu_split_star
 
+subroutine gpu_split_sink(sim, ilevel)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  use refine_device, only: init_global_swap_table_kernel, &
+       compute_local_swap_table, update_global_swap_table
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+
+  integer(kind=4) :: head_idx, num_parts, n_fine, n_coarse, ilev
+  integer(kind=8) :: leading
+  integer(kind=4), device :: n_fine_dev
+  integer :: num_threads, num_blocks, idim
+  real(kind=8) :: dx_loc, skip1, skip2, skip3
+
+  head_idx = sim%sink%headp(ilevel)
+  num_parts = sim%sink%tailp(sim%r%nlevelmax) - head_idx + 1
+  leading = sim%r%nsinkmax
+
+  if (num_parts <= 0) then
+     sim%sink%tailp(ilevel) = sim%sink%headp(ilevel) - 1
+     do ilev = ilevel + 1, sim%r%nlevelmax
+        sim%sink%headp(ilev) = sim%sink%tailp(ilevel) + 1
+        sim%sink%tailp(ilev) = sim%sink%npart
+     end do
+     return
+  endif
+
+  num_threads = 128
+  num_blocks  = (num_parts + num_threads - 1) / num_threads
+
+  ! Geometry
+  dx_loc = sim%r%boxlen/2**ilevel
+  skip1 = sim%m%skip(1)
+  skip2 = sim%m%skip(2)
+  skip3 = sim%m%skip(3)
+
+  ! Partition into current level particles and finer levels particles
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+  call bucket_part_kernel<<<num_blocks, num_threads>>>(sink_xp, isp_swap, &
+       & grid, hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+       & skip1, skip2, skip3, dx_loc, ilevel, head_idx, num_parts, &
+       & leading)
+  call nvtxEndRange()
+
+  ! Initialize prefix sum using swap table sortp
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+  call init_prefix_sum_part_hilbert_fine<<<num_blocks, num_threads>>>( &
+       & isp_swap, sink_sortp, prefix_sum, head_idx, num_parts)
+  call nvtxEndRange()
+
+  ! Compute prefix sum
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+  call gpu_scan(prefix_sum, head_idx, num_parts, n_fine_dev)
+  call nvtxEndRange()
+
+  n_fine = n_fine_dev
+  n_coarse = num_parts - n_fine
+
+  ! Update swap table sortp
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+  call write_swap_global_hilbert_partition<<<num_blocks, num_threads>>>( &
+       & isp_swap, sink_sortp, prefix_sum, &
+       & head_idx, num_parts, n_coarse)
+  call nvtxEndRange()
+
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+  call write_sortp_part<<<num_blocks, num_threads>>>(sink_sortp, isp_swap, &
+       & head_idx, num_parts)
+  call nvtxEndRange()
+
+  ! Shuffle data according to swap table
+  call nvtxStartRange("gpu_split_sink", color=4) ! purple
+
+  ! Positions
+  do idim = 1, ndim
+     call sort_gather_part_real_col<<<num_blocks, num_threads>>>(xp_swap, sink_xp, &
+          & sink_sortp, head_idx, num_parts, leading, idim)
+     call sort_scatter_part_real_col<<<num_blocks, num_threads>>>(sink_xp, xp_swap, &
+          & head_idx, num_parts, leading, idim)
+  end do
+
+  ! Velocities
+  do idim = 1, ndim
+     call sort_gather_part_real_col<<<num_blocks, num_threads>>>(xp_swap, sink_vp, &
+          & sink_sortp, head_idx, num_parts, leading, idim)
+     call sort_scatter_part_real_col<<<num_blocks, num_threads>>>(sink_vp, xp_swap, &
+          & head_idx, num_parts, leading, idim)
+  end do
+
+  ! Accelerations
+  do idim = 1, ndim
+     call sort_gather_part_real_col<<<num_blocks, num_threads>>>(xp_swap, sink_fp, &
+          & sink_sortp, head_idx, num_parts, leading, idim)
+     call sort_scatter_part_real_col<<<num_blocks, num_threads>>>(sink_fp, xp_swap, &
+          & head_idx, num_parts, leading, idim)
+  end do
+
+  ! Masses
+  call sort_gather_part_real_1d<<<num_blocks, num_threads>>>(xp_swap, sink_mp, &
+       & sink_sortp, head_idx, num_parts)
+  call sort_scatter_part_real_1d<<<num_blocks, num_threads>>>(sink_mp, xp_swap, &
+       & head_idx, num_parts)
+
+  ! Birth time
+  call sort_gather_part_real_1d<<<num_blocks, num_threads>>>(xp_swap, sink_tp, &
+       & sink_sortp, head_idx, num_parts)
+  call sort_scatter_part_real_1d<<<num_blocks, num_threads>>>(sink_tp, xp_swap, &
+       & head_idx, num_parts)
+
+  ! Potential
+  if (allocated(sink_phip)) then
+     call sort_gather_part_real_1d<<<num_blocks, num_threads>>>(xp_swap, sink_phip, &
+          & sink_sortp, head_idx, num_parts)
+     call sort_scatter_part_real_1d<<<num_blocks, num_threads>>>(sink_phip, xp_swap, &
+          & head_idx, num_parts)
+  endif
+
+  ! Levels
+  call sort_gather_part_i4_1d<<<num_blocks, num_threads>>>(isp_swap, sink_levelp, &
+       & sink_sortp, head_idx, num_parts)
+  call sort_scatter_part_i4_1d<<<num_blocks, num_threads>>>(sink_levelp, isp_swap, &
+       & head_idx, num_parts)
+
+  ! Particle ids
+  if (allocated(sink_idp)) then
+#ifndef LONGINT
+     call sort_gather_part_i8_1d<<<num_blocks, num_threads>>>(isp_swap, sink_idp, &
+          & sink_sortp, head_idx, num_parts)
+     call sort_scatter_part_i8_1d<<<num_blocks, num_threads>>>(sink_idp, isp_swap, &
+          & head_idx, num_parts)
+#else
+     call sort_gather_part_i8_1d<<<num_blocks, num_threads>>>(idp_swap, sink_idp, &
+          & sink_sortp, head_idx, num_parts)
+     call sort_scatter_part_i8_1d<<<num_blocks, num_threads>>>(sink_idp, idp_swap, &
+          & head_idx, num_parts)
+#endif
+  end if
+  call nvtxEndRange()
+
+  ! Bookkeeping
+  sim%sink%tailp(ilevel) = sim%sink%headp(ilevel) + n_coarse - 1
+  do ilev = ilevel + 1, sim%r%nlevelmax
+     sim%sink%headp(ilev) = sim%sink%tailp(ilevel) + 1
+     sim%sink%tailp(ilev) = sim%sink%npart
+  end do
+
+end subroutine gpu_split_sink
+
 !> Compute per-particle Hilbert sort keys.
 !>
 !> The source cell per axis is floor((xp+skip)/dx + shift). For the large
@@ -985,6 +1132,101 @@ subroutine gpu_sort_star(sim, ilevel)
   call nvtxEndRange()
 
 end subroutine gpu_sort_star
+
+subroutine gpu_sort_sink(sim, ilevel)
+  use nvtx
+  use cub_module, only: radix_sort
+  use ramses_commons, only: ramses_t
+  use refine_device, only: init_global_swap_table_kernel, &
+       & compute_local_swap_table, update_global_swap_table
+  implicit none
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+
+  integer(kind=4) :: head_idx, tail_idx, num_parts, val
+  integer :: num_threads, num_blocks, nblks
+  integer, parameter :: nrnd = 16, nthr = 128
+  integer :: ibit, level
+  real(kind=8) :: dx, dx_inv, shift
+  character(len=32) :: nvtx_lbl
+
+  head_idx = sim%sink%headp(ilevel)
+  tail_idx = sim%sink%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+
+  if (num_parts <= 0) return
+
+  num_threads = 128
+  num_blocks = (num_parts + num_threads - 1) / num_threads
+
+  level = ilevel
+  dx = sim%r%boxlen/2**level
+  dx_inv = 1d0 / dx
+
+  ! The shifted-source deposits (part_dep_algo=2 medium, 3 small) sort by the
+  ! half-cell shifted source cell (upper corner of the 2x2x2 CIC block). The
+  ! +1/2 shift can push the source cell to the upper edge of the computational
+  ! box, which is wrapped back to box_ckey_min before keying (GPU runs are
+  ! periodic). The large deposit (1) is unshifted.
+  if (sim%r%sink_dep_algo >= 2) then
+     shift = 0.5_dp
+  else
+     shift = 0.0_dp
+  end if
+
+  call nvtxStartRange("gpu_sort_sink", color=4) ! purple
+  ! Compute Hilbert keys and store them in idp_swap
+  call nvtxStartRange("gpu_sort_sink:hkey", color=4)
+  call compute_hkey_part_kernel<<<num_blocks, num_threads>>>(sink_xp, idp_swap, &
+       & box_ckey_min, box_ckey_max, d_skip, dx_inv, head_idx, num_parts, &
+       & int(sim%r%nsinkmax,8), level, shift)
+  call nvtxEndRange()
+
+#if defined(CUB_SORT_PART)
+  ! generate the input sequence [head_idx ... head_idx + num_parts - 1]
+  nblks = (((num_parts + nrnd - 1)/nrnd) + nthr - 1)/nthr
+  call init_global_swap_table_kernel_u8<<<nblks,nthr>>>(isp_swap, head_idx, num_parts)
+
+  ! idp_swap has keys to sort by. isp_swap is the input indices sequence
+  ! sortp has the sorted indices. hkeyp will have the sorted keys. we don't
+  ! need sorted keys but cub requires no overlap on input and output buffers.
+  call radix_sort(c_loc(idp_swap(head_idx)), c_loc(hkeyp(head_idx)), &
+                & c_loc(isp_swap(head_idx)), c_loc(sink_sortp(head_idx)), &
+                & head_idx, num_parts, 0, ndim * level)
+#else
+  ! Init sortp
+  call nvtxStartRange("gpu_sort_sink:init_sortp", color=4)
+  call init_global_swap_table_kernel<<<num_blocks, num_threads>>>(sink_sortp, &
+       & head_idx, num_parts)
+  call nvtxEndRange()
+
+  ! Loop over bits (one NVTX range per radix pass; kernels visible in CUDA row)
+  do ibit = 0, ndim * level - 1
+
+     write(nvtx_lbl, '(A,I0)') 'gpu_sort_sink:bit_', ibit
+     call nvtxStartRange(trim(nvtx_lbl), color=4)
+
+     ! Init prefix sum based on Hilbert key bit value
+     call init_prefix_sum_part_bit<<<num_blocks, num_threads>>>(idp_swap, &
+          & sink_sortp, prefix_sum, head_idx, num_parts, ibit)
+
+     ! Compute prefix sum
+     call gpu_scan(prefix_sum, head_idx, num_parts)
+
+     ! Compute sorted indices
+     call compute_local_swap_table<<<num_blocks, num_threads>>>(isp_swap, &
+          & sink_sortp, prefix_sum, head_idx, num_parts)
+
+     ! Store back to sortp
+     call update_global_swap_table<<<num_blocks, num_threads>>>(sink_sortp, &
+          & isp_swap, head_idx, num_parts)
+
+     call nvtxEndRange()
+  end do
+#endif
+  call nvtxEndRange()
+
+end subroutine gpu_sort_sink
 
 !> Multipole reduction over [1, npart]: q(1)=sum(mp), q(idim+1)=sum(mp*xp).
 attributes(global) subroutine multipole_q_kernel(xp_d, mp_d, multipole_q_d, &
@@ -1465,10 +1707,8 @@ subroutine gpu_cic_part_large(sim, ilevel, rtype)
   real(kind=8) :: q_h(1:ndim+1)
   real(kind=8), device :: q_d(1:ndim+1)
 
-  ! rtype gate: matches the host's "deposit DM into rho" branch.
-  if (rtype /= 0 .and. rtype /= 1) then
-     return
-  endif
+  ! If not ALL and not DM return
+  if (rtype /= 0 .and. rtype /= 1) return
 
   ! Coarsest level: accumulate global monopole and dipole.
   if (ilevel == sim%r%levelmin .and. sim%p%npart > 0) then
@@ -1541,10 +1781,8 @@ subroutine gpu_cic_star_large(sim, ilevel, rtype)
   real(kind=8) :: q_h(1:ndim+1)
   real(kind=8), device :: q_d(1:ndim+1)
 
-  ! rtype gate: matches the host's "deposit DM into rho" branch.
-  if (rtype /= 0 .and. rtype /= 1) then
-     return
-  endif
+  ! If not ALL and not STAR return
+  if (rtype /= 0 .and. rtype /= 2) return
 
   ! Coarsest level: accumulate global monopole and dipole.
   if (ilevel == sim%r%levelmin .and. sim%star%npart > 0) then
@@ -1603,6 +1841,81 @@ subroutine gpu_cic_star_large(sim, ilevel, rtype)
   call nvtxEndRange()
 
 end subroutine gpu_cic_star_large
+
+subroutine gpu_cic_sink_large(sim, ilevel, rtype)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: rtype
+
+  integer(kind=4) :: head_idx, tail_idx, num_parts
+  integer :: num_threads, num_blocks, idim
+  integer :: deposit_block_size, deposit_num_blocks
+  real(kind=8) :: dx_loc, vol_loc, skip1, skip2, skip3, mass_sph
+  real(kind=8) :: q_h(1:ndim+1)
+  real(kind=8), device :: q_d(1:ndim+1)
+
+  ! If not ALL and not SINK return
+  if (rtype /= 0 .and. rtype /= 3) return
+
+  ! Coarsest level: accumulate global monopole and dipole.
+  if (ilevel == sim%r%levelmin .and. sim%sink%npart > 0) then
+
+     num_threads = 256
+     num_blocks  = (sim%sink%npart + num_threads - 1) / num_threads
+
+     q_d = 0.0_dp
+     call nvtxStartRange("gpu_cic_sink_large:multipole", color=4)
+     call multipole_q_kernel<<<num_blocks, num_threads>>>(sink_xp, sink_mp, q_d, &
+          & 1, sim%sink%npart, int(sim%r%nsinkmax,8))
+     call nvtxEndRange()
+     q_h = q_d
+
+     do idim = 1, ndim+1
+        sim%g%multipole%q(idim) = sim%g%multipole%q(idim) + q_h(idim)
+     end do
+
+  endif
+
+  ! Particle index range for the deposit: everything at or below ilevel.
+  head_idx = sim%sink%headp(ilevel)
+  tail_idx = sim%sink%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+
+  if (num_parts <= 0) return
+
+  ! Geometry. dx_loc = boxlen/2**ilevel is the deposit CELL side at level
+  ! ilevel (the host's "mesh spacing at level ilevel"); the parent oct spans
+  ! 2*dx_loc. vol_loc = dx_loc**ndim is the level-ilevel cell volume used to
+  ! convert mass to density. skip(:) recentres positions on this rank's tile.
+  dx_loc = sim%r%boxlen/2**ilevel
+  vol_loc = dx_loc**ndim
+  skip1 = sim%m%skip(1)
+  skip2 = sim%m%skip(2)
+  skip3 = sim%m%skip(3)
+  mass_sph = sim%r%mass_sph
+
+  ! Single-pass warp-segmented CIC deposit. 256 threads/block = 8 warps/block;
+  ! each warp owns 32 contiguous slots of sortp and emits roughly one
+  ! atomicAdd per stencil offset (more on cell boundaries). The former build
+  ! pass (which hashed each particle's parent oct into the isp_swap source map)
+  ! is now folded into this kernel: every lane derives its source cell, frac
+  ! position, and packed (igrid, icell) directly from xp, so no isp_swap
+  ! write/read round trip or grid(igrid)%ckey read is needed.
+  deposit_block_size = 256
+  deposit_num_blocks = (num_parts + deposit_block_size - 1) / deposit_block_size
+  call nvtxStartRange("gpu_cic_sink_large:deposit", color=4)
+  call cic_part_large_kernel<<<deposit_num_blocks, deposit_block_size>>>(&
+       & sink_sortp, head_idx, num_parts, &
+       & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+       & box_ckey_min, box_ckey_max, periodic, &
+       & sink_xp, sink_mp, rho, nref, &
+       & skip1, skip2, skip3, dx_loc, vol_loc, mass_sph, .true., &
+       & sim%r%m_refine(ilevel), sim%r%mass_cut_refine, ilevel, int(sim%r%nsinkmax,8))
+  call nvtxEndRange()
+
+end subroutine gpu_cic_sink_large
 
 !################################################################
 !  GPU CIC medium-stencil deposit (part_dep_algo = 2)
@@ -1878,9 +2191,7 @@ subroutine gpu_cic_part_medium(sim, ilevel, rtype)
   real(kind=8) :: q_h(1:ndim+1)
   real(kind=8), device :: q_d(1:ndim+1)
 
-  if (rtype /= 0 .and. rtype /= 1) then
-     return
-  endif
+  if (rtype /= 0 .and. rtype /= 1) return
 
   ! Coarsest level: accumulate global monopole and dipole.
   if (ilevel == sim%r%levelmin .and. sim%p%npart > 0) then
@@ -1941,9 +2252,7 @@ subroutine gpu_cic_star_medium(sim, ilevel, rtype)
   real(kind=8) :: q_h(1:ndim+1)
   real(kind=8), device :: q_d(1:ndim+1)
 
-  if (rtype /= 0 .and. rtype /= 1) then
-     return
-  endif
+  if (rtype /= 0 .and. rtype /= 2) return
 
   ! Coarsest level: accumulate global monopole and dipole.
   if (ilevel == sim%r%levelmin .and. sim%star%npart > 0) then
@@ -1990,6 +2299,68 @@ subroutine gpu_cic_star_medium(sim, ilevel, rtype)
   call nvtxEndRange()
 
 end subroutine gpu_cic_star_medium
+
+subroutine gpu_cic_sink_medium(sim, ilevel, rtype)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: rtype
+
+  integer(kind=4) :: head_idx, tail_idx, num_parts
+  integer :: num_threads, num_blocks, idim
+  integer :: deposit_block_size, deposit_num_blocks
+  real(kind=8) :: dx_loc, vol_loc, skip1, skip2, skip3, mass_sph
+  real(kind=8) :: q_h(1:ndim+1)
+  real(kind=8), device :: q_d(1:ndim+1)
+
+  if (rtype /= 0 .and. rtype /= 3) return
+
+  ! Coarsest level: accumulate global monopole and dipole.
+  if (ilevel == sim%r%levelmin .and. sim%sink%npart > 0) then
+
+     num_threads = 256
+     num_blocks  = (sim%sink%npart + num_threads - 1) / num_threads
+
+     q_d = 0.0_dp
+     call nvtxStartRange("gpu_cic_sink_medium:multipole", color=4)
+     call multipole_q_kernel<<<num_blocks, num_threads>>>(sink_xp, sink_mp, q_d, &
+          & 1, sim%sink%npart, int(sim%r%nsinkmax,8))
+     call nvtxEndRange()
+     q_h = q_d
+
+     do idim = 1, ndim+1
+        sim%g%multipole%q(idim) = sim%g%multipole%q(idim) + q_h(idim)
+     end do
+
+  endif
+
+  head_idx = sim%sink%headp(ilevel)
+  tail_idx = sim%sink%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+
+  if (num_parts <= 0) return
+
+  dx_loc = sim%r%boxlen/2**ilevel
+  vol_loc = dx_loc**ndim
+  skip1 = sim%m%skip(1)
+  skip2 = sim%m%skip(2)
+  skip3 = sim%m%skip(3)
+  mass_sph = sim%r%mass_sph
+
+  deposit_block_size = 256
+  deposit_num_blocks = (num_parts + deposit_block_size - 1) / deposit_block_size
+  call nvtxStartRange("gpu_cic_part_medium:deposit", color=4)
+  call cic_part_medium_kernel<<<deposit_num_blocks, deposit_block_size>>>(&
+       & sink_sortp, head_idx, num_parts, &
+       & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+       & box_ckey_min, box_ckey_max, &
+       & sink_xp, sink_mp, rho, nref, &
+       & skip1, skip2, skip3, dx_loc, vol_loc, mass_sph, .true., &
+       & sim%r%m_refine(ilevel), sim%r%mass_cut_refine, ilevel, int(sim%r%nsinkmax,8))
+  call nvtxEndRange()
+
+end subroutine gpu_cic_sink_medium
 
 !################################################################
 !  GPU CIC small-stencil deposit (part_dep_algo = 3)
@@ -2352,7 +2723,7 @@ subroutine gpu_cic_star_small(sim, ilevel, rtype)
   real(kind=8), device :: q_d(1:ndim+1)
 
   ! rtype gate: matches the host's "deposit DM into rho" branch.
-  if (rtype /= 0 .and. rtype /= 1) return
+  if (rtype /= 0 .and. rtype /= 2) return
 
   ! Coarsest level: accumulate global monopole and dipole (same as large path).
   if (ilevel == sim%r%levelmin .and. sim%star%npart > 0) then
@@ -2428,6 +2799,98 @@ subroutine gpu_cic_star_small(sim, ilevel, rtype)
   call nvtxEndRange()
 
 end subroutine gpu_cic_star_small
+
+subroutine gpu_cic_sink_small(sim, ilevel, rtype)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: rtype
+
+  integer(kind=4) :: head_idx, tail_idx, num_parts
+  integer :: num_threads, num_blocks, idim, k
+  integer :: blk, nblk
+  real(kind=8) :: dx_loc, vol_loc, dx_inv, skip1, skip2, skip3, mass_sph
+  real(kind=8) :: q_h(1:ndim+1)
+  real(kind=8), device :: q_d(1:ndim+1)
+
+  ! rtype gate: matches the host's "deposit DM into rho" branch.
+  if (rtype /= 0 .and. rtype /= 3) return
+
+  ! Coarsest level: accumulate global monopole and dipole (same as large path).
+  if (ilevel == sim%r%levelmin .and. sim%sink%npart > 0) then
+     num_threads = 256
+     num_blocks  = (sim%sink%npart + num_threads - 1) / num_threads
+     q_d = 0.0_dp
+     call nvtxStartRange("gpu_cic_sink_small:multipole", color=4)
+     call multipole_q_kernel<<<num_blocks, num_threads>>>(sink_xp, sink_mp, q_d, &
+          & 1, sim%sink%npart, int(sim%r%nsinkmax,8))
+     call nvtxEndRange()
+     q_h = q_d
+     do idim = 1, ndim+1
+        sim%g%multipole%q(idim) = sim%g%multipole%q(idim) + q_h(idim)
+     end do
+  endif
+
+  ! Particle index range for the deposit: everything at or below ilevel.
+  head_idx = sim%sink%headp(ilevel)
+  tail_idx = sim%sink%tailp(sim%r%nlevelmax)
+  num_parts = tail_idx - head_idx + 1
+
+  if (num_parts <= 0) return
+
+  dx_loc = sim%r%boxlen/2**ilevel
+  vol_loc = dx_loc**ndim
+  dx_inv  = 1.0_dp/dx_loc
+  skip1 = sim%m%skip(1)
+  skip2 = sim%m%skip(2)
+  skip3 = sim%m%skip(3)
+  mass_sph = sim%r%mass_sph
+
+  nblk = 256
+  blk  = (num_parts + nblk - 1) / nblk
+
+  ! Build source-cell runs: leader markers -> inclusive scan (run id in
+  ! prefix_sum) -> per-run tail slot (in isp_swap).
+  call nvtxStartRange("gpu_cic_sink_small:runs", color=4)
+  call init_leader_marker_part_small<<<blk, nblk>>>(sink_sortp, idp_swap, &
+       & prefix_sum, head_idx, num_parts)
+  call gpu_scan(prefix_sum, head_idx, num_parts)
+  call fill_run_tail_part_small<<<blk, nblk>>>(prefix_sum, isp_swap, &
+       & head_idx, num_parts)
+  call nvtxEndRange()
+
+  ! Per stencil offset: prefix sum the weighted contributions and deposit one
+  ! value per source-cell run.
+  call nvtxStartRange("gpu_cic_sink_small:deposit", color=4)
+  do k = 1, twotondim
+     ! rho contribution (mp * w / vol_loc)
+     call fill_contrib_part_small<<<blk, nblk>>>(sink_sortp, sink_xp, sink_mp, xp_swap, &
+          & skip1, skip2, skip3, dx_inv, vol_loc, k, 0, sim%r%mass_cut_refine, 1d0, &
+          & head_idx, num_parts, int(sim%r%nsinkmax,8))
+     call gpu_scan_dp(xp_swap, head_idx, num_parts)
+     call deposit_runs_part_small<<<blk, nblk>>>(sink_sortp, sink_xp, xp_swap, &
+          & prefix_sum, isp_swap, &
+          & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+          & box_ckey_min, box_ckey_max, rho, &
+          & skip1, skip2, skip3, dx_inv, k, ilevel, head_idx, num_parts, int(sim%r%nsinkmax,8))
+
+     ! nref contribution (w, gated), only when the refinement gate is active.
+     if (sim%r%m_refine(ilevel) >= 0.0_dp) then
+        call fill_contrib_part_small<<<blk, nblk>>>(sink_sortp, sink_xp, sink_mp, xp_swap, &
+             & skip1, skip2, skip3, dx_inv, vol_loc, k, 2, sim%r%mass_cut_refine, mass_sph,&
+             & head_idx, num_parts, int(sim%r%nsinkmax,8))
+        call gpu_scan_dp(xp_swap, head_idx, num_parts)
+        call deposit_runs_part_small<<<blk, nblk>>>(sink_sortp, sink_xp, xp_swap, &
+             & prefix_sum, isp_swap, &
+             & hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+             & box_ckey_min, box_ckey_max, nref, &
+             & skip1, skip2, skip3, dx_inv, k, ilevel, head_idx, num_parts, int(sim%r%nsinkmax,8))
+     endif
+  end do
+  call nvtxEndRange()
+
+end subroutine gpu_cic_sink_small
 
 !> Per-level particle Courant reduction. Computes vmax = MAX|vp| and
 !> ekin = SUM 0.5*mp*|vp|^2 over particles in level ilevel from device vp/mp
@@ -2511,6 +2974,46 @@ subroutine gpu_newdt_star(sim, ilevel, vmax, ekin)
   ekin = ekin + ekin_host
 
 end subroutine gpu_newdt_star
+
+subroutine gpu_newdt_sink(sim, ilevel, vmax, ekin)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  real(kind=8), intent(inout) :: vmax, ekin
+
+  integer(kind=4) :: head_idx, num_parts
+  integer(kind=8) :: leading
+  integer :: num_threads, num_blocks
+  real(kind=8), device :: vmax_dev
+  real(kind=8), device :: ekin_dev
+  real(kind=8) :: vmax_host, ekin_host
+
+  head_idx  = sim%sink%headp(ilevel)
+  num_parts = sim%sink%tailp(ilevel) - head_idx + 1
+
+  if (num_parts <= 0) return
+
+  leading = sim%r%nsinkmax
+  vmax_dev = 0.0_dp
+  ekin_dev = 0.0_dp
+
+  num_threads = 256
+  num_blocks  = (num_parts + num_threads - 1) / num_threads
+
+  call nvtxStartRange("gpu_newdt_sink", color=4) ! purple
+  call gpu_newdt_part_kernel<<<num_blocks, num_threads>>>(sink_vp, sink_mp, &
+       & vmax_dev, ekin_dev, head_idx, num_parts, leading)
+  call GPU_Error_Check("gpu/gpu_part.cuf", 0)
+  call nvtxEndRange()
+
+  vmax_host = vmax_dev   ! D->H
+  ekin_host = ekin_dev   ! D->H
+
+  vmax = MAX(vmax, vmax_host)
+  ekin = ekin + ekin_host
+
+end subroutine gpu_newdt_sink
 
 attributes(device) subroutine gather_cic_force_part(f_d, hash_key_d, hash_val_d, &
      hash_size_d, ckey_max_d, key_off_d, box_ckey_min_d, box_ckey_max_d, periodic_d, &
@@ -2626,14 +3129,15 @@ attributes(device) subroutine gather_cic_force_part(f_d, hash_key_d, hash_val_d,
 
 end subroutine gather_cic_force_part
 
-attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
+attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, fp_d, levelp_d, &
      f_d, hash_key_d, hash_val_d, hash_size_d, ckey_max_d, key_off_d, &
      box_ckey_min_d, box_ckey_max_d, box_size_d, periodic_d, ngridmax, &
-     dtnew_d, dtold_d, skip1, skip2, skip3, dx_loc, &
-     action_part, ilevel, head_idx, num_parts, leading)
+     dtnew_d, dtold_d, skip1, skip2, skip3, dx_loc, fudge_descent, &
+     action_part, ilevel, head_idx, num_parts, leading, has_fp)
   integer(kind=8), intent(in), value :: leading
   real(kind=dp),   device :: xp_d(*)
   real(kind=dp),   device :: vp_d(*)
+  real(kind=dp),   device :: fp_d(*)
   integer(kind=4), device :: levelp_d(*)
   real(kind=dp),   device :: f_d(1:twotondim,1:ndim,*)
   integer(kind=8), device :: hash_key_d(*)
@@ -2648,7 +3152,9 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
   integer(kind=4), intent(in), value :: ngridmax
   real(kind=8),    device :: dtnew_d(*)
   real(kind=8),    device :: dtold_d(*)
-  real(kind=8), intent(in), value :: skip1, skip2, skip3, dx_loc
+  logical,         intent(in), value :: has_fp
+  real(kind=8),    intent(in), value :: skip1, skip2, skip3
+  real(kind=8),    intent(in), value :: dx_loc, fudge_descent
   integer(kind=4), intent(in), value :: action_part
   integer(kind=4), intent(in), value :: ilevel
   integer(kind=4), intent(in), value :: head_idx
@@ -2657,6 +3163,7 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
   integer :: thread_idx, block_idx, idx, ipart, idim, lp
   real(kind=8) :: skip(1:3), x(1:3), x_coarse(1:3), ff(1:3)
   real(kind=8) :: dteff, xnew
+  real(kind=dp) :: gamma, norm2, fnorm, delta
   logical :: ok_level
 
   thread_idx = threadIdx%x - 1
@@ -2690,7 +3197,7 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
 
   endif
 
-  if (action_part == 2) then
+  if (action_part == 2) then ! kick-drift
 
      do idim = 1, ndim
 
@@ -2701,7 +3208,7 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
              & + vp_d(ipart + (idim-1)*leading) * dtnew_d(ilevel)
 
         if (periodic_d(idim)) then
-           if (xnew < 0.0_dp)              xnew = xnew + box_size_d(idim)
+           if (xnew < 0.0_dp)            xnew = xnew + box_size_d(idim)
            if (xnew >= box_size_d(idim)) xnew = xnew - box_size_d(idim)
         endif
 
@@ -2709,7 +3216,43 @@ attributes(global) subroutine kick_drift_part_kernel(xp_d, vp_d, levelp_d, &
 
      end do
 
-  else if (action_part == 1) then
+     ! Gradient descent
+     if (has_fp .and. (fudge_descent > 0d0)) then
+
+        ! Compute coefficients
+        gamma = 0.0_dp
+        norm2 = 0.0_dp
+        fnorm = 0.0_dp
+        do idim = 1, ndim
+           gamma = gamma + real(vp_d(ipart + (idim-1)*leading) * (ff(idim) - fp_d(ipart + (idim-1)*leading)), kind=dp)
+           norm2 = norm2 + real((ff(idim) - fp_d(ipart + (idim-1)*leading))**2, kind=dp)
+           fnorm = fnorm + real(ff(idim)**2, kind=dp)
+        enddo
+        gamma = gamma * real(dtnew_d(ilevel), kind=dp) ! cm2 s-2
+        fnorm = sqrt(fnorm)
+        delta = 0.0_dp
+        if (norm2 > 0.0_dp) then
+           delta = MIN(real(fudge_descent, kind=dp) * real(dtnew_d(ilevel), kind=dp) &
+                & * sqrt(abs(gamma)/norm2)*fnorm, 0.5_dp*real(dx_loc, kind=dp))
+        endif
+
+        ! Update position
+        if(fnorm>0)then
+           do idim = 1, ndim
+              xp_d(ipart + (idim-1)*leading) = xp_d(ipart + (idim-1)*leading) + ff(idim)/fnorm*delta
+           end do
+        endif
+
+     endif
+
+     ! Store old force
+     if (has_fp) then
+        do idim = 1, ndim
+           fp_d(ipart + (idim-1)*leading) = ff(idim)
+        end do
+     endif
+
+  else if (action_part == 1) then ! kick-only
 
      lp = levelp_d(ipart)
 
@@ -2760,11 +3303,12 @@ subroutine gpu_kick_drift_part(sim, ilevel, action_part)
      num_blocks  = (num_parts + num_threads - 1) / num_threads
 
      call nvtxStartRange("gpu_kick_drift_part", color=4) ! purple
-     call kick_drift_part_kernel<<<num_blocks, num_threads>>>(xp, vp, levelp, &
+     call kick_drift_part_kernel<<<num_blocks, num_threads>>>(xp, vp, xp, levelp, &
           & f, hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
           & box_ckey_min, box_ckey_max, box_size, periodic, sim%r%ngridmax, &
           & dtnew_part_d, dtold_part_d, &
-          & skip1, skip2, skip3, dx_loc, action_part, ilevel, head_idx, num_parts, int(sim%r%npartmax,8))
+          & skip1, skip2, skip3, dx_loc, 0d0, action_part, ilevel, head_idx, num_parts, &
+          & int(sim%r%npartmax,8), .false.)
      call nvtxEndRange()
 
   endif
@@ -2801,15 +3345,63 @@ subroutine gpu_kick_drift_star(sim, ilevel, action_part)
      num_blocks  = (num_parts + num_threads - 1) / num_threads
 
      call nvtxStartRange("gpu_kick_drift_star", color=4) ! purple
-     call kick_drift_part_kernel<<<num_blocks, num_threads>>>(star_xp, star_vp, star_levelp, &
-          & f, hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+     call kick_drift_part_kernel<<<num_blocks, num_threads>>>(star_xp, star_vp, star_xp, &
+          & star_levelp, f, hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
           & box_ckey_min, box_ckey_max, box_size, periodic, sim%r%ngridmax, &
           & dtnew_part_d, dtold_part_d, &
-          & skip1, skip2, skip3, dx_loc, action_part, ilevel, head_idx, num_parts, int(sim%r%nstarmax,8))
+          & skip1, skip2, skip3, dx_loc, 0d0, action_part, ilevel, head_idx, num_parts, &
+          & int(sim%r%nstarmax,8), .false.)
      call nvtxEndRange()
 
   endif
 
 end subroutine gpu_kick_drift_star
+
+subroutine gpu_kick_drift_sink(sim, ilevel, action_part)
+  use nvtx
+  use ramses_commons, only: ramses_t
+  type(ramses_t), intent(inout) :: sim
+  integer, intent(in) :: ilevel
+  integer, intent(in) :: action_part
+
+  integer(kind=4) :: head_idx, tail_idx, num_parts
+  integer :: num_threads, num_blocks
+  real(kind=8) :: fudge_descent, dx_loc, skip1, skip2, skip3
+
+  dx_loc = sim%r%boxlen/2**ilevel
+  skip1 = sim%m%skip(1)
+  skip2 = sim%m%skip(2)
+  skip3 = sim%m%skip(3)
+  fudge_descent = 0d0
+  if ((sim%g%nstep_coarse > 0) .and. sim%r%sink_descent) then
+     fudge_descent = sim%r%fudge_descent
+  endif
+
+  ! Refresh the time step on device
+  dtnew_part_d = sim%g%dtnew
+  dtold_part_d = sim%g%dtold
+
+  head_idx = sim%sink%headp(ilevel)
+  tail_idx = sim%sink%tailp(ilevel)
+  num_parts = tail_idx - head_idx + 1
+
+  if (num_parts > 0) then
+
+     num_threads = 128
+     num_blocks  = (num_parts + num_threads - 1) / num_threads
+
+     call nvtxStartRange("gpu_kick_drift_sink", color=4) ! purple
+     call kick_drift_part_kernel<<<num_blocks, num_threads>>>(sink_xp, sink_vp, sink_fp, sink_levelp, &
+          & f, hash_key, hash_val, sim%m%hash_size, ckey_max, key_off, &
+          & box_ckey_min, box_ckey_max, box_size, periodic, sim%r%ngridmax, &
+          & dtnew_part_d, dtold_part_d, &
+          & skip1, skip2, skip3, dx_loc, fudge_descent, &
+          & action_part, ilevel, head_idx, num_parts, &
+          & int(sim%r%nsinkmax,8), .true.)
+     call nvtxEndRange()
+
+  endif
+
+end subroutine gpu_kick_drift_sink
 
 end module part_device

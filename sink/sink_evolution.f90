@@ -60,8 +60,8 @@ contains
     ! Written by Nicholas Choustikov (Apr 2025)
     !==================================================================
     ! Local variables
-    real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,factG ! Units
-    real(kind=8)::dx_loc,vol_loc
+    real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v,factG,unit_yr ! Units
+    real(kind=8)::dx_loc,vol_loc,current_time
     integer::nBHnei,nBH_fb_nei
     real(kind=8)::jet_angle,tan_theta,lambda_sonic
     integer::kk,jj,ii,ipart,istep,idim
@@ -77,16 +77,23 @@ contains
 #if NDIM==3
     associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
-    if(r%verbose)write(*,*)'Entering sink_evolution...'
+    if(g%myid==1.and.r%verbose)write(*,*)'Entering sink_evolution...'
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Check if high frequency dump
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     output_file = .false.
     if(r%sink_delta_tout>0)then
+       unit_yr = 3600*24*365.25
+       ! proper time in Myr (careful in cosmology it is negative)
+       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
        istep = int(g%t / r%sink_delta_tout)
+       if (.not. p%init_counter) then
+          p%step_counter = istep - 1
+          p%init_counter = .true.
+       endif
        if(istep > p%step_counter)then
-          p%step_counter = p%step_counter + 1
+          p%step_counter = istep
           output_file = .true.
        endif
     endif
@@ -168,6 +175,16 @@ contains
     macc_loc=0
     do ipart = p%headp(ilevel), p%tailp(ilevel)
 
+       ! Skip zero-mass (merged/defunct) sinks
+       if(p%mp(ipart)<=0.0d0)cycle
+
+       ! Initialize accretion outputs so drag, feedback and dumps
+       ! read defined values even when accretion is disabled or the
+       ! accretion region is off-grid
+       dmacc_loc=0.0d0; dMBH_overdt=0.0d0; dMED_overdt=0.0d0
+       rho_inf=0.0d0; cs_gas=0.0d0; vel_gas=0.0d0; rho_av_all=0.0d0
+       fbk_mom_agn=0.0d0; fbk_ener_agn=0.0d0
+
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Sink Accretion
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -193,10 +210,10 @@ contains
                &            dMBH_overdt,dMED_overdt,tan_theta,fbk_mom_agn,fbk_ener_agn)
        endif
 
-       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Save sink data at a high cadence if needed
-       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-       if(output_file)then
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+        if(output_file .and. p%idp(ipart) < 100000)then
           if(r%agn)then
              call dump_sink_data_fine_AGN(s,p,ipart,ilevel,scale_l,scale_t,scale_d, &
                   &                       dMBH_overdt,dMED_overdt,rho_inf,cs_gas, &
@@ -271,6 +288,10 @@ contains
     real(kind=8)::d_acc,m_gas,bondi_mass
     real(kind=8)::weighted_bondi,dMdt_freefall,t_ff
     real(kind=8)::div_cell,total_divergence,div_right,div_left
+#if NENER>0
+    integer::irad
+    real(kind=8)::erad
+#endif
 #ifdef MHD
     real(kind=8)::bx,by,bz,emag
 #endif   
@@ -402,9 +423,9 @@ contains
              div_left = (m%uold(icelln,1+idim,igridn) - max(dble(m%uold(icelln,1,igridn)),r%smallr)*p%vp(ipart,idim))/dx_loc
 
              ! Compute the 'Total' contribution
-             div_cell = (div_right - div_left)
+             div_cell = (div_right - div_left) / 2.0d0
+             total_divergence = total_divergence + div_cell
           end do
-          total_divergence = total_divergence + div_cell
        end if
 
        ! Compute local bondi rate
@@ -564,8 +585,10 @@ contains
        d_acc = dMBH_overdt * g%dtnew(ilevel) * weight / vol_loc
        if (r%mass_weighting) d_acc = d_acc * d / rho_gas
 
-       ! Ensure that the accreted amount is positive
+       ! Ensure that the accreted amount is positive and never exceeds
+       ! 75% of the gas content of this cell (avoids negative densities)
        d_acc = max(d_acc, 0.0d0)
+       d_acc = min(d_acc, 0.75d0*d)
 
        ! Accrete from the cell
        m%unew(icelln,1,igridn)          = m%unew(icelln,1,igridn)          - d_acc
@@ -781,15 +804,16 @@ contains
                    end if
 
                    if(ok)then
-                      call psy_function(acc_ratio.gt.r%agn_fbk_mode_switch_threshold,r_rel,local_weight)
-                      weight_fb_nei(iBHnei) = local_weight
-                      total_weight = total_weight + local_weight
-
                       hash_nbor(1:ndim)  = ckey_fb_nei(1:ndim,iBHnei)
                       call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
-                      ! If missing cycle
+                      ! If missing cycle (missing cells must not
+                      ! contribute to the weight normalization)
                       if(igridn==0)cycle
+
+                      call psy_function(acc_ratio.gt.r%agn_fbk_mode_switch_threshold,r_rel,local_weight)
+                      weight_fb_nei(iBHnei) = local_weight
+                      total_weight = total_weight + local_weight
 
                       d = max(dble(m%uold(icelln,1,igridn)), r%smallr)
                       rho_gas_fb = rho_gas_fb + d * local_weight
@@ -800,10 +824,14 @@ contains
           end do ! End loop over jj
        end do ! End loop over kk
 
-       ! Normalise the weights
-       if(total_weight==0.0d0)write(*,*)'PROBLEM: total weight 0'
-       weight_fb_nei = weight_fb_nei / total_weight
-       rho_gas_fb = rho_gas_fb / total_weight
+       ! Normalise the weights. If no valid cell was found, all weights
+       ! are zero and the injection loop below is a no-op.
+       if(total_weight>0.0d0)then
+          weight_fb_nei = weight_fb_nei / total_weight
+          rho_gas_fb = rho_gas_fb / total_weight
+       else
+          write(*,*)'AGN_feedback: total weight is zero, skipping feedback'
+       endif
 
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Administer the AGN Feedback
@@ -903,17 +931,22 @@ contains
 
     ! See also Beckmann+2018 for a similar approach.
     !==================================================================
-    real(kind=8)::mach,vel_gas_mag,I,drag_force
-    real(kind=8),dimension(1:ndim)::vel_gas_direction
+    real(kind=8)::mach,v_rel_mag,I,drag_accel,dv_drag
+    real(kind=8),dimension(1:ndim)::v_rel,v_rel_direction
 
     if(.not.s%r%drag_sink)return
 
-    ! Calculate the mach number in the local gas
-    vel_gas_mag = norm2(vel_gas)
-    mach = vel_gas_mag/cs_gas
+    ! Velocity of the gas relative to the sink (Ostriker 1999 drag
+    ! depends on the relative motion, not the absolute gas velocity)
+    v_rel(1:ndim) = vel_gas(1:ndim) - p%vp(ipart,1:ndim)
+    v_rel_mag = norm2(v_rel)
+    if(v_rel_mag<=0.0d0 .or. cs_gas<=0.0d0)return
 
-    ! Calculate the gas velocity direction
-    vel_gas_direction(1:ndim) = vel_gas(1:ndim) / (vel_gas_mag + tiny(0.0d0))
+    ! Calculate the mach number of the sink relative to the local gas
+    mach = v_rel_mag/cs_gas
+
+    ! Calculate the relative velocity direction
+    v_rel_direction(1:ndim) = v_rel(1:ndim) / v_rel_mag
 
     ! Compute the drag force
     if(mach.lt.0.01)then
@@ -925,10 +958,17 @@ contains
        ! Value for log(Lambda) taken from Beckmann+2018
        I = 0.5d0*log(mach**2 - 1.0d0 + tiny(0.0d0)) + 4.0d0
     end if
-    drag_force = -I * 4.0d0*pi *factG**2 * p%mp(ipart)**2 * rho_av_all / vel_gas_mag**2
 
-    ! Update the velocity of the sink due to the gas
-    p%vp(ipart,1:ndim) = p%vp(ipart,1:ndim) - drag_force * vel_gas_direction(1:ndim) * s%g%dtnew(ilevel)
+    ! Drag acceleration: force F = 4 pi I (G M)^2 rho / v_rel^2 divided
+    ! by the sink mass
+    drag_accel = I * 4.0d0*pi *factG**2 * p%mp(ipart) * rho_av_all / v_rel_mag**2
+
+    ! Limit the kick so drag can at most cancel the relative velocity
+    ! (also tames the 1/v_rel divergence of the subsonic regime)
+    dv_drag = min(drag_accel * s%g%dtnew(ilevel), v_rel_mag)
+
+    ! Update the velocity of the sink towards the local gas velocity
+    p%vp(ipart,1:ndim) = p%vp(ipart,1:ndim) + dv_drag * v_rel_direction(1:ndim)
 
   end subroutine dynamical_friction
   !##############################################################################

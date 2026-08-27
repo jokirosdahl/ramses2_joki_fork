@@ -358,6 +358,7 @@ subroutine m_read_params(pst)
   integer :: star_dep_algo=2                   ! star GPU CIC deposition algorithm
   integer :: star_force_interpolation_scheme=1 ! star force interpolation schemes
   integer :: sink_mass_deposition_scheme=1     ! sink mass deposition schemes
+  integer :: sink_dep_algo=2                   ! sink GPU CIC deposition algorithm
   integer :: sink_force_interpolation_scheme=1 ! sink force interpolation schemes
   integer :: tree_mass_deposition_scheme=1     ! tree mass deposition schemes
   integer :: tree_force_interpolation_scheme=1 ! tree force interpolation schemes
@@ -501,7 +502,7 @@ subroutine m_read_params(pst)
   real(kind=8) :: cone_phi = 0.0 ! Rotation of the cone's x-axis around the box's z-axis in degrees
   real(kind=8), dimension(1:3) :: cone_observer = (/0.0, 0.0, 0.0/) ! Observer position in code units
 
-  ! Sink formation parameters
+  ! Sink formation/dynamical parameters
   integer::rho_type_sink=1
   logical::sink_descent=.false.
   real(kind=8)::fudge_descent=0.5d0
@@ -511,7 +512,9 @@ subroutine m_read_params(pst)
   real(kind=8)::sink_mass_threshold=0
   real(kind=8)::sink_purity_threshold=-1
   real(kind=8)::sink_fraction_threshold=2d0
+  real(kind=8)::sink_nstar_frac=-1 ! Gas density threshold in units of SF density
   real(kind=8)::sink_delta_tout=0 ! Time interval in code units between each sink high frequency dump
+  real(kind=8)::sink_mseed=1e6 ! Sink seed mass in solar masses
   logical::sink_form=.false.
   logical::sink_merge=.false.
   logical::sink_refine=.false.
@@ -606,7 +609,7 @@ subroutine m_read_params(pst)
        & ,cg_levelmin,cic_levelmax,fast_solver,gravity_test &
        & ,part_mass_deposition_scheme,part_dep_algo,part_force_interpolation_scheme &
        & ,star_mass_deposition_scheme,star_dep_algo,star_force_interpolation_scheme &
-       & ,sink_mass_deposition_scheme,sink_force_interpolation_scheme &
+       & ,sink_mass_deposition_scheme,sink_dep_algo,sink_force_interpolation_scheme &
        & ,tree_mass_deposition_scheme,tree_force_interpolation_scheme
   ! Movies parameters
   namelist/movie_params/levelmax_frame,nw_frame,nh_frame,ivar_frame &
@@ -705,20 +708,24 @@ subroutine m_read_params(pst)
        & ,rtz_primary_cosmic_ray_ionization_rate, rtz_include_HM12_UVB, isH2_rtz &
        & ,rtz_max_cool_timestep, rtz_eqm_min_its
   ! Tracer particles parameters
-  namelist/trac_params/trac,ntracmax,ntractot,ntrac_per_cell,trac_interpolation_scheme,part_subcell_positions,tracer_kick_pdf
+  namelist/trac_params/trac,ntracmax,ntractot,ntrac_per_cell,trac_interpolation_scheme,&
+       & part_subcell_positions,tracer_kick_pdf
   namelist/dust_params/dust,ndustmax,ndusttot,ndust_per_cell,dust_to_gas_mass_ratio,&
-  & grain_size_parameter,grain_charge_parameter,dust_mass_deposition_scheme,dust_force_interpolation_scheme,dust_gyro_factor,analytic_dust_force
+       & grain_size_parameter,grain_charge_parameter,&
+       & dust_mass_deposition_scheme,dust_force_interpolation_scheme,dust_gyro_factor,&
+       & analytic_dust_force
   ! Star particles and star formation recipe
   namelist/star_params/star,nstarmax,nstartot,T2_star,n_star,eps_star,seed,m_star,sf_model
   ! Sink particles and black hole parameters
   namelist/sink_params/sink,nsinkmax,nsinktot,rho_type_sink,sink_descent,fudge_descent &
        & ,sink_relevance_threshold,sink_density_threshold,sink_saddle_threshold &
        & ,sink_mass_threshold,sink_purity_threshold,sink_fraction_threshold &
+       & ,sink_nstar_frac,sink_mseed,sink_delta_tout &
        & ,sink_form,sink_merge,verbose_sink,sink_dump,drag_sink
   ! Black Hole accretion parameters
   namelist/sink_accretion_params/accretion_type,acc_sink_boost,bondi_use_vrel,use_rho_inf &
        & ,eddington_cap,sink_b_spline_order,bondi_use_gas_mass,use_bondi_lambda &
-       & ,t_start_black_hole,use_local_bondi_rate,static_sink,sink_delta_tout &
+       & ,t_start_black_hole,use_local_bondi_rate,static_sink &
        & ,fix_sink_mass,eddington_floor,mass_weighting,momentum_conserving
   ! AGN Feedback parameters
   namelist/sink_feedback_params/agn,agn_feedback_radius,agn_weighting_scheme,epsilon_rad &
@@ -1373,6 +1380,7 @@ subroutine m_read_params(pst)
   s%r%star_dep_algo=star_dep_algo
   s%r%star_force_interpolation_scheme=star_force_interpolation_scheme
   s%r%sink_mass_deposition_scheme=sink_mass_deposition_scheme
+  s%r%sink_dep_algo=sink_dep_algo
   s%r%sink_force_interpolation_scheme=sink_force_interpolation_scheme
   s%r%tree_mass_deposition_scheme=tree_mass_deposition_scheme
   s%r%tree_force_interpolation_scheme=tree_force_interpolation_scheme
@@ -1756,6 +1764,8 @@ subroutine m_read_params(pst)
   s%r%sink_fraction_threshold=sink_fraction_threshold
   s%r%static_sink=static_sink
   s%r%sink_delta_tout=sink_delta_tout
+  s%r%sink_nstar_frac=sink_nstar_frac
+  s%r%sink_mseed=sink_mseed
   s%r%fix_sink_mass=fix_sink_mass
   s%r%drag_sink=drag_sink
 

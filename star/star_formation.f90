@@ -355,6 +355,8 @@ subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
   end do
   s%npart_tot=s%npart_tot+nstar_cum(g%ncpu)
 
+!  if(g%myid==1)write(*,*)'Formed',int(nstar_cum(g%ncpu),kind=4),' new stars for a total of',int(s%npart_tot,kind=4)
+
 #endif
 #endif
 

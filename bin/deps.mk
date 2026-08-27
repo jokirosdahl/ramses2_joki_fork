@@ -104,7 +104,7 @@ rtz_cooling_module.o: amr_commons.o amr_parameters.o charge_exchange_module.o co
 rtz_coolrates_module.o: amr_commons.o charge_exchange_module.o coolrates_module.o cosmic_ray_ionization_module.o molecules_module.o photoionization_UVB_module.o rt_parameters.o rtz_module.o
 sink_evolution.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.o constants.o godunov_fine.o hilbert.o hydro_parameters.o marshal.o mdl.o mdl_commons.o nbors_utils.o pm_commons.o ramses_commons.o read_params.o rho_fine.o
 sink_formation.o: amr_commons.o amr_parameters.o cache.o cache_commons.o clfind_commons.o clump_finder.o clump_merger.o constants.o hydro_parameters.o mdl.o mdl_commons.o output_amr.o output_clump.o output_part.o output_poisson.o pm_commons.o ramses_commons.o rngstream.o
-sink_merger.o: amr_commons.o amr_parameters.o cache.o cache_commons.o constants.o flag_utils.o hilbert.o marshal.o mdl.o mdl_commons.o nbors_utils.o pm_commons.o pm_parameters.o ramses_commons.o sink_evolution.o
+sink_merger.o: amr_commons.o amr_parameters.o cache.o cache_commons.o constants.o marshal.o mdl.o mdl_commons.o nbors_utils.o pm_commons.o ramses_commons.o sink_evolution.o
 smooth.o: amr_parameters.o boundaries.o cache.o cache_commons.o marshal.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
 sort.o: amr_parameters.o
 source_hydro_fine.o: amr_parameters.o boundaries.o cache.o cache_commons.o hydro_flag.o hydro_parameters.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
@@ -163,6 +163,7 @@ feedback.o: gpu_runner.o
 flag_utils.o: gpu_runner.o gpu_utils.o
 force_fine.o: gpu_runner.o
 godunov_fine.o: gpu_runner.o
+gpu_clump.o: amr_parameters.o constants.o gpu_part.o gpu_runner.o gpu_utils.o hydro_parameters.o oct_commons.o ramses_commons.o
 gpu_cooling.o: amr_parameters.o cooling_module.o hydro_parameters.o oct_commons.o
 gpu_feedback.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_flag.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
@@ -190,6 +191,7 @@ newdt_fine.o: gpu_part.o
 phi_fine_cg.o: gpu_runner.o
 refine_utils.o: gpu_runner.o
 rho_fine.o: gpu_part.o gpu_runner.o
+sink_formation.o: gpu_clump.o
 smooth.o: gpu_runner.o
 star_formation.o: gpu_runner.o
 synchro_hydro_fine.o: gpu_runner.o

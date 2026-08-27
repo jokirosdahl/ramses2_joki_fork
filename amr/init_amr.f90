@@ -47,6 +47,7 @@ recursive subroutine r_init_amr(pst)
   use mdl_parameters
 #ifdef _CUDA
   use gpu_manager
+  use clump_device, only: gpu_allocate_clump
 #endif
 #ifdef _METAL
   use metal_runner, only: metal_allocate_amr, metal_allocate_grav
@@ -67,13 +68,16 @@ recursive subroutine r_init_amr(pst)
         allocate(pst%s%m_mg)
         call init_amr(pst%s%r,pst%s%g,pst%s%m_mg,'mg')
      endif
-     if(pst%s%r%clump_finder)then
+     if(pst%s%r%clump_finder .or. pst%s%r%sink_form)then
         allocate(pst%s%c)
      endif
      call init_params(pst%s%mdl,pst%s%r,pst%s%g)
 #ifdef _CUDA
      call gpu_allocate_amr(pst%s)
      if(pst%s%r%poisson) call gpu_allocate_mg(pst%s)
+     if(pst%s%r%clump_finder .or. pst%s%r%sink_form)then
+        call gpu_allocate_clump(pst%s)
+     endif
 #endif
 #ifdef _METAL
      call metal_allocate_amr(pst%s)

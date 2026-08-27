@@ -74,10 +74,8 @@ contains
     turb%turb_dt = run%turb_T / real(run%turb_Ndt,kind=8)
 
     if (run%nrestart == 0) then
-       ! Set up random seed (modified from gfortran docs)
+       ! Set up random seed
        if (run%turb_seed == -1) then
-!          call system_clock(count=clock)
-!          turb%kiss64_state = clock + 37 * (/(i-1,i=1,n_seed)/)
           turb%kiss64_state = 1234
        else
           turb%kiss64_state = run%turb_seed
@@ -93,13 +91,13 @@ contains
     if (any(all_stat /= 0)) stop 'Out of memory in init_turb!'
 
     ! Set decay fraction per timestep dt
-    turb%turb_decay_frac = turb%turb_dt / run%turb_T ! == 1 / turbNdt
+    turb%turb_decay_frac = turb%turb_dt / run%turb_T
 
     ! Set solenoidal fraction from compressive fraction
     turb%sol_frac = 1.0 - run%comp_frac
 
     ! Set turbulent field time
-    turb%turb_next_time = global%t ! will be updated later
+    turb%turb_next_time = global%t
 
     ! Set initial power distribution (should be parameterised in some fashion)
     do k = 0, TGRID_Z
