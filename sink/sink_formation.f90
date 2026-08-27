@@ -44,7 +44,7 @@ recursive subroutine m_sink_formation(pst)
   !----------------------------
   ! Output sink properties
   !----------------------------
-  if(pst%s%r%sink_dump)call dump_sink_particles(pst)
+!  if(pst%s%r%sink_dump)call dump_sink_particles(pst)
 
   !----------------------------
   ! Deallocate all peak arrays
@@ -190,6 +190,13 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
      if(c%relevance(j)<=c%relevance_threshold)ok=.false.
      if(c%clump_mass(j)<=c%mass_threshold)ok=.false.
      if(c%nsink(j)>0)ok=.false.
+     if(r%rho_type_sink==1)then
+        if(c%particle_mass(j)>0)then
+           purity=c%npart(j)*g%mp_min/c%particle_mass(j)
+           if(purity<=c%purity_threshold)ok=.false.
+        endif
+        if(c%npart(j)==0)ok=.false.
+     endif
 #ifdef HYDRO
      dgas=m%uold(ind,1,igrid)*scale_nH
      if(dgas<=r%sink_nstar_frac*r%n_star)ok=.false.
@@ -278,7 +285,7 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
   end do
   p%npart_tot=p%npart_tot+nsink_cum(g%ncpu)
 
-!  if(g%myid==1)write(*,*)'Formed',int(nsink_cum(g%ncpu),kind=4),' new sinks for a total of',int(p%npart_tot,kind=4)
+  if(g%myid==1)write(*,*)'Formed',int(nsink_cum(g%ncpu),kind=4),' new sinks for a total of',int(p%npart_tot,kind=4)
 
 #endif
 
@@ -367,6 +374,7 @@ subroutine sink_clump(s)
   s%c%density_threshold = s%r%sink_density_threshold
   s%c%saddle_threshold = s%r%sink_saddle_threshold
   s%c%mass_threshold = s%r%sink_mass_threshold
+  s%c%purity_threshold = s%r%sink_purity_threshold
   s%c%fraction_threshold = s%r%sink_fraction_threshold
   !----------------------------------------------------------------------
   ! Count and collect all cells above the prescribed density threshold.
@@ -436,7 +444,7 @@ subroutine sink_clump(s)
   ! Count sinks in each clump hierarchically.
   !---------------------------------------------
   call particle_peak_id(s,s%sink)
-  call sink_in_peak(s,.false.,.true.)
+  call sink_in_peak(s,.true.,.true.)
 
 #endif
 end subroutine sink_clump
@@ -499,7 +507,7 @@ subroutine sink_in_peak(s,reset_sink_pos,count_sink)
   endif
 
   !------------------------------------
-  ! Count sinks in each halo
+  ! Count sink particles in each halo
   !------------------------------------
   if(count_sink)then
      ! Count sinks in each peak
