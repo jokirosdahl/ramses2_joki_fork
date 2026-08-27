@@ -295,10 +295,6 @@ contains
 #ifdef MHD
     real(kind=8)::bx,by,bz,emag
 #endif   
-#if NENER>0
-    real(kind=8)::erad
-    integer::irad
-#endif
    
 #ifdef HYDRO
 #if NDIM==3
