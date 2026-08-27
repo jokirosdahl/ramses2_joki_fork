@@ -125,9 +125,6 @@ contains
           p%step_counter = istep
           output_file = .true.
        endif
-       if(g%myid==1.and.r%verbose)then
-          write(*,*)output_file,istep,p%step_counter
-       endif
     endif
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -162,9 +159,6 @@ contains
        jet_angle = min(jet_angle, 180d0)
        tan_theta = tan(pi/180d0*jet_angle/2) ! tangent of half of the opening angle
     end if
-    if(g%myid==1.and.r%verbose)then
-       write(*,*)nBHnei, nBH_fb_nei
-    endif
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Open Cache
@@ -199,7 +193,6 @@ contains
                &              factG,lambda_sonic,dmacc_loc,dMBH_overdt,dMED_overdt, &
                &              rho_inf,cs_gas,vel_gas,rho_av_all)
           macc_loc = macc_loc + dmacc_loc
-          write(*,*)dMED_overdt, rho_inf, cs_gas
        endif
 
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -305,10 +298,10 @@ contains
    
 #ifdef HYDRO
 #if NDIM==3
-    if(s%r%accretion_type==0)return
     associate(r=>s%r,g=>s%g,m=>s%m)
 
-    if(r%verbose)write(*,*)'Entering sink_accretion...'
+    if(r%accretion_type==0)return
+    if(r%verbose_sink)write(*,*)'Entering sink_accretion...'
 
     hash_nbor(0) = ilevel+1
     xBHnei=0d0; ckeynei=0d0; vol=0d0
@@ -746,7 +739,7 @@ contains
 #if NDIM==3
     associate(r=>s%r,g=>s%g,m=>s%m)
 
-    if(r%verbose)write(*,*)'Entering sink_accretion...'
+    if(r%verbose_sink)write(*,*)'Entering AGN_feedback...'
     if(.not.r%agn)return
 
     hash_nbor(0) = ilevel+1
