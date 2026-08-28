@@ -146,7 +146,7 @@ def main():
                 color=colors[idx],
                 linewidth=1.5,
                 alpha=0.85,
-                marker="o" if len(mass) < 30 else None,
+                marker="o" if n_files <= 20 else None,
                 markersize=3,
             )
             plotted_count += 1
@@ -179,7 +179,7 @@ def main():
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.6)
     ax.tick_params(direction="in", which="both", top=True, right=True)
 
-    # Place legend
+    # Place legend (only if <= 20 sinks)
     if plotted_count <= 20:
         ncol = 2 if plotted_count > 10 else 1
         ax.legend(
@@ -189,14 +189,6 @@ def main():
             frameon=True,
             ncol=ncol,
             title="Sink ID"
-        )
-    else:
-        # Too many sinks for complete legend
-        ax.legend(
-            loc="best",
-            fontsize=8,
-            frameon=True,
-            title="Sinks"
         )
 
     plt.tight_layout()
