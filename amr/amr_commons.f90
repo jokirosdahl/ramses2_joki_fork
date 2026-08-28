@@ -438,6 +438,8 @@ module amr_commons
      logical::use_bondi_lambda = .true.
      logical::mass_weighting = .true.
      logical::momentum_conserving = .false.
+     real(kind=8)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
+     real(kind=8)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
 
      ! AGN Feedback parameters
      logical::agn = .false. ! Whether to activate AGN feedback around black hole/sink particles
@@ -449,9 +451,7 @@ module amr_commons
      real(kind=8)::momentum_boost = 10.0d0 ! Momentum boost in units of L/c for the jet
      real(kind=8)::agn_fbk_mode_switch_threshold = 0.01d0 ! Threshold accretion rate to switch from jet to quasar mode
      real(kind=8)::agn_jet_opening_angle = 60.0d0 !  Outflow cone opening angle; in deg
-     real(kind=8)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
      logical::agn_use_mass_weighting = .false. ! Whether to use a mass-weighted feedback scheme
-     real(kind=8)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
 
      ! Gadget initial conditions parameters
      character(len=flen)::ic_file, ic_format

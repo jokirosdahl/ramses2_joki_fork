@@ -510,6 +510,8 @@ subroutine m_read_params(pst)
   logical::use_bondi_lambda = .true.
   logical::mass_weighting = .true.
   logical::momentum_conserving = .false.
+  real(kind=8)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
+  real(kind=8)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
 
   ! Sink feedback parameters
   logical::agn = .false. ! Whether to activate AGN feedback around black hole/sink particles
@@ -521,9 +523,7 @@ subroutine m_read_params(pst)
   real(kind=8)::momentum_boost = 10.0d0 ! Momentum boost in units of L/c for the jet
   real(kind=8)::agn_fbk_mode_switch_threshold = 0.01d0 ! Threshold accretion rate to switch from jet to quasar mode
   real(kind=8)::agn_jet_opening_angle = 60.0d0 !  Outflow cone opening angle; in deg
-  real(kind=8)::manual_accretion_rate = -1 ! Manual accretion rate (fraction of Eddington)
   logical::agn_use_mass_weighting = .false. ! Whether to use a mass-weighted feedback scheme
-  real(kind=8)::eddington_floor = -1 ! Accretion rate floor below which nothing happens
 
   ! Gadget initial conditions parameters
   character(len=flen)::ic_file, ic_format
@@ -689,11 +689,12 @@ subroutine m_read_params(pst)
   namelist/sink_accretion_params/accretion_type,acc_sink_boost,bondi_use_vrel,use_rho_inf &
        & ,eddington_cap,sink_b_spline_order,bondi_use_gas_mass,use_bondi_lambda &
        & ,t_start_black_hole,use_local_bondi_rate,static_sink &
-       & ,fix_sink_mass,eddington_floor,mass_weighting,momentum_conserving
+       & ,fix_sink_mass,eddington_floor,mass_weighting,momentum_conserving &
+       & ,manual_accretion_rate
   ! AGN Feedback parameters
   namelist/sink_feedback_params/agn,agn_feedback_radius,agn_weighting_scheme,epsilon_rad &
        & ,epsilon_radio,epsilon_quasar,momentum_boost,agn_fbk_mode_switch_threshold &
-       & ,agn_jet_opening_angle,manual_accretion_rate,agn_use_mass_weighting
+       & ,agn_jet_opening_angle,agn_use_mass_weighting
   ! Supernovae feedback parameters
   namelist/feedback_params/M_SNII,E_SNII,t_SNII,eta_SNII,yield_SNII,thermal_feedback,mechanical_feedback
   ! Clump finder parameters
@@ -1703,6 +1704,8 @@ subroutine m_read_params(pst)
   s%r%use_bondi_lambda = use_bondi_lambda
   s%r%mass_weighting = mass_weighting
   s%r%momentum_conserving = momentum_conserving
+  s%r%eddington_floor = eddington_floor
+  s%r%manual_accretion_rate = manual_accretion_rate
 
   s%r%agn = agn
   s%r%agn_feedback_radius = agn_feedback_radius
@@ -1713,9 +1716,7 @@ subroutine m_read_params(pst)
   s%r%momentum_boost = momentum_boost
   s%r%agn_fbk_mode_switch_threshold = agn_fbk_mode_switch_threshold
   s%r%agn_jet_opening_angle = agn_jet_opening_angle
-  s%r%manual_accretion_rate = manual_accretion_rate
   s%r%agn_use_mass_weighting = agn_use_mass_weighting
-  s%r%eddington_floor = eddington_floor
 
   s%r%ic_file=ic_file
   s%r%ic_format=ic_format

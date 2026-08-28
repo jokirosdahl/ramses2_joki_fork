@@ -50,13 +50,13 @@ filetype='ascii'
 tend=0.5
 /
 
-&units_params
+&UNITS_PARAMS
 units_density = 9.701214037999999e-23
 units_time = 392998825700775.44
 units_length = 5.4137730359807626e+20
 /
 
-&poisson_params
+&POISSON_PARAMS
 gravity_type = 2
 gravity_params = 0.001,0.0078125,0.50,0.50,0.50
 /
