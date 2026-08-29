@@ -610,7 +610,6 @@ contains
              p%mp(j) = total_mass
              p%xp(j,1:3) = com_position(1:3)
              p%vp(j,1:3) = com_velocity(1:3)
-             write(*, '("MERGER IN CPU ",I0,": Updated sink ",I0," mass=",G0)') myrank, id_keep, total_mass
           endif
        endif
        if(owner2(i) == myrank) then
@@ -619,7 +618,9 @@ contains
              p%mp(j) = 0.0d0
              p%xp(j,1:3) = com_position(1:3)
              p%vp(j,1:3) = com_velocity(1:3)
-             write(*, '("MERGER IN CPU ",I0,": Deleted sink ",I0)') myrank, id_delete
+             p%tm(j)     = s%g%texp
+             p%idm(j)    = id_keep
+             write(*, '("sink ",I0," merged into sink ",I0)') id_delete, id_keep
           endif
        endif
 #endif

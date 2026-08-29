@@ -257,6 +257,10 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
 #endif
         ! Compute sink particle birth time using proper time
         p%tp(p%npart)=g%texp
+        ! Set merging time to -1000
+        p%tm(p%npart)=-1000
+        ! Set merging id to 0
+        p%idm(p%npart)=0
         ! Compute level
         p%levelp(p%npart)=ilevel
      endif
@@ -466,10 +470,6 @@ subroutine sink_in_peak(s,reset_sink_pos,count_sink)
   type(msg_sink_clump)::dummy_sink_clump
 
   associate(r=>s%r,g=>s%g,m=>s%m,c=>s%c,p=>s%sink,mdl=>s%mdl)
-
-  if(p%norphan_peak>0)then
-     write(*,*)'CREATE_SINK: SINK OUTSIDE PEAKS',p%norphan_peak
-  end if
 
   !--------------------------------------------
   ! Sort particles according to global clump id
