@@ -90,27 +90,25 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
      call m_sink_formation(pst)
   endif
 
-  !--------------------------------
-  ! Merging tree particle formation
-  !--------------------------------
+  !---------------------------------------
+  ! Merging tree tracer particle formation
+  !---------------------------------------
   if(r%tree.and.ilevel==r%levelmin.and.mod(g%nstep_coarse, r%nsteps_per_tree)==0)then
      call m_timer('tree - formation','start')
      call m_tree_formation(pst)
   endif
 
   if(ilevel==r%levelmin)then
+     !---------------------------
+     ! Write output files to disk
+     !---------------------------
      if(r%foutput>0)then
         if(mod(g%nstep_coarse,r%foutput)==0.or.g%aexp>=r%aout(g%iout).or.g%t>=r%tout(g%iout))then
-           !----------------------------
            ! Call the clump finder
-           !----------------------------
-           if(r%clump_finder)then ! Create output and no need to keep alive
+           if(r%clump_finder)then
               call m_timer('clump','start')
               call m_clump_finder(pst,.true.,.false.)
            endif
-           !---------------------------
-           ! Write output files to disk
-           !---------------------------
            call m_timer('output','start')
 #ifdef _CUDA
            call r_transfer_grid_host(pst)
@@ -149,7 +147,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
            bkp_last_done=.true.
         endif
      endif
-     ! Lightcone
+     !------------------------
+     ! Write lightcone to disk
+     !------------------------
      if (r%lightcone) then
         call m_timer('lightcone','start')
         call m_output_lightcone(pst)
@@ -177,7 +177,9 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
      call m_rho_fine(pst,ilevel,0)
   endif
 
+  !-------------------------------------------------------------
   ! Remove gravity source term with half time step and old force
+  !-------------------------------------------------------------
   if(r%hydro.and..not.r%static_gas)then
      if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
         call m_timer('hydro - gravity','start')
@@ -217,13 +219,17 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   end if
 #endif
 
+  !----------------------------------
   ! Perform second kick for particles
+  !----------------------------------
   if(r%pic)then
      call m_timer('particle - kickdrift','start')
      call m_kick_drift_part(pst,ilevel,action_kick_only)
   endif
 
+  !----------------------------------------------------------
   ! Add gravity source term with half time step and new force
+  !----------------------------------------------------------
   if(r%hydro.and..not.r%static_gas)then
      if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
         call m_timer('hydro - gravity','start')
