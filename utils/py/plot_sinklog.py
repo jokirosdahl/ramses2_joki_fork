@@ -4,9 +4,8 @@ Plot sink particle mass (log scale) versus lookback time (linear scale)
 for all sink particle CSV files in a given sinklog directory.
 
 Usage:
-    python3 utils/py/plot_sinklog.py [--dir sinklog] [--out sinks.png] [--unit Gyr] [--show]
+    python3 utils/py/plot_sinklog.py [--dir sinklog] [--out sinks.png] [--unit Gyr]
 """
-
 import os
 import glob
 import re
@@ -16,11 +15,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-
 def natural_sort_key(s):
     """Sort strings containing numbers naturally (e.g. sink_2 before sink_10)."""
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -35,8 +32,8 @@ def parse_args():
     parser.add_argument(
         "--out", "-o",
         type=str,
-        default="sink_mass_vs_lookback.png",
-        help="Output plot image filename (default: 'sink_mass_vs_lookback.png')."
+        default=None,
+        help="Output plot image filename."
     )
     parser.add_argument(
         "--unit", "-u",
@@ -57,13 +54,7 @@ def parse_args():
         action="store_true",
         help="Invert x-axis so that cosmic time flows from left to right (larger lookback to smaller lookback)."
     )
-    parser.add_argument(
-        "--show",
-        action="store_true",
-        help="Display the plot interactively with plt.show()."
-    )
     return parser.parse_args()
-
 
 def main():
     args = parse_args()
@@ -198,11 +189,8 @@ def main():
         fig.savefig(args.out, dpi=300, bbox_inches="tight")
         print(f"Plot saved to '{args.out}'")
 
-    if args.show:
-        plt.show()
-
+    plt.show()
     plt.close(fig)
-
 
 if __name__ == "__main__":
     main()
