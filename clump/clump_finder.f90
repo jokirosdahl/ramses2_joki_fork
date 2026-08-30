@@ -317,6 +317,11 @@ subroutine collect_test(s)
   !---------------------------------------------------------
   ! Make density field smooth, positive and monotonous.
   !---------------------------------------------------------
+  do igrid=m%head(r%levelmin),m%tail(r%levelmin) ! Loop over grids
+     do ind=1,twotondim ! Loop over cells
+        m%nref(ind,igrid) = m%rho(ind,igrid) ! Save for true mass later
+     end do
+  end do
   do ilevel=r%levelmin+1,r%nlevelmax ! Loop over levels
      call open_cache(mdl, m, pack_size=storage_size(dummy_small_realdp)/32, &
           pack=pack_fetch_rho, unpack=unpack_fetch_rho)

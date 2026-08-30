@@ -45,12 +45,15 @@ attributes(device) function block_reduce_int_sum(num)
   ! wait for all partial reductions
   call syncthreads()
 
-  ! real from shared memory only if that warp existed
+  ! read from shared memory only if that warp existed
   if (tid .le. ((blockdim%x) / warpsize)) then
      num = svalues(lane)
   else
      num = 0
   endif
+
+  ! wait for all partial reads
+  call syncthreads()
 
   ! final reduce within first warp 
   if (wid.eq.1) call warp_reduce_int_sum(num)
@@ -106,12 +109,15 @@ attributes(device) function block_reduce_sum(mass)
   ! wait for all partial reductions
   call syncthreads()
 
-  ! real from shared memory only if that warp existed
+  ! read from shared memory only if that warp existed
   if (tid .le. ((blockdim%x) / warpsize)) then
      mass = svalues(lane)
   else
      mass = 0
   endif
+
+  ! wait for all partial reads
+  call syncthreads()
 
   ! final reduce within first warp 
   if (wid.eq.1) call warp_reduce_sum(mass)
@@ -168,12 +174,15 @@ attributes(device) function block_reduce_min(dt)
   ! wait for all partial reductions
   call syncthreads()
 
-  ! real from shared memory only if that warp existed
+  ! read from shared memory only if that warp existed
   if (tid .le. ((blockdim%x) / warpsize)) then
      dt = svalues(lane)
   else
      dt = huge(0d0)
   endif
+
+  ! wait for all partial reads
+  call syncthreads()
 
   ! final reduce within first warp 
   if (wid.eq.1) call warp_reduce_min(dt)
@@ -229,12 +238,15 @@ attributes(device) function block_reduce_max(dt)
   ! wait for all partial reductions
   call syncthreads()
 
-  ! real from shared memory only if that warp existed
+  ! read from shared memory only if that warp existed
   if (tid .le. ((blockdim%x) / warpsize)) then
      dt = svalues(lane)
   else
      dt = - huge(0d0)
   endif
+
+  ! wait for all partial reads
+  call syncthreads()
 
   ! final reduce within first warp
   if (wid.eq.1) call warp_reduce_max(dt)

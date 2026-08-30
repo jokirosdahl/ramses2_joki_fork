@@ -1013,16 +1013,6 @@ contains
        wrr(idim)=(2D0                        -abs(x(idim)-xrr))**3/6D0
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(cll(idim)< m%box_ckey_min(idim,ilevel+1))cll(idim)=cll(idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
-          if(cl (idim)< m%box_ckey_min(idim,ilevel+1))cl (idim)=cl (idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
-          if(cr (idim)>=m%box_ckey_max(idim,ilevel+1))cr (idim)=cr (idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
-          if(crr(idim)>=m%box_ckey_max(idim,ilevel+1))crr(idim)=crr(idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = pcs_weight(wll,wl,wr,wrr)
 
@@ -1035,6 +1025,19 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+     ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(cll(idim)< m%box_ckey_min(idim,ilevel+1))cll(idim)=cll(idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+          if(cl (idim)< m%box_ckey_min(idim,ilevel+1))cl (idim)=cl (idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+          if(cr (idim)>=m%box_ckey_max(idim,ilevel+1))cr (idim)=cr (idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+          if(crr(idim)>=m%box_ckey_max(idim,ilevel+1))crr(idim)=crr(idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = pcs_index(cll,cl,cr,crr)
 
     end associate
 
@@ -1077,14 +1080,6 @@ contains
        wr(idim)=0.5D0*(1.5D0-abs(x(idim)-xr))**2
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(cl(idim)< m%box_ckey_min(idim,ilevel+1))cl(idim)=m%box_ckey_max(idim,ilevel+1)-1
-          if(cr(idim)>=m%box_ckey_max(idim,ilevel+1))cr(idim)=m%box_ckey_min(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = tsc_weight(wl,wc,wr)
 
@@ -1097,6 +1092,17 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+    ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(cl(idim)< m%box_ckey_min(idim,ilevel+1))cl(idim)=m%box_ckey_max(idim,ilevel+1)-1
+          if(cr(idim)>=m%box_ckey_max(idim,ilevel+1))cr(idim)=m%box_ckey_min(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = tsc_index(cl,cc,cr)
 
     end associate
 
@@ -1134,14 +1140,6 @@ contains
        il(idim)=ir(idim)-1
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(il(idim)< m%box_ckey_min(idim,ilevel+1))il(idim)=m%box_ckey_max(idim,ilevel+1)-1
-          if(ir(idim)>=m%box_ckey_max(idim,ilevel+1))ir(idim)=m%box_ckey_min(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = cic_weight(dl,dr)
 
@@ -1154,6 +1152,17 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+    ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(il(idim)< m%box_ckey_min(idim,ilevel+1))il(idim)=m%box_ckey_max(idim,ilevel+1)-1
+          if(ir(idim)>=m%box_ckey_max(idim,ilevel+1))ir(idim)=m%box_ckey_min(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = cic_index(il,ir)
 
     end associate
 
