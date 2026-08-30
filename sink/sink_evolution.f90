@@ -211,6 +211,16 @@ contains
        endif
 
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       ! Periodic box
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       do idim=1,ndim
+          if(r%periodic(idim))then
+             if(p%xp(ipart,idim)< 0.0d0           )p%xp(ipart,idim)=p%xp(ipart,idim)+r%box_size(idim)
+             if(p%xp(ipart,idim)>=r%box_size(idim))p%xp(ipart,idim)=p%xp(ipart,idim)-r%box_size(idim)
+          endif
+       end do
+
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Save sink data at a high cadence if needed
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
         if(output_file .and. p%idp(ipart) < 100000)then
@@ -223,14 +233,6 @@ contains
                   &                   dMBH_overdt,dMED_overdt,rho_inf,cs_gas)
           end if
        end if
-
-       ! Periodic box
-       do idim=1,ndim
-          if(r%periodic(idim))then
-             if(p%xp(ipart,idim)< 0.0d0           )p%xp(ipart,idim)=p%xp(ipart,idim)+r%box_size(idim)
-             if(p%xp(ipart,idim)>=r%box_size(idim))p%xp(ipart,idim)=p%xp(ipart,idim)-r%box_size(idim)
-          endif
-       end do
 
     end do ! End loop over ipart
 
@@ -336,12 +338,11 @@ contains
     do j = 1,nBHnei
 
        ! Get neighbouring cell coordinates
-       ! Note, periodic BCs for xnei are already enforced in sink_B_spline_weights_PCS etc.
-       xnei(1:ndim) = xBHnei(1:ndim,j)
+       xnei(1:ndim) = xBHnei(1:ndim,j) ! Non-periodic
        x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
 
        ! Get neighboring cell at current level
-       hash_nbor(1:ndim)  = ckeynei(1:ndim,j)
+       hash_nbor(1:ndim)  = ckeynei(1:ndim,j) ! Periodic
        call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
        ! If missing then cycle
@@ -541,12 +542,11 @@ contains
     do j = 1, nBHnei
 
        ! Compute neighbouring cell coordinates
-       ! Note, periodic BCs for xnei are already enforced in sink_B_spline_weights_PCS etc.
-       xnei(1:ndim) = xBHnei(1:ndim,j)
+       xnei(1:ndim) = xBHnei(1:ndim,j) ! Non-periodic
        x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
 
        ! Get neighboring cell at current level
-       hash_nbor(1:ndim)  = ckeynei(1:ndim,j)
+       hash_nbor(1:ndim)  = ckeynei(1:ndim,j) ! Periodic
        call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
        ! If missing cycle
@@ -853,13 +853,12 @@ contains
 
           do j=1,twotondim
              ! Compute neighbouring cell coordinates
-             ! Note, periodic BCs for xCIC are already enforced in sink_B_spline_weights_CIC
-             xnei(1:ndim) = xCIC(1:ndim,j)
+             xnei(1:ndim) = xCIC(1:ndim,j) ! Non-periodic
              x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
              r_rel = norm2(x_rel(:))
 
              ! Get neighboring cell at current level
-             hash_nbor(1:ndim)  = ckeyCIC(1:ndim,j)
+             hash_nbor(1:ndim)  = ckeyCIC(1:ndim,j) ! Periodic
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
              ! If missing cycle
