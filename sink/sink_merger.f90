@@ -620,7 +620,7 @@ contains
              p%vp(j,1:3) = com_velocity(1:3)
              p%tm(j)     = s%g%texp
              p%idm(j)    = id_keep
-             write(*, '("sink ",I0," merged into sink ",I0)') id_delete, id_keep
+             write(*, '(" Sink ",I0," merged into sink ",I0)') id_delete, id_keep
           endif
        endif
 #endif
