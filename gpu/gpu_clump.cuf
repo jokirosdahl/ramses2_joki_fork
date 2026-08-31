@@ -179,6 +179,27 @@ contains
   end subroutine gpu_deallocate_clump
 
   ! =========================================================================
+  ! CUDA Kernel: Save raw density to nref for levelmin
+  ! =========================================================================
+  attributes(global) subroutine save_nref_kernel(rho, nref, head_idx, num_octs)
+    real(kind=dp), device :: rho(1:twotondim, *)
+    real(kind=dp), device :: nref(1:twotondim, *)
+    integer, value :: head_idx, num_octs
+
+    integer :: cell_idx, oct_idx, block_idx
+
+    block_idx = blockIdx%x - 1
+    oct_idx = block_idx * blockDim%y + threadIdx%y - 1
+    if (oct_idx >= num_octs) return
+    oct_idx = head_idx + oct_idx
+
+    cell_idx = threadIdx%x
+
+    ! Save true density value into nref
+    nref(cell_idx, oct_idx) = rho(cell_idx, oct_idx)
+  end subroutine save_nref_kernel
+
+  ! =========================================================================
   ! CUDA Kernel: Smooth density field
   ! =========================================================================
   attributes(global) subroutine smooth_rho_kernel(rho, nref, grid, father, head_idx, num_octs)
@@ -225,6 +246,15 @@ contains
 
     block_y = 16
     block_dim = dim3(twotondim, block_y, 1)
+
+    ! Save true density value into nref at levelmin
+    head_idx = sim%m%head(sim%r%levelmin)
+    num_octs = sim%m%noct(sim%r%levelmin)
+    if (num_octs > 0) then
+       grid_x = (num_octs + block_y - 1) / block_y
+       grid_dim = dim3(grid_x, 1, 1)
+       call save_nref_kernel<<<grid_dim, block_dim>>>(rho, nref, head_idx, num_octs)
+    endif
 
     do ilevel = sim%r%levelmin + 1, sim%r%nlevelmax
        head_idx = sim%m%head(ilevel)
