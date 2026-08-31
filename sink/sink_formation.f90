@@ -238,10 +238,10 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
         p%vp(p%npart,1)=c%peak_vel(j,1)-c%peak_acc(j,1)*0.5d0*g%dtnew(c%peak_level(j))
         p%vp(p%npart,2)=c%peak_vel(j,2)-c%peak_acc(j,2)*0.5d0*g%dtnew(c%peak_level(j))
         p%vp(p%npart,3)=c%peak_vel(j,3)-c%peak_acc(j,3)*0.5d0*g%dtnew(c%peak_level(j))
-        ! Set initial angular momentum to zero
+        ! Set initial angular momentum to almost zero
         p%jp(p%npart,1)=0.0d0
         p%jp(p%npart,2)=0.0d0
-        p%jp(p%npart,3)=0.0d0
+        p%jp(p%npart,3)=1.0d-20
         ! Compute sink particle old force from peak acceleration
         p%fp(p%npart,1)=c%peak_acc(j,1)
         p%fp(p%npart,2)=c%peak_acc(j,2)
@@ -257,6 +257,10 @@ subroutine sink_formation(r,g,m,p,c,msink_loc)
 #endif
         ! Compute sink particle birth time using proper time
         p%tp(p%npart)=g%texp
+        ! Set merging time to -1000
+        p%tm(p%npart)=-1000
+        ! Set merging id to 0
+        p%idm(p%npart)=0
         ! Compute level
         p%levelp(p%npart)=ilevel
      endif
@@ -466,10 +470,6 @@ subroutine sink_in_peak(s,reset_sink_pos,count_sink)
   type(msg_sink_clump)::dummy_sink_clump
 
   associate(r=>s%r,g=>s%g,m=>s%m,c=>s%c,p=>s%sink,mdl=>s%mdl)
-
-  if(p%norphan_peak>0)then
-     write(*,*)'CREATE_SINK: SINK OUTSIDE PEAKS',p%norphan_peak
-  end if
 
   !--------------------------------------------
   ! Sort particles according to global clump id

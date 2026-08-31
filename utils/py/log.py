@@ -65,7 +65,6 @@ with open(path_to_output, "r") as f:
                         if emag_val is not None:
                             emag_vals.append(emag_val)
                             do_mag = True
-                        do_time = True
                     except ValueError:
                         pass
                 main_step_seen = False
@@ -82,36 +81,39 @@ if len(emag_vals) == 0:
     do_mag = False
 if len(time_vals) == 0:
     print("no proper time")
+    exit()
+
+if np.all(aexp == 1.0):
+    do_time = True
+    x = time
+    xlabel = 'time'
+else:
     do_time = False
+    x = aexp
+    xlabel = 'expansion factor'
 
 if do_mag:
     if args.sym:
-        plt.plot(time,emag,"o")
+        plt.plot(x, emag, "o")
     else:
-        plt.plot(time,emag)
+        plt.plot(x, emag)
     if args.log:
         plt.yscale("log")
-    plt.xlabel('time')
+    plt.xlabel(xlabel)
     plt.ylabel('magnetic energy')
 
     if args.out:
         plt.savefig(args.out)
     plt.show()
 
-if do_time:
-    if args.sym:
-        plt.plot(time,dt,"o")
-    else:
-        plt.plot(time,dt)
+if args.sym:
+    plt.plot(x, dt, "o")
 else:
-    if args.sym:
-        plt.plot(aexp,dt,"o")
-    else:
-        plt.plot(aexp,dt)
+    plt.plot(x, dt)
     
 if args.log:
     plt.yscale("log")
-plt.xlabel('time')
+plt.xlabel(xlabel)
 plt.ylabel('time step')
 
 if args.out:

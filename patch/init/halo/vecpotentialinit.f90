@@ -17,7 +17,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
   !================================================================
   ! This routine generates initial conditions for RAMSES.
   ! Positions are in user (aka code) units:
-  ! x(i,1:ndim) are in [0,boxlen]**ndim.
+  ! x(i,1:ndim) are in [0,box_size]**ndim.
   ! A is the component of the vector potential corresponding
   ! to direction idim.
   ! A(:) is in user (aka code) units.
@@ -29,9 +29,9 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
   ! Halo parameters from namelist
   hsmall = 0.7d0
   eps = halo_eps ! small like 10 pc
-  xc = halo_center(1)+r%boxlen/2
-  yc = halo_center(2)+r%boxlen/2
-  zc = halo_center(3)+r%boxlen/2
+  xc = halo_center(1)+r%box_size(1)/2
+  yc = halo_center(2)+r%box_size(2)/2
+  zc = halo_center(3)+r%box_size(3)/2
   v200 = v_200 ! in [km/s]
   r200 = v200/hsmall ! in [kpc]
   c = concentration ! concentration

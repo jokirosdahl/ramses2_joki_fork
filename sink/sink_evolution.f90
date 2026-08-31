@@ -79,25 +79,6 @@ contains
 
     if(g%myid==1.and.r%verbose)write(*,*)'Entering sink_evolution...'
 
-    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    ! Check if high frequency dump
-    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-    output_file = .false.
-    if(r%sink_delta_tout>0)then
-       unit_yr = 3600*24*365.25
-       ! proper time in Myr (careful in cosmology it is negative)
-       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
-       istep = int(g%t / r%sink_delta_tout)
-       if (.not. p%init_counter) then
-          p%step_counter = istep - 1
-          p%init_counter = .true.
-       endif
-       if(istep > p%step_counter)then
-          p%step_counter = istep
-          output_file = .true.
-       endif
-    endif
-
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Get all units, constants and cell sizes
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -126,6 +107,25 @@ contains
     ! Mesh spacing in that level
     dx_loc=r%boxlen/2**ilevel
     vol_loc=dx_loc**ndim
+
+    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    ! Check if high frequency dump
+    !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    output_file = .false.
+    if(r%sink_delta_tout>0)then
+       unit_yr = 3600*24*365.25
+       ! proper time in Myr (careful in cosmology it is negative)
+       current_time = g%texp * scale_t / g%aexp**2 / unit_yr / 1e6
+       istep = int(current_time / r%sink_delta_tout)
+       if (.not. p%init_counter) then
+          p%step_counter = istep - 1
+          p%init_counter = .true.
+       endif
+       if(istep > p%step_counter)then
+          p%step_counter = istep
+          output_file = .true.
+       endif
+    endif
 
     !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     ! Prepare for the B-spline interpolation
@@ -211,6 +211,16 @@ contains
        endif
 
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       ! Periodic box
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+       do idim=1,ndim
+          if(r%periodic(idim))then
+             if(p%xp(ipart,idim)< 0.0d0           )p%xp(ipart,idim)=p%xp(ipart,idim)+r%box_size(idim)
+             if(p%xp(ipart,idim)>=r%box_size(idim))p%xp(ipart,idim)=p%xp(ipart,idim)-r%box_size(idim)
+          endif
+       end do
+
+       !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
        ! Save sink data at a high cadence if needed
        !-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
         if(output_file .and. p%idp(ipart) < 100000)then
@@ -223,14 +233,6 @@ contains
                   &                   dMBH_overdt,dMED_overdt,rho_inf,cs_gas)
           end if
        end if
-
-       ! Periodic box
-       do idim=1,ndim
-          if(r%periodic(idim))then
-             if(p%xp(ipart,idim)< 0.0d0           )p%xp(ipart,idim)=p%xp(ipart,idim)+r%box_size(idim)
-             if(p%xp(ipart,idim)>=r%box_size(idim))p%xp(ipart,idim)=p%xp(ipart,idim)-r%box_size(idim)
-          endif
-       end do
 
     end do ! End loop over ipart
 
@@ -298,10 +300,10 @@ contains
    
 #ifdef HYDRO
 #if NDIM==3
-    if(s%r%accretion_type==0)return
     associate(r=>s%r,g=>s%g,m=>s%m)
 
-    if(r%verbose)write(*,*)'Entering sink_accretion...'
+    if(r%accretion_type==0)return
+    if(r%verbose_sink)write(*,*)'Entering sink_accretion...'
 
     hash_nbor(0) = ilevel+1
     xBHnei=0d0; ckeynei=0d0; vol=0d0
@@ -336,12 +338,11 @@ contains
     do j = 1,nBHnei
 
        ! Get neighbouring cell coordinates
-       ! Note, periodic BCs for xnei are already enforced in sink_B_spline_weights_PCS etc.
-       xnei(1:ndim) = xBHnei(1:ndim,j)
+       xnei(1:ndim) = xBHnei(1:ndim,j) ! Non-periodic
        x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
 
        ! Get neighboring cell at current level
-       hash_nbor(1:ndim)  = ckeynei(1:ndim,j)
+       hash_nbor(1:ndim)  = ckeynei(1:ndim,j) ! Periodic
        call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
        ! If missing then cycle
@@ -399,6 +400,7 @@ contains
              ! Get the cell information
              hash_nbor(1:ndim)  = ckey_div(1:ndim)
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
+
              ! If missing then cycle
              if(igridn==0)cycle
 
@@ -412,6 +414,7 @@ contains
              ! Get the cell information
              hash_nbor(1:ndim)  = ckey_div(1:ndim)
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
+
              ! If missing then cycle
              if(igridn==0)cycle
 
@@ -541,16 +544,16 @@ contains
     do j = 1, nBHnei
 
        ! Compute neighbouring cell coordinates
-       ! Note, periodic BCs for xnei are already enforced in sink_B_spline_weights_PCS etc.
-       xnei(1:ndim) = xBHnei(1:ndim,j)
+       xnei(1:ndim) = xBHnei(1:ndim,j) ! Non-periodic
        x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
 
        ! Get neighboring cell at current level
-       hash_nbor(1:ndim)  = ckeynei(1:ndim,j)
+       hash_nbor(1:ndim)  = ckeynei(1:ndim,j) ! Periodic
        call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
-       ! If missing cycle
+       ! If missing or refined cycle
        if(igridn==0)cycle
+       if(m%grid(igridn)%refined(icelln))cycle
 
        ! Get physical information
        d          = max(dble(m%uold(icelln,1,igridn)),r%smallr)
@@ -723,7 +726,7 @@ contains
     integer::i,j,k,ii,jj,kk,icelln,igridn,ind,idim,ivar,iBHnei
     real(kind=8)::d,e,ethermal,r_rel,rho_gas_fb,energy_agn
     real(kind=8),dimension(1:ndim)::vv
-    logical::ok,ok_blast_agn
+    logical::ok,ok_blast_agn,quasar_mode
     real(kind=8)::acc_ratio,jet_mass,local_weight,total_weight,jet_speed
     real(kind=8)::fbk_mass_agn_loc,fbk_mom_agn_loc,fbk_ener_agn_loc
     real(kind=8),dimension(1:ndim)::jet_direction
@@ -739,7 +742,7 @@ contains
 #if NDIM==3
     associate(r=>s%r,g=>s%g,m=>s%m)
 
-    if(r%verbose)write(*,*)'Entering sink_accretion...'
+    if(r%verbose_sink)write(*,*)'Entering AGN_feedback...'
     if(.not.r%agn)return
 
     hash_nbor(0) = ilevel+1
@@ -763,6 +766,9 @@ contains
        ! Compute chi (fraction of Eddington)
        acc_ratio = dMBH_overdt/dMED_overdt
        acc_ratio = max(acc_ratio, 0.0d0)
+
+       ! Check if quasar mode
+       quasar_mode = (acc_ratio.gt.r%agn_fbk_mode_switch_threshold) .or. (norm2(p%jp(ipart,:)) .le. 0.0d0)
 
        ! Compute the jet direction
        jet_direction(1:ndim) = p%jp(ipart,1:ndim) / (norm2(p%jp(ipart,:)) + tiny(0.0d0))
@@ -789,7 +795,7 @@ contains
 
                    ! Compute the weight of the cell in question
                    ok=.false.
-                   if(acc_ratio.gt.r%agn_fbk_mode_switch_threshold)then
+                   if(quasar_mode)then
                       ok=.true.
                    else
                       cone_dist = dot_product(x_rel(1:ndim),jet_direction(1:ndim))
@@ -807,7 +813,7 @@ contains
                       ! contribute to the weight normalization)
                       if(igridn==0)cycle
 
-                      call psy_function(acc_ratio.gt.r%agn_fbk_mode_switch_threshold,r_rel,local_weight)
+                      call psy_function(quasar_mode,r_rel,local_weight)
                       weight_fb_nei(iBHnei) = local_weight
                       total_weight = total_weight + local_weight
 
@@ -850,17 +856,17 @@ contains
 
           do j=1,twotondim
              ! Compute neighbouring cell coordinates
-             ! Note, periodic BCs for xCIC are already enforced in sink_B_spline_weights_CIC
-             xnei(1:ndim) = xCIC(1:ndim,j)
+             xnei(1:ndim) = xCIC(1:ndim,j) ! Non-periodic
              x_rel(1:ndim) = xnei(1:ndim) - xcen(1:ndim)
              r_rel = norm2(x_rel(:))
 
              ! Get neighboring cell at current level
-             hash_nbor(1:ndim)  = ckeyCIC(1:ndim,j)
+             hash_nbor(1:ndim)  = ckeyCIC(1:ndim,j) ! Periodic
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
-             ! If missing cycle
+             ! If missing or refined cycle
              if(igridn==0)cycle
+             if(m%grid(igridn)%refined(icelln))cycle
 
              ! Get the local gas properties
              d = max(dble(m%uold(icelln,1,igridn)),r%smallr)
@@ -871,8 +877,7 @@ contains
              if (r%agn_use_mass_weighting) weight = weight * d / rho_gas_fb
 
              ! Proceed with the feedback
-             if(acc_ratio.gt.r%agn_fbk_mode_switch_threshold)then
-
+             if(quasar_mode)then
                 ! Quasar mode (energy)
                 ! Get the local feedback quantities (accounting for weightings)
                 fbk_ener_agn_loc = fbk_ener_agn * weight / vol_loc
@@ -886,8 +891,11 @@ contains
                 fbk_mom_agn_loc  = fbk_mom_agn  * weight / vol_loc
 
                 ! Now we inject the actual feedback (note, all energy is due to work done)
-                m%unew(icelln,2:4,igridn) = m%unew(icelln,2:4,igridn) + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:))*jet_direction(1:ndim)/(r_rel+tiny(0.0d0))
-                m%unew(icelln,5,igridn)   = m%unew(icelln,5,igridn)   + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:)/(r_rel+tiny(0.0d0)))*dot_product(jet_direction(1:ndim), vv(1:ndim))
+                m%unew(icelln,2:4,igridn) = m%unew(icelln,2:4,igridn) &
+                     & + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:))*jet_direction(1:ndim)/(r_rel+tiny(0.0d0))
+                m%unew(icelln,5,igridn)   = m%unew(icelln,5,igridn)   &
+                     & + fbk_mom_agn_loc*dot_product(jet_direction(:),x_rel(:)/(r_rel+tiny(0.0d0)))* &
+                     & dot_product(jet_direction(1:ndim), vv(1:ndim))
 
              end if
 
@@ -1008,16 +1016,6 @@ contains
        wrr(idim)=(2D0                        -abs(x(idim)-xrr))**3/6D0
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(cll(idim)< m%box_ckey_min(idim,ilevel+1))cll(idim)=cll(idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
-          if(cl (idim)< m%box_ckey_min(idim,ilevel+1))cl (idim)=cl (idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
-          if(cr (idim)>=m%box_ckey_max(idim,ilevel+1))cr (idim)=cr (idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
-          if(crr(idim)>=m%box_ckey_max(idim,ilevel+1))crr(idim)=crr(idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = pcs_weight(wll,wl,wr,wrr)
 
@@ -1030,6 +1028,19 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+     ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(cll(idim)< m%box_ckey_min(idim,ilevel+1))cll(idim)=cll(idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+          if(cl (idim)< m%box_ckey_min(idim,ilevel+1))cl (idim)=cl (idim)-m%box_ckey_min(idim,ilevel+1)+m%box_ckey_max(idim,ilevel+1)
+          if(cr (idim)>=m%box_ckey_max(idim,ilevel+1))cr (idim)=cr (idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+          if(crr(idim)>=m%box_ckey_max(idim,ilevel+1))crr(idim)=crr(idim)+m%box_ckey_min(idim,ilevel+1)-m%box_ckey_max(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = pcs_index(cll,cl,cr,crr)
 
     end associate
 
@@ -1072,14 +1083,6 @@ contains
        wr(idim)=0.5D0*(1.5D0-abs(x(idim)-xr))**2
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(cl(idim)< m%box_ckey_min(idim,ilevel+1))cl(idim)=m%box_ckey_max(idim,ilevel+1)-1
-          if(cr(idim)>=m%box_ckey_max(idim,ilevel+1))cr(idim)=m%box_ckey_min(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = tsc_weight(wl,wc,wr)
 
@@ -1092,6 +1095,17 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+    ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(cl(idim)< m%box_ckey_min(idim,ilevel+1))cl(idim)=m%box_ckey_max(idim,ilevel+1)-1
+          if(cr(idim)>=m%box_ckey_max(idim,ilevel+1))cr(idim)=m%box_ckey_min(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = tsc_index(cl,cc,cr)
 
     end associate
 
@@ -1129,14 +1143,6 @@ contains
        il(idim)=ir(idim)-1
     end do
 
-    ! Periodic boundary conditions
-    do idim=1,ndim
-       if(r%periodic(idim))then
-          if(il(idim)< m%box_ckey_min(idim,ilevel+1))il(idim)=m%box_ckey_max(idim,ilevel+1)-1
-          if(ir(idim)>=m%box_ckey_max(idim,ilevel+1))ir(idim)=m%box_ckey_min(idim,ilevel+1)
-       endif
-    enddo
-
     ! Compute cloud volumes
     vol = cic_weight(dl,dr)
 
@@ -1149,6 +1155,17 @@ contains
           xnei(idim,j) = dble(ckey(idim,j)) + 0.5d0
        end do
     end do
+
+    ! Periodic boundary conditions
+    do idim=1,ndim
+       if(r%periodic(idim))then
+          if(il(idim)< m%box_ckey_min(idim,ilevel+1))il(idim)=m%box_ckey_max(idim,ilevel+1)-1
+          if(ir(idim)>=m%box_ckey_max(idim,ilevel+1))ir(idim)=m%box_ckey_min(idim,ilevel+1)
+       endif
+    enddo
+
+    ! Compute wrapped cartesian keys
+    ckey = cic_index(il,ir)
 
     end associate
 
@@ -1236,7 +1253,7 @@ contains
     open(unit=unit,file=filename,form='formatted',status='unknown',position='append')
 
     ! Write data to the sink file
-    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%t*scale_t/unit_yr, &
+    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%texp*scale_t/g%aexp**2/unit_yr, &
          & ',',g%dtnew(ilevel)*scale_t/unit_yr,',',p%mp(ipart)*scale_m/unit_msun,&
          & ',',dMBH_overdt*unit_dotM,',',dMED_overdt*unit_dotM,&
          & ',',rho_inf*scale_d,',',cs_gas*scale_v,&
@@ -1315,7 +1332,7 @@ contains
     open(unit=unit,file=filename,form='formatted',status='unknown',position='append')
 
     ! Write data to the sink file
-    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%t*scale_t/unit_yr,&
+    write(unit,'(I10,21(A1,ES21.10),A1,I10)')p%step_counter,',',g%texp*scale_t/g%aexp**2/unit_yr,&
          & ',',g%dtnew(ilevel)*scale_t/unit_yr,',',p%mp(ipart)*scale_m/unit_msun,&
          & ',',dMBH_overdt*unit_dotM,',',dMED_overdt*unit_dotM,&
          & ',',rho_inf*scale_d,',',cs_gas*scale_v,&

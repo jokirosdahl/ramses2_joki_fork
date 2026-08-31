@@ -50,7 +50,7 @@ subroutine read_halo_params(g)
   if(mag_topology=='constant')mag_type=0
   if(mag_topology=='toroidal')mag_type=1
   if(mag_topology=='dipole')mag_type=2
-  if(mag_topology=='quadrupoole')mag_type=3
+  if(mag_topology=='quadrupole')mag_type=3
   
   if(.not. nml_ok)then
      if(g%myid==1)write(*,*)'Too many errors in the namelist'
