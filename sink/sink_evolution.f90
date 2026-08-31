@@ -400,6 +400,7 @@ contains
              ! Get the cell information
              hash_nbor(1:ndim)  = ckey_div(1:ndim)
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
+
              ! If missing then cycle
              if(igridn==0)cycle
 
@@ -413,6 +414,7 @@ contains
              ! Get the cell information
              hash_nbor(1:ndim)  = ckey_div(1:ndim)
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
+
              ! If missing then cycle
              if(igridn==0)cycle
 
@@ -549,8 +551,9 @@ contains
        hash_nbor(1:ndim)  = ckeynei(1:ndim,j) ! Periodic
        call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
-       ! If missing cycle
+       ! If missing or refined cycle
        if(igridn==0)cycle
+       if(m%grid(igridn)%refined(icelln))cycle
 
        ! Get physical information
        d          = max(dble(m%uold(icelln,1,igridn)),r%smallr)
@@ -861,8 +864,9 @@ contains
              hash_nbor(1:ndim)  = ckeyCIC(1:ndim,j) ! Periodic
              call get_parent_cell(s,hash_nbor,igridn,icelln,flush_cache=.true.,fetch_cache=.true.)
 
-             ! If missing cycle
+             ! If missing or refined cycle
              if(igridn==0)cycle
+             if(m%grid(igridn)%refined(icelln))cycle
 
              ! Get the local gas properties
              d = max(dble(m%uold(icelln,1,igridn)),r%smallr)
