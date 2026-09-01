@@ -35,7 +35,6 @@ subroutine m_read_cr_params(pst)
   real(kind=8)::cr_dmax=1d30              ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
   real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
-  real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
   character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
   real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29
   real(kind=8),dimension(1:ncrgrp)::cr_d_perp_factors=1d-6 ! perp CR diffusion suppression  !
@@ -49,7 +48,7 @@ subroutine m_read_cr_params(pst)
        &  cr_advect, cr_streaming_diffusion, cr_streaming_heating        &
        & ,cr_cooling, cr_isotropic_pressure, cr_reduced_flux_correction  &
        & ,cr_c_fraction, cr_dmax, cr_nsubcycle, cr_courant_factor        &
-       & ,cr_smallr_decouple, cr_test_setup, cr_v_alfven
+       & ,cr_test_setup, cr_v_alfven
 
   namelist/cr_groups/cr_d, cr_d_perp_factors, fecr
 
@@ -99,7 +98,6 @@ subroutine m_read_cr_params(pst)
   s%r%cr_dmax=cr_dmax
   s%r%cr_nsubcycle=cr_nsubcycle
   s%r%cr_courant_factor=cr_courant_factor
-  s%r%cr_smallr_decouple=cr_smallr_decouple
   s%r%cr_test_setup=cr_test_setup
 
   s%r%cr_d=cr_d

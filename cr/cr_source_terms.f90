@@ -64,7 +64,7 @@ subroutine cr_source_terms(s,ilevel)
   real(kind=8)::coef_31, coef_33, coef_41, coef_44
   real(kind=8)::e_coef, new_ec, old_ec, sigma_x, sigma_y, sigma_z, sigma_stream
   real(kind=8)::Ecr, rhs2, rhs3, rhs4, v1, v2, v3
-  real(kind=8)::f_decouple, g_grp, smallp, three_gmone
+  real(kind=8)::g_grp, smallp, three_gmone
   real(kind=8)::scale_nH, scale_T2, scale_l, scale_d, scale_t, scale_v
   real(kind=8)::dtcool, lambda_cr, lambda_rad, nH
   real(kind=8),parameter:: zeta_cr=7.51d-16, fneut = 0.875d0, ne = 1.0d-3
@@ -244,9 +244,6 @@ subroutine cr_source_terms(s,ilevel)
 
             rhs2 = frotx ; rhs3 = froty ; rhs4 = frotz
 
-           ! Factor for decoupling CRs from gas at low densities
-            f_decouple = MAX(exp(-r%smallr*r%cr_smallr_decouple/m%uold(ind,1,ind_leaf(i))),1d-10)
-
             if(r%cr_streaming_diffusion) then
                sigma_stream = max(1./r%cr_dmax_code &
                   & ,abs(bdotgradE_loc)/3d0 / norm / va_loc / g_grp / Ecr)
@@ -285,7 +282,7 @@ subroutine cr_source_terms(s,ilevel)
 
             old_ec = m%unew(ind,r%iEcr+igrp-1,ind_leaf(i))
             m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = &
-              & m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) + (new_ec-old_ec) * f_decouple
+              & m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) + (new_ec-old_ec)
 
             ! Floor the CR energy and update total energy if necessary
             m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)) = max(m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)), smallecr)

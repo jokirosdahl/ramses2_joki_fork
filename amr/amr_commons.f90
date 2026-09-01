@@ -582,7 +582,6 @@ module amr_commons
      real(kind=8)::cr_dmax=1d30              ! Max CR streaming diffusion coefficient in cgs   !
      integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
      real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
-     real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
      character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
      ! CR group parameters---------------------------------------------------------------------
      real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29 !Classical value cm^2/s (e.g., Jockipii 1999)
