@@ -212,6 +212,67 @@ attributes(device) subroutine warp_reduce_max(dt)
 end subroutine warp_reduce_max
 ! =========================================================================
 
+! =========================================================================
+!> @brief
+!> Fused block-wide reduction: four sums (s1..s4) and one min (m1).
+!> One pair of syncthreads for all five reductions. Avoids the per-call
+!> shared-memory / register cost of chaining 5 separate block_reduce calls.
+attributes(device) subroutine block_reduce_sum4_min1(s1, s2, s3, s4, m1)
+  implicit none
+  real(kind=8) :: s1, s2, s3, s4, m1
+
+  real(kind=8), shared :: sh(5, 32)
+  integer :: tid, lane, wid
+
+  tid = threadIdx%x
+  lane = mod(tid - 1, warpsize) + 1
+  wid  = (tid - 1) / warpsize + 1
+
+  ! warp-level reductions (independent, no barrier needed)
+  call warp_reduce_sum(s1)
+  call warp_reduce_sum(s2)
+  call warp_reduce_sum(s3)
+  call warp_reduce_sum(s4)
+  call warp_reduce_min(m1)
+
+  ! one lane per warp writes all five partials
+  if (lane == 1) then
+     sh(1, wid) = s1
+     sh(2, wid) = s2
+     sh(3, wid) = s3
+     sh(4, wid) = s4
+     sh(5, wid) = m1
+  endif
+  call syncthreads()
+
+  ! first warp gathers per-warp partials
+  if (tid <= (blockdim%x / warpsize)) then
+     s1 = sh(1, lane)
+     s2 = sh(2, lane)
+     s3 = sh(3, lane)
+     s4 = sh(4, lane)
+     m1 = sh(5, lane)
+  else
+     s1 = 0d0
+     s2 = 0d0
+     s3 = 0d0
+     s4 = 0d0
+     m1 = huge(0d0)
+  endif
+  call syncthreads()
+
+  ! final reduce within first warp
+  if (wid == 1) then
+     call warp_reduce_sum(s1)
+     call warp_reduce_sum(s2)
+     call warp_reduce_sum(s3)
+     call warp_reduce_sum(s4)
+     call warp_reduce_min(m1)
+  endif
+
+end subroutine block_reduce_sum4_min1
+! =========================================================================
+
 ! ==========================================================================
 !> @brief
 !> Performs a reduction min within a block.
