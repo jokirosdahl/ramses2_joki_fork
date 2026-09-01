@@ -4401,12 +4401,11 @@ contains
 
     endif
 
-!    dt_loc   = block_reduce_min(dt_loc)
-!    mass_loc = block_reduce_sum(mass_loc)
-!    ekin_loc = block_reduce_sum(ekin_loc)
-!    eint_loc = block_reduce_sum(eint_loc)
-!    emag_loc = block_reduce_sum(emag_loc)
-    call block_reduce_sum4_min1(mass_loc, ekin_loc, eint_loc, emag_loc, dt_loc)
+    dt_loc   = block_reduce_min(dt_loc)
+    mass_loc = block_reduce_sum(mass_loc)
+    ekin_loc = block_reduce_sum(ekin_loc)
+    eint_loc = block_reduce_sum(eint_loc)
+    emag_loc = block_reduce_sum(emag_loc)
 
     if(tid == 0)then
        info = atomicadd(data_out(1),mass_loc)
