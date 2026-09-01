@@ -191,7 +191,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   real(kind=8),dimension(1:nrtvar)::rtuold
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold_tmp
 #endif
-#ifdef CRS
+#ifdef CR
   real(kind=8),dimension(1:nrtvar)::cruold
   real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold_tmp
 #endif
@@ -437,7 +437,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #ifdef RT
         rtuold_tmp=m%rtuold(:,:,j)
 #endif
-#ifdef CRS
+#ifdef CR
         cruold_tmp=m%cruold(:,:,j)
 #endif
 #ifdef GRAV
@@ -460,7 +460,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #ifdef RT
            m%rtuold(:,:,i)=m%rtuold(:,:,inew)
 #endif
-#ifdef CRS
+#ifdef CR
            m%cruold(:,:,i)=m%cruold(:,:,inew)
 #endif
 #ifdef GRAV
@@ -490,7 +490,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #ifdef RT
         m%rtuold(:,:,i)=rtuold_tmp
 #endif
-#ifdef CRS
+#ifdef CR
         m%cruold(:,:,i)=cruold_tmp
 #endif
 #ifdef GRAV
@@ -606,7 +606,7 @@ subroutine pack_flush_refine(mesh,igrid,msg_size,msg_array)
   end do
 #endif
 
-#ifdef CRS
+#ifdef CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -681,7 +681,7 @@ subroutine unpack_flush_refine(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef CRS
+#ifdef CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
@@ -770,7 +770,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
   use amr_parameters, only: ndim, nhilbert, twotondim, twondim, nvector
   use hydro_parameters, only: nvar
   use ramses_commons, only: ramses_t
-#ifdef CRS
+#ifdef CR
   use cr_parameters, only: ncruvar
 #endif
   use nbors_utils
@@ -817,7 +817,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
   real(kind=8),dimension(0:twondim  ,1:nrtvar)::rtu1
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtu2
 #endif
-#ifdef CRS
+#ifdef CR
   real(kind=8),dimension(0:twondim  ,1:ncruvar)::cru1
   real(kind=8),dimension(1:twotondim,1:ncruvar)::cru2
 #endif
@@ -936,7 +936,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
      end do
   end do
 #endif
-#ifdef CRS
+#ifdef CR
   do inbor=0,twondim
      do ivar=1,ncruvar
         cru1(inbor,ivar)=m%cruold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
@@ -1008,7 +1008,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
      end do
   end do
 #endif
-#ifdef CRS
+#ifdef CR
   ! Interpolate using CR variables
   call interpol_cr(cru1,cru2,r%interpol_type)
   ! Store children cell CR variables

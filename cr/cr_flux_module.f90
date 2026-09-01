@@ -13,7 +13,7 @@ MODULE cr_flux_module
   integer,parameter::jfcr1=1-ndim/2                                               ! 0 or 1
   integer,parameter::kfcr1=1-ndim/3                                               ! 0 or 1
 
-#ifdef CRS
+#ifdef CR
   public cr_unsplit, invrotatevec, rotatevec
 
 CONTAINS

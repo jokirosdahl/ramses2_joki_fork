@@ -10,7 +10,7 @@ HYDRO = 1
 GRAV = 0
 MHD = 0
 RT = 0
-CRS = 0
+CR = 0
 RTZ = 0
 INIT =
 UNITS =
@@ -31,8 +31,8 @@ N_SULFUR_IONS = 0
 N_IRON_IONS = 0
 NION = 0
 NPSCAL = 0
-NRTGRP = 0
-NCRGRP=0
+NRTGRP = 1
+NCRGRP=1
 NHILBERT = 1
 NVECTOR = 32
 NPRE = 8
@@ -57,9 +57,9 @@ NION := $(NION)+$(N_NEON_IONS)+$(N_MAGNESIUM_IONS)+$(N_SILICON_IONS)
 NION := $(NION)+$(N_SULFUR_IONS)+$(N_IRON_IONS)
 NION := $(NION)+$(N_HYDROGEN_IONS)+$(N_H2)+$(N_HELIUM_IONS)
 endif
-ifeq ($(CRS),1)
+ifeq ($(CR),1)
    NENER := $(NENER)+$(NCRGRP)
-   DEFINES += -DMHD -DCRS -DNCRGRP=$(NCRGRP)
+   DEFINES += -DMHD -DCR -DNCRGRP=$(NCRGRP)
 endif
 NVAR := $(NHYDRO)+$(NENER)+$(NPSCAL)+$(NMETAL)+$(NION)
 #############################################################################

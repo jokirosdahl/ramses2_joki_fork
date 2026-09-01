@@ -49,7 +49,7 @@ subroutine output_cr(s,filename)
   integer::ilevel,igrid,ilun
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
   real(kind=4),dimension(1:twotondim,1:ncruvar)::qout
-#ifdef CRS
+#ifdef CR
   real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold
 #endif
   logical::overflow_reported=.false.
@@ -60,7 +60,7 @@ subroutine output_cr(s,filename)
   do ilevel=r%levelmin,r%nlevelmax
      write(ilun,POS=nskip(ilevel))
      do igrid=m%head(ilevel),m%tail(ilevel)
-#ifdef CRS
+#ifdef CR
         cruold=m%cruold(:,:,igrid)
         qout=real(cruold,kind=4)
 #endif
@@ -113,7 +113,7 @@ subroutine backup_cr(r,g,m,mdl,filename)
   enddo
   do ilevel=r%levelmin,r%nlevelmax
      do igrid=m%head(ilevel),m%tail(ilevel)
-#ifdef CRS
+#ifdef CR
         write(ilun)m%cruold(:,:,igrid)
 #endif
      end do

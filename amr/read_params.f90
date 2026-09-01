@@ -253,7 +253,7 @@ subroutine m_read_params(pst)
 #endif
 
   ! Initial condition CR variables
-#ifdef CRS
+#ifdef CR
   integer::cr_nregion=0
   character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
   real(kind=8),dimension(1:MAXREGION)::cr_reg_x_center=0.
@@ -403,7 +403,7 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_v_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
 #endif
-#ifdef CRS
+#ifdef CR
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
@@ -642,7 +642,7 @@ subroutine m_read_params(pst)
        & ,rt_exp_region, rt_reg_group                          &
        & ,rt_n_region, rt_u_region, rt_v_region, rt_w_region   &
 #endif
-#ifdef CRS
+#ifdef CR
        & ,cr_nregion, cr_region_type                             &
        & ,cr_reg_x_center, cr_reg_y_center, cr_reg_z_center      &
        & ,cr_reg_length_x, cr_reg_length_y, cr_reg_length_z      &
@@ -691,7 +691,7 @@ subroutine m_read_params(pst)
 #ifdef RT
        & ,rt_n_bound,rt_u_bound,rt_v_bound,rt_w_bound &
 #endif
-#ifdef CRS
+#ifdef CR
        & ,cr_fx_bound,cr_fy_bound,cr_fz_bound &
 #endif
        & ,d_bound,u_bound,v_bound,w_bound,p_bound
@@ -786,7 +786,7 @@ subroutine m_read_params(pst)
 #ifdef RT
   write(*,'(" Using radiation solver with nrtgrp = ",I0)')nrtgrp
 #endif
-#ifdef CRS
+#ifdef CR
   write(*,'(" Using 2-moment cosmic rays solver with ncrgrp = ",I2)')ncrgrp
 #endif
 
@@ -975,7 +975,7 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif
 #endif
-#ifdef CRS
+#ifdef CR
   if(.not. cr)then
      write(*,*)'You are not using the cr solver but'
      write(*,*)'the code was compiled with CR=1'
@@ -1599,7 +1599,7 @@ subroutine m_read_params(pst)
   s%r%rt_v_region=rt_v_region
   s%r%rt_w_region=rt_w_region
 #endif
-#ifdef CRS
+#ifdef CR
   s%r%cr_nregion=cr_nregion
   s%r%cr_region_type=cr_region_type
   s%r%cr_reg_x_center=cr_reg_x_center
@@ -1652,7 +1652,7 @@ subroutine m_read_params(pst)
   s%r%rt_v_bound=rt_v_bound
   s%r%rt_w_bound=rt_w_bound
 #endif
-#ifdef CRS
+#ifdef CR
   s%r%cr_fx_bound=cr_fx_bound
   s%r%cr_fy_bound=cr_fy_bound
   s%r%cr_fz_bound=cr_fz_bound

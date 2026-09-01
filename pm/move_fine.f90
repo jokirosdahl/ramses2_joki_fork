@@ -948,7 +948,7 @@ subroutine pack_fetch_kick_dust(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-#ifdef CRS
+#ifdef CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -1008,7 +1008,7 @@ subroutine unpack_fetch_kick_dust(mesh,igrid,msg_size,msg_array,hash_key)
      end do
   end do
 #endif
-#ifdef CRS
+#ifdef CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)

@@ -65,7 +65,7 @@ subroutine cr_input_condinit(r,g,m,ilevel)
         ! Call initial condition routine
         call cr_condinit(r,g,xx,qq,dx,ngrid)
         ! Scatter primitive variables to main memory
-#ifdef CRS
+#ifdef CR
         do ivar=1,ncruvar
            do i=1,ngrid
               m%cruold(ind, ivar, igrid+i-1) = qq(i, ivar)

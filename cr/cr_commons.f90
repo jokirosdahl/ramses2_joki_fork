@@ -16,7 +16,7 @@ module cr_commons
 #ifdef MHD
      real(kind=8),dimension(:,:,:,:),allocatable::bloc
 #endif
-#ifdef CRS
+#ifdef CR
      real(kind=8),dimension(:,:,:,:),allocatable::cruloc
      real(kind=8),dimension(:,:,:,:,:),allocatable::crflux
      real(kind=8),dimension(:,:,:,:,:),allocatable::cFlx
@@ -60,7 +60,7 @@ contains
 #ifdef MHD
     allocate(h%bloc(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:6))
 #endif
-#ifdef CRS
+#ifdef CR
     allocate(h%cruloc (h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ncruvar)) 
     allocate(h%crflux(h%if1:h%if2,h%jf1:h%jf2,h%kf1:h%kf2,1:ncrvar,1:ndim))
     allocate(h%cFlx(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ndim+1,1:ndim))
@@ -88,7 +88,7 @@ contains
 #ifdef MHD
     nint=nint+size(transfer(h%bloc,(/1/)))
 #endif
-#ifdef CRS
+#ifdef CR
     nint=nint+size(transfer(h%cruloc,(/1/)))
     nint=nint+size(transfer(h%crflux,(/1/)))
     nint=nint+size(transfer(h%cFlx,(/1/)))

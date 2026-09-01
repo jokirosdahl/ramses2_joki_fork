@@ -796,7 +796,7 @@ module amr_commons
      real(dp),allocatable,dimension(:,:,:)::rtunew
      real(dp),allocatable,dimension(:,:,:)::emissivity
 #endif
-#ifdef CRS
+#ifdef CR
      real(dp),allocatable,dimension(:,:,:)::cruold
      real(dp),allocatable,dimension(:,:,:)::crunew
 #endif

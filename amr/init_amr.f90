@@ -151,7 +151,7 @@ subroutine init_amr(r,g,m,type)
      allocate(m%rtunew(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
      allocate(m%emissivity(1:twotondim,1:nrtgrp,1:m%ngridmax+m%ncachemax))
 #endif
-#ifdef CRS
+#ifdef CR
      allocate(m%cruold(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
      allocate(m%crunew(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
 #endif

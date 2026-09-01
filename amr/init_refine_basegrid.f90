@@ -41,7 +41,7 @@ subroutine m_init_refine_basegrid(pst)
 #endif
 
   ! Initialize cr variables on the base grid
-#ifdef CRS
+#ifdef CR
   if(r%cr)call m_cr_init_flow_fine(pst,r%levelmin)
 #endif
 

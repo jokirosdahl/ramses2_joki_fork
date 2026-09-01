@@ -341,7 +341,7 @@ subroutine load_balance(s,ilevel)
 #ifdef RT
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold_tmp
 #endif
-#ifdef CRS
+#ifdef CR
   real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold_tmp
 #endif
 #ifdef GRAV
@@ -402,7 +402,7 @@ subroutine load_balance(s,ilevel)
 #ifdef RT
            m%rtuold(:,:,ichild)=m%rtuold(:,:,ioct)
 #endif
-#ifdef CRS
+#ifdef CR
            m%cruold(:,:,ichild)=m%cruold(:,:,ioct)
 #endif
 #ifdef GRAV
@@ -548,7 +548,7 @@ subroutine load_balance(s,ilevel)
 #ifdef RT
         rtuold_tmp=m%rtuold(:,:,j)
 #endif
-#ifdef CRS
+#ifdef CR
         cruold_tmp=m%cruold(:,:,j)
 #endif
 #ifdef GRAV
@@ -571,7 +571,7 @@ subroutine load_balance(s,ilevel)
 #ifdef RT
            m%rtuold(:,:,i)=m%rtuold(:,:,inew)
 #endif
-#ifdef CRS
+#ifdef CR
            m%cruold(:,:,i)=m%cruold(:,:,inew)
 #endif
 #ifdef GRAV
@@ -601,7 +601,7 @@ subroutine load_balance(s,ilevel)
 #ifdef RT
         m%rtuold(:,:,i)=rtuold_tmp
 #endif
-#ifdef CRS
+#ifdef CR
         m%cruold(:,:,i)=cruold_tmp
 #endif
 #ifdef GRAV
@@ -713,7 +713,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
   end do
 #endif
   
-#ifdef CRS
+#ifdef CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -790,7 +790,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef CRS
+#ifdef CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
