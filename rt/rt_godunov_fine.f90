@@ -484,7 +484,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                     end do
                  end do
                  ! Interpolate using rt variables
-                 call interpol_rt(u1,u2,r%interpol_var,r%interpol_type)
+                 call interpol_rt(u1,u2,r%interpol_type)
               endif
 
               ! Store grid index
