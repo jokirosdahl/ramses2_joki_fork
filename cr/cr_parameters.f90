@@ -4,7 +4,7 @@ module cr_parameters
 #ifdef NCRGRP
   integer,parameter::ncrgrp=NCRGRP       ! # of CR groups (set in Makefile)
 #else
-  integer,parameter::ncrgrp=1
+  integer,parameter::ncrgrp=0
 #endif
   integer,parameter::ncruvar=ncrgrp*ndim    ! # of CR flux variables, stored in cruold and crunew
   integer,parameter::ncrvar=ncrgrp*(ndim+1) ! # of CR variables energy densities plus fluxes
