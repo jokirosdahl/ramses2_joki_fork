@@ -106,7 +106,6 @@ sink_evolution.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_comm
 sink_formation.o: amr_commons.o amr_parameters.o cache.o cache_commons.o clfind_commons.o clump_finder.o clump_merger.o constants.o hydro_parameters.o mdl.o mdl_commons.o output_amr.o output_clump.o output_part.o output_poisson.o pm_commons.o ramses_commons.o rngstream.o
 sink_merger.o: amr_commons.o amr_parameters.o cache.o cache_commons.o constants.o marshal.o mdl.o mdl_commons.o nbors_utils.o pm_commons.o ramses_commons.o sink_evolution.o
 smooth.o: amr_parameters.o boundaries.o cache.o cache_commons.o marshal.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
-sort.o: amr_parameters.o
 source_hydro_fine.o: amr_parameters.o boundaries.o cache.o cache_commons.o hydro_flag.o hydro_parameters.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
 star_formation.o: amr_commons.o amr_parameters.o constants.o hydro_parameters.o input_hydro_condinit.o mdl.o mdl_commons.o pm_commons.o ramses_commons.o rngstream.o rt_spectra.o
 synchro_hydro_fine.o: amr_commons.o amr_parameters.o mdl.o mdl_commons.o ramses_commons.o
@@ -181,7 +180,7 @@ gpu_scan.o: amr_parameters.o
 gpu_star.o: amr_parameters.o gpu_utils.o hydro_parameters.o oct_commons.o
 gpu_turb.o: amr_parameters.o hydro_parameters.o oct_commons.o turb_commons.o
 gpu_utils.o: amr_parameters.o oct_commons.o
-init_amr.o: gpu_manager.o
+init_amr.o: gpu_clump.o gpu_manager.o
 init_part.o: gpu_manager.o
 interpol_phi.o: gpu_runner.o
 move_fine.o: gpu_part.o
