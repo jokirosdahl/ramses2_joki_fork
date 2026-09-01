@@ -115,7 +115,7 @@ end subroutine update_cr_vars
 !#####################################################################
 !#####################################################################
 !#####################################################################
-subroutine get_cr_c_min(r, g, cr_c_min)
+subroutine get_cr_c(r, g, cr_c_min)
   ! Get CR speed of light according to the speed of light fraction
   !-------------------------------------------------------------------------
   use amr_commons, only: run_t, global_t
@@ -130,7 +130,7 @@ subroutine get_cr_c_min(r, g, cr_c_min)
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
   cr_c_min = c_cgs * r%cr_c_fraction / scale_v
 
-end subroutine get_cr_c_min
+end subroutine get_cr_c
 !#####################################################################
 !#####################################################################
 !#####################################################################

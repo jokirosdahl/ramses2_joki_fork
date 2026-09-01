@@ -41,7 +41,7 @@ subroutine m_newdt_fine(pst,ilevel)
   !-----------------------------------------------------------
   real(kind=8)::dx,tff,fourpi,threepi2
   real(kind=8)::ekin,vmax
-  real(kind=8)::dt_gyro, dt_courant, max_b, max_q, cr_c_min
+  real(kind=8)::dt_gyro, dt_courant, max_b, max_q, cr_c
   type(out_courant_fine_t)::out_courant_fine
   type(out_newdt_part_t)::out_newdt_part
   type(in_broadcast_dt_t)::in_broadcast_dt
@@ -128,13 +128,8 @@ subroutine m_newdt_fine(pst,ilevel)
   endif
 
   if(r%cr.and.r%cr_advect)then
-     call get_cr_c_min(r, g, cr_c_min)
-     g%cr_c(ilevel) = cr_c_min
-     if(r%cr_varc) then
-       ! Update the variable light speed
-       ! This is not necessary in the fluid frame, unless we want to make c faster than diffusion or streaming speed
-       g%cr_c(ilevel) = max(cr_c_min, dx/3./out_courant_fine%dt * r%cr_varc_fudge)
-     endif
+     call get_cr_c(r, g, cr_c)
+     g%cr_c(ilevel) = cr_c
      ! Broadcast the new value of cr_c
      in_broadcast_cr_c%ilevel=ilevel
      in_broadcast_cr_c%cr_c=g%cr_c(ilevel)

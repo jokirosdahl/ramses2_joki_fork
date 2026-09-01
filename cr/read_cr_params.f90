@@ -30,14 +30,11 @@ subroutine m_read_cr_params(pst)
   logical::cr_streaming_heating=.false.   ! Streaming heating of cosmic rays?               !
   logical::cr_cooling=.false.             ! CR cooling?                                     !
   logical::cr_isotropic_pressure=.true.   ! Isotropic CR pressure?                          !
-  logical::cr_varc=.false.                ! Vary the speed of light for CRs?                !
-  logical::cr_varc_vdvs=.false.           ! Use diffusion and Alfven speed for cr_c         !
   logical::cr_reduced_flux_correction=.false.  ! Make sure F<c*E always?                    !
   real(kind=8)::cr_c_fraction=1.0
   real(kind=8)::cr_dmax=1d30              ! Max CR streaming diffusion coefficient in cgs   !
   integer::cr_nsubcycle=1                 ! Maximum number of CR subcycles per hydro step   !
   real(kind=8)::cr_courant_factor=0.8d0   ! Courant factor for CR timesteps                 !
-  real(kind=8)::cr_varc_fudge=10.0
   real(kind=8)::cr_smallr_decouple=1d-4   ! Density (over smallr) at which to decouple CRs  !
   character(LEN=100)::cr_test_setup='none'! Setup for standard CR tests                     !
   real(kind=8),dimension(1:ncrgrp)::cr_d=1.0d29
@@ -50,9 +47,8 @@ subroutine m_read_cr_params(pst)
   !--------------------------------------------------
   namelist/cr_params/ &
        &  cr_advect, cr_streaming_diffusion, cr_streaming_heating        &
-       & ,cr_cooling, cr_isotropic_pressure, cr_varc, cr_varc_vdvs       &
-       & ,cr_reduced_flux_correction, cr_c_fraction, cr_dmax             &
-       & ,cr_nsubcycle, cr_courant_factor, cr_varc_fudge                 &
+       & ,cr_cooling, cr_isotropic_pressure, cr_reduced_flux_correction  &
+       & ,cr_c_fraction, cr_dmax, cr_nsubcycle, cr_courant_factor        &
        & ,cr_smallr_decouple, cr_test_setup, cr_v_alfven
 
   namelist/cr_groups/cr_d, cr_d_perp_factors, fecr
@@ -98,14 +94,11 @@ subroutine m_read_cr_params(pst)
   s%r%cr_streaming_heating=cr_streaming_heating
   s%r%cr_cooling=cr_cooling
   s%r%cr_isotropic_pressure=cr_isotropic_pressure
-  s%r%cr_varc=cr_varc
-  s%r%cr_varc_vdvs=cr_varc_vdvs
   s%r%cr_reduced_flux_correction=cr_reduced_flux_correction
   s%r%cr_c_fraction=cr_c_fraction
   s%r%cr_dmax=cr_dmax
   s%r%cr_nsubcycle=cr_nsubcycle
   s%r%cr_courant_factor=cr_courant_factor
-  s%r%cr_varc_fudge=cr_varc_fudge
   s%r%cr_smallr_decouple=cr_smallr_decouple
   s%r%cr_test_setup=cr_test_setup
 
