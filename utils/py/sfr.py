@@ -56,14 +56,14 @@ print("Reading output number ",nout)
 
 s=ram.rd_part(nout,path=path,prefix='star',center=center,radius=radius)
 i=ram.rd_info(nout,path=path)
-is_cosmo = (i.H0 > 0) or np.all(s.birth_date <= 0)
+is_cosmo = bool(np.any(s.birth_date < 0))
 
 if is_cosmo:
     time = abs(s.birth_date * i.unit_t / i.aexp**2 / (365 * 24 * 3600 * 1e9))
     xlabel = 'Lookback time [Gyr]'
 else:
     time = s.birth_date * i.unit_t / (365 * 24 * 3600 * 1e9)
-    xlabel = 't [Gyr]'
+    xlabel = 'Time [Gyr]'
 
 if np.max(time) < bin_size:
     print("Reduce bin size, bin=", bin_size, " max(time)=", np.max(time))
