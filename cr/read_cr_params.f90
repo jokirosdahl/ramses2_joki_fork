@@ -15,6 +15,7 @@ subroutine m_read_cr_params(pst)
   implicit none
   type(pst_t)::pst
 
+#ifdef CR
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------
@@ -113,6 +114,7 @@ subroutine m_read_cr_params(pst)
   endif
 
   end associate
+#endif
 
 end subroutine m_read_cr_params
 !#########################################################################
