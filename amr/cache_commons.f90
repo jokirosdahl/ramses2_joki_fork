@@ -2,7 +2,7 @@ module cache_commons
   use amr_parameters, only: ndim, twotondim, nbin
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar, nrtgrp
-  use cr_parameters, only: ncrvar, ncruvar
+  use cr_parameters, only: ncrvar
   use call_back
 
   ! Communication-related taghs

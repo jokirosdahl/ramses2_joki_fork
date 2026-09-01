@@ -94,7 +94,7 @@ subroutine init_amr(r,g,m,type)
   use amr_parameters, ONLY: nhilbert, ndim, twotondim, threetondim, dp
   use hydro_parameters, ONLY: nvar
   use rt_parameters, ONLY: nrtvar, nrtgrp
-  use cr_parameters, ONLY: ncruvar, ncrgrp
+  use cr_parameters, ONLY: ncruvar
   use amr_commons, ONLY: run_t, global_t, mesh_t
   use hash
   use hilbert

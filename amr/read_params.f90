@@ -294,7 +294,6 @@ subroutine m_read_params(pst)
 #if NENER>0
   real(kind=8),dimension(1:NENER)::err_grad_prad=-1.0
   real(kind=8),dimension(1:NENER)::floor_prad=1d-10
-
 #endif
 #if NVAR>5+NENER
   real(kind=8),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
