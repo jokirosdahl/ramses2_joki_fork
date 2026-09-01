@@ -51,7 +51,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      yy = x(i,2)-r%box_size(2)/2.0
      if(idim==1)A(i) = 0.0
      if(idim==2)A(i) = 0.0
-     if(idim==3)A(i) = A0*max(R0-sqrt(xx**2+yy**2),-r%box_size(1))
+     if(idim==3)A(i) = A0*max(R0-sqrt(xx**2+yy**2),0.0d0)
   end do
 #endif
 
