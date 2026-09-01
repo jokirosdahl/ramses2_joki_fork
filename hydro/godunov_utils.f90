@@ -137,6 +137,19 @@ subroutine hydro_refine(r,ug,um,ud,ok)
      end if
   end if
 
+#if NENER>0
+  do irad = 1,nener
+    if(r%err_grad_prad(irad) >= 0.)then
+      pg=ug(5+irad); pm=um(5+irad); pd=ud(5+irad)
+      error=2.0d0*MAX( &
+        & ABS((pd-pm)/(pd+pm+r%floor_prad(irad))), &
+        & ABS((pm-pg)/(pm+pg+r%floor_prad(irad))) )
+      ok = ok .or. error > r%err_grad_prad(irad)
+    end if
+  end do
+#endif
+
+
   !TODO(code): fix in the case of RTZ
   if(r%neq_chem .and. r%err_grad_xHII >= 0.)then
      ii=r%iIons

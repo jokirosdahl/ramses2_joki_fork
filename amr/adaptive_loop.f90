@@ -6,6 +6,7 @@ subroutine adaptive_loop(pst)
   use init_time_module, only: r_init_time
   use init_hydro_module, only: r_init_hydro
   use init_rt_module, only: r_init_rt
+  use init_cr_module, only: r_init_cr
   use init_part_module, only: r_init_part
   use init_xion_module, only: m_init_xion
   use input_part_module, only: m_input_part
@@ -61,6 +62,9 @@ subroutine adaptive_loop(pst)
 
   ! Initialize rt kernel workspace
   if(r%rt)call r_init_rt(pst)
+
+  ! Initialize rt kernel workspace
+  if(r%cr)call r_init_cr(pst)
 
   ! Initialize particle variables
   if(r%pic)call r_init_part(pst)

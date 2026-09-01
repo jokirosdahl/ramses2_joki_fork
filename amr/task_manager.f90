@@ -158,6 +158,13 @@ function worker_init(mdl) result(pst)
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold,r_set_emissivity
   use update_rt_c_module, only: r_rt_neq_updates
   use rt_star_feedback, only: r_star_rt_feedback
+  use init_cr_module, only: r_init_cr
+  use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold,r_conserve_cr_flux
+  use cr_source_terms_module, only: r_cr_source_terms
+  use update_cr_c_module, only: r_cr_updates, r_broadcast_cr_c
+  use cr_input_condinit_module, only: r_cr_input_condinit
+  use cr_upload_module, only: r_cr_upload_fine
+  use output_cr_module, only: r_output_cr
 #if defined(_CUDA)
   use gpu_manager, only: r_set_grid_device, r_transfer_grid_host
 #elif defined(_METAL)
@@ -314,6 +321,17 @@ function worker_init(mdl) result(pst)
   call mdl_add_service(pst%s%mdl,MDL_SET_RTUOLD,             pst,C_FUNLOC(r_set_rtuold),1,0,"set_rtuold")
   call mdl_add_service(pst%s%mdl,MDL_RT_NEQ_UPDATES,         pst,C_FUNLOC(r_rt_neq_updates),1,0,"rt_neq_updates")
   call mdl_add_service(pst%s%mdl,MDL_CHECK_PART_EMISSION,    pst,C_FUNLOC(r_check_part_emission),0,0,"check_part_emission")
+  call mdl_add_service(pst%s%mdl,MDL_INIT_CR,                pst,C_FUNLOC(r_init_cr),0,0,"init_cr")
+  call mdl_add_service(pst%s%mdl,MDL_CR_UPLOAD_FINE,         pst,C_FUNLOC(r_cr_upload_fine),1,0,"cr_upload_fine")
+  call mdl_add_service(pst%s%mdl,MDL_CR_INPUT_CONDINIT,      pst,C_FUNLOC(r_cr_input_condinit),1,0,"cr_input_condinit")
+  call mdl_add_service(pst%s%mdl,MDL_OUTPUT_CR,              pst,C_FUNLOC(r_output_cr),flen,0,"output_cr")
+  call mdl_add_service(pst%s%mdl,MDL_CR_GODUNOV_FINE,        pst,C_FUNLOC(r_cr_godunov_fine),1,0,"cr_godunov_fine")
+  call mdl_add_service(pst%s%mdl,MDL_CR_SOURCE_TERMS,        pst,C_FUNLOC(r_cr_source_terms),1,0,"cr_source_terms")
+  call mdl_add_service(pst%s%mdl,MDL_SET_CRUNEW,             pst,C_FUNLOC(r_set_crunew),1,0,"set_crunew")
+  call mdl_add_service(pst%s%mdl,MDL_SET_CRUOLD,             pst,C_FUNLOC(r_set_cruold),1,0,"set_cruold")
+  call mdl_add_service(pst%s%mdl,MDL_CONSERVE_CR_FLUX,       pst,C_FUNLOC(r_conserve_cr_flux),1,0,"conserve_cr_flux")
+  call mdl_add_service(pst%s%mdl,MDL_CR_UPDATES,             pst,C_FUNLOC(r_cr_updates),1,0,"cr_updates")
+  call mdl_add_service(pst%s%mdl,MDL_BROADCAST_CR_C,         pst,C_FUNLOC(r_broadcast_cr_c),24,0,"broadcast_cr_c")
 #if defined(_CUDA) || defined(_METAL)
   call mdl_add_service(pst%s%mdl,MDL_SET_GRID_DEVICE,        pst,C_FUNLOC(r_set_grid_device),0,0,"set_grid_device")
   call mdl_add_service(pst%s%mdl,MDL_TRANSFER_GRID_HOST,     pst,C_FUNLOC(r_transfer_grid_host),0,0,"transfer_grid_host")

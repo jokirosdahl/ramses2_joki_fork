@@ -1,23 +1,22 @@
-module rt_step_module
+module cr_step_module
 contains
 !#####################################################################
 !#####################################################################
 !#####################################################################
 !#####################################################################
-subroutine m_rt_step(pst,ilevel)
+subroutine m_cr_step(pst,ilevel)
   use ramses_commons, only: pst_t
-  use cooling_fine_module, only: r_cooling_fine
-  use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold
-  use rt_upload_module, only: m_rt_upload_fine
-  use rt_input_condinit_module, only: r_rt_input_source_regions  
-  use cooling_fine_module, only: r_cooling_fine
-  use rt_star_feedback, only: r_star_RT_feedback
+  use cr_godunov_fine_module, only: r_cr_godunov_fine,r_set_crunew,r_set_cruold
+  use cr_source_terms_module, only: r_cr_source_terms
+  use cr_upload_module, only: m_cr_upload_fine
+  use constants,only: c_cgs
   type(pst_t)::pst
   integer::ilevel
 
   real(kind=8) :: dt_save, t_save
-  real(kind=8) :: dt_rad, t_rad
+  real(kind=8) :: dt_cr, t_cr
   integer  :: i, i_substep
+  real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
 
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,mdl=>pst%s%mdl)
 
@@ -25,70 +24,66 @@ subroutine m_rt_step(pst,ilevel)
   dt_save = g%dtnew(ilevel)
   t_save = g%t
 
-  ! We shift the time backwards one hydro-dt, to get evolution of stellar
-  ! ages within the hydro timestep, in the case of rt subcycling:
-  t_rad = t_save - dt_save
+  ! We shift the time backwards one hydro-dt, just in case,
+  ! though not really needed for now.
+  t_cr = t_save - dt_save
 
-  ! Get RT courant time step at coarse level
-  call get_rt_courant_dt(r,g,dt_rad,ilevel)
-  ! Compute RT courant time step at fine level
-  dt_rad = MIN(dt_rad,dt_save)
+  ! Get CR courant time step at coarse level
+  call get_cr_courant_dt(r,g,dt_cr,ilevel)
+  ! Compute CR courant time step at fine level
+  dt_cr = MIN(dt_cr,dt_save)
 
   ! Compute number of subcycles
-  i_substep = ceiling(dt_save/dt_rad-1e-12)
-  dt_rad = dt_save/dble(i_substep)
+  i_substep = ceiling(dt_save/dt_cr-1e-12)
+  dt_cr = dt_save/dble(i_substep)
 
-  ! Compute isotropic emissivity from stars
-  if(r%star)call r_star_RT_feedback(pst,ilevel,1)
-
-  ! Compute isotropic emissivity from sinks
-  ! if(r%rt_sink) call r_sink_RT_feedback(pst,ilevel,1)
-
-  ! RT sub-cycle loop
+  ! CR sub-cycle loop
   do i = 1, i_substep
+     if(i_substep .gt. r%cr_nsubcycle) then
+         print*,'Doing CR substeps but should not!! ',i_substep, r%cr_nsubcycle, dt_save
+         stop
+     endif
 
-     ! Shift the RT time forwards one dt_rad
-     t_rad = t_rad + dt_rad
+     ! Shift the CR time forwards one dt_cr
+     t_cr = t_cr + dt_cr
 
      ! Update time variables
-     call m_rt_update_time(pst,ilevel,t_rad,dt_rad)
+     call m_cr_update_time(pst,ilevel,t_cr,dt_cr)
 
-     ! Set rtunew equal to rtuold
-     if(i>1)call r_set_rtunew(pst,ilevel,1)
+     ! Set crunew equal to cruold
+     if(i>1)call r_set_crunew(pst,ilevel,1)
 
-     ! Hyperbolic RT solver
-     if(r%rt_advect)call r_rt_godunov_fine(pst,ilevel,1)
+     ! Hyperbolic CR solver
+     if(r%cr_advect)call r_cr_godunov_fine(pst,ilevel,1)
+     if(r%cr_advect)call r_cr_source_terms(pst,ilevel,1)
 
-     ! Add anisotropic radiation from other sources
-     if(r%rt_nsource>0)call r_rt_input_source_regions(pst,ilevel,1)
-
-     ! Set rtuold equal to rtunew if not rt_smooth
-     ! Add isotropic sources if not neq_chem
-     call r_set_rtuold(pst,ilevel,1)
-
-     ! Source terms for photo-chemistry
-     if(r%neq_chem)call r_cooling_fine(pst,ilevel,1)
+     ! Set cruold equal to crunew
+     call r_set_cruold(pst,ilevel,1)
 
   end do
-  ! End RT subcycle loop
+  ! End CR subcycle loop
 
   ! Restore original hydro timestep and time
-  call m_rt_update_time(pst,ilevel,t_save,dt_save)
+  call m_cr_update_time(pst,ilevel,t_save,dt_save)
 
   ! Restriction operator to update coarser level split cells
-  call m_rt_upload_fine(pst,ilevel)
+  call m_cr_upload_fine(pst,ilevel)
 
-  if (g%myid==1 .and. r%rt_nsubcycle .gt. 1) write(*,901) ilevel, i_substep
-901 format (' Performed level', I3, ' RT-step with ', I5, ' subcycles')
+  if(mod(g%nstep_coarse,r%ncontrol)==0) then
+      call units(r, g, scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
+      write(*,901) ilevel, i_substep, g%cr_c(ilevel)*scale_v/1e5, g%cr_c(ilevel)*scale_v/c_cgs, dt_cr
+   endif
+
+901 format (' Performed level', I3, ' CR-step with ', I5, ' sub-steps, cr_vmax(km/s)=', 1pe9.2, ' cr_c_fraction=', 1pe9.2, ',  dt_cr=', 1pe9.2)
 
   end associate
 
-end subroutine m_rt_step
+end subroutine m_cr_step
 !#####################################################################
 !#####################################################################
 !#####################################################################
 !#####################################################################
-subroutine m_rt_update_time(pst,ilevel,t,dt)
+subroutine m_cr_update_time(pst,ilevel,t,dt)
   use amr_parameters, only: n_frw
   use ramses_commons, only: pst_t
   use update_time_module, only: in_broadcast_aexp_t, r_broadcast_aexp
@@ -147,9 +142,9 @@ subroutine m_rt_update_time(pst,ilevel,t,dt)
 
   end associate
 
-end subroutine m_rt_update_time
+end subroutine m_cr_update_time
 !#####################################################################
 !#####################################################################
 !#####################################################################
 !#####################################################################
-end module rt_step_module
+end module cr_step_module

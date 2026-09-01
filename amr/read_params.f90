@@ -6,10 +6,12 @@ subroutine m_read_params(pst)
   use amr_parameters
   use hydro_parameters
   use rt_parameters, only: nrtgrp
+  use cr_parameters, only: ncrgrp
   use ramses_commons, only: pst_t
   use mdl_module
   use movie_module, only: set_movie_vars
   use rt_params_module
+  use cr_params_module
   use constants
 #ifdef RTZ
   use rtz_module, only: elements, n_elements !, initialize_elements
@@ -44,13 +46,14 @@ subroutine m_read_params(pst)
   logical::poisson =.false.    ! Poisson solver activated
   logical::hydro   =.false.    ! Hydro activated
   logical::rt      =.false.    ! RT activated
+  logical::cr      =.false.    ! Cosmic rays activated
   logical::star    =.false.    ! Stars and star formation activated
   logical::sink    =.false.    ! Sinks and sink formation activated
-  logical::part    =.false.   ! Dark matter particles activated
-  logical::trac    =.false.   ! Tracer particles activated
-  logical::dust    =.false.   ! Dust particles activated
+  logical::part    =.false.    ! Dark matter particles activated
+  logical::trac    =.false.    ! Tracer particles activated
+  logical::dust    =.false.    ! Dust particles activated
   logical::merger_tree=.false. ! Merger tree particles activated
-  logical::orphan  =.false.   ! Orphan particles activated
+  logical::orphan  =.false.    ! Orphan particles activated
   logical::verbose =.false.    ! Write everything
   logical::debug   =.false.    ! Debug mode activated
   logical::static_mesh=.false. ! Static mesh refinement activated
@@ -141,8 +144,8 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:10)::deltay_frame=0d0
   real(kind=8),dimension(1:10)::deltaz_frame=0d0
   character(LEN=5)::proj_axis='z' ! x->x, y->y, projection along z
-  integer,dimension(0:NVAR+2+nrtgrp)::movie_vars=0
-  character(len=5),dimension(0:NVAR+2+nrtgrp)::movie_vars_txt=''
+  integer,dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars=0
+  character(len=5),dimension(0:NVAR+2+nrtgrp+ncrgrp)::movie_vars_txt=''
   ! Movie camera and rendering options (per-projection, NMOV=5)
   real(kind=8),dimension(1:5)::theta_camera=0d0
   real(kind=8),dimension(1:5)::phi_camera=0d0
@@ -249,6 +252,23 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXREGION)::rt_w_region=0.0 !    Photon flux
 #endif
 
+  ! Initial condition CR variables
+#ifdef CR
+  integer::cr_nregion=0
+  character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_x_center=0.
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_y_center=0.
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_z_center=0.
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_length_x=1.E10
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_length_y=1.E10
+  real(kind=8),dimension(1:MAXREGION)::cr_reg_length_z=1.E10
+  real(kind=8),dimension(1:MAXREGION)::cr_exp_region=2.0
+  integer ,dimension(1:MAXREGION)::cr_reg_group=1
+  real(kind=8),dimension(1:MAXREGION)::cr_fx_region=0.0 ! CR flux
+  real(kind=8),dimension(1:MAXREGION)::cr_fy_region=0.0 ! CR flux
+  real(kind=8),dimension(1:MAXREGION)::cr_fz_region=0.0 ! CR flux
+#endif
+
   ! Refinement parameters for hydro
   real(kind=8)::err_grad_d=-1.0  ! Density gradient
   real(kind=8)::err_grad_u=-1.0  ! Velocity gradient
@@ -273,6 +293,7 @@ subroutine m_read_params(pst)
 #endif
 #if NENER>0
   real(kind=8),dimension(1:NENER)::err_grad_prad=-1.0
+  real(kind=8),dimension(1:NENER)::floor_prad=1d-10
 #endif
 #if NVAR>5+NENER
   real(kind=8),dimension(1:NVAR-5-NENER)::err_grad_var=-1.0
@@ -381,6 +402,11 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_u_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_v_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
+#endif
+#ifdef CR
+  real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
+  real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
 #endif
 
   ! Cooling parameters
@@ -563,8 +589,8 @@ subroutine m_read_params(pst)
   ! Namelist definitions
   !--------------------------------------------------
   ! Global run parameter
-  namelist/run_params/cosmo,pic,poisson,hydro,rt,verbose,debug &
-       & ,nrestart,ncontrol,nstepmax,nsubcycle,nremap &
+  namelist/run_params/cosmo,pic,poisson,hydro,rt,cr &
+       & ,verbose,debug,nrestart,ncontrol,nstepmax,nsubcycle,nremap &
        & ,static_mesh,static_gas,geom,overload,nsuperoct &
        & ,clump_only
   ! Output parameters
@@ -616,6 +642,13 @@ subroutine m_read_params(pst)
        & ,rt_exp_region, rt_reg_group                          &
        & ,rt_n_region, rt_u_region, rt_v_region, rt_w_region   &
 #endif
+#ifdef CR
+       & ,cr_nregion, cr_region_type                             &
+       & ,cr_reg_x_center, cr_reg_y_center, cr_reg_z_center      &
+       & ,cr_reg_length_x, cr_reg_length_y, cr_reg_length_z      &
+       & ,cr_exp_region, cr_reg_group                            &
+       & ,cr_fx_region, cr_fy_region, cr_fz_region  &
+#endif
        & ,d_region,u_region,v_region,w_region,p_region
   ! Hydro solver parameters
   namelist/hydro_params/gamma,courant_factor,smallr,smallc &
@@ -630,7 +663,7 @@ subroutine m_read_params(pst)
        & ,floor_b2,floor_A,floor_B,floor_C &
 #endif
 #if NENER>0
-       & ,err_grad_prad &
+       & ,err_grad_prad, floor_prad &
 #endif
 #if NVAR>5+NENER
        & ,err_grad_var &
@@ -657,6 +690,9 @@ subroutine m_read_params(pst)
 #endif
 #ifdef RT
        & ,rt_n_bound,rt_u_bound,rt_v_bound,rt_w_bound &
+#endif
+#ifdef CR
+       & ,cr_fx_bound,cr_fy_bound,cr_fz_bound &
 #endif
        & ,d_bound,u_bound,v_bound,w_bound,p_bound
   ! Cooling / basic chemistry parameters
@@ -749,6 +785,9 @@ subroutine m_read_params(pst)
 #endif
 #ifdef RT
   write(*,'(" Using radiation solver with nrtgrp = ",I0)')nrtgrp
+#endif
+#ifdef CR
+  write(*,'(" Using 2-moment cosmic rays solver with ncrgrp = ",I2)')ncrgrp
 #endif
 
   ! Write information about git version
@@ -930,13 +969,34 @@ subroutine m_read_params(pst)
   endif
 #else
   if(rt)then
-     write(*,*)'You are using the rt solver but'
+     write(*,*)'You are trying to use the rt solver but'
      write(*,*)'the code was compiled with RT=0'
      write(*,*)'Please recompile with RT=1'
      call mdl_abort(s%mdl)
+  endif
+#endif
+#ifdef CR
+  if(.not. cr)then
+     write(*,*)'You are not using the cr solver but'
+     write(*,*)'the code was compiled with CR=1'
+     write(*,*)'This is just a warning and RAMSES will continue'
+  endif
+#else
+  if(cr)then
+     write(*,*)'You are trying to use the cr solver but'
+     write(*,*)'the code was compiled with CR=0'
+     write(*,*)'Please recompile with CR=1'
+     call mdl_abort(s%mdl)
   endif  
 #endif
-
+#ifndef MHD
+  if(cr)then
+     write(*,*)'You are trying to use the cr solver but'
+     write(*,*)'the code was compiled with MHD=0'
+     write(*,*)'Please recompile with MHD=1'
+     call mdl_abort(s%mdl)
+  endif  
+#endif
 
   !----------------------------
   ! Read hydro parameters 
@@ -1245,6 +1305,7 @@ subroutine m_read_params(pst)
   s%r%poisson=poisson
   s%r%hydro=hydro
   s%r%rt=rt
+  s%r%cr=cr
   s%r%part=part
   s%r%star=star
   s%r%sink=sink
@@ -1468,6 +1529,7 @@ subroutine m_read_params(pst)
 #endif
 #if NENER>0
   s%r%err_grad_prad=err_grad_prad
+  s%r%floor_prad=floor_prad
 #endif
 #if NVAR>5+NENER
   s%r%err_grad_var=err_grad_var
@@ -1537,6 +1599,21 @@ subroutine m_read_params(pst)
   s%r%rt_v_region=rt_v_region
   s%r%rt_w_region=rt_w_region
 #endif
+#ifdef CR
+  s%r%cr_nregion=cr_nregion
+  s%r%cr_region_type=cr_region_type
+  s%r%cr_reg_x_center=cr_reg_x_center
+  s%r%cr_reg_y_center=cr_reg_y_center
+  s%r%cr_reg_z_center=cr_reg_z_center
+  s%r%cr_reg_length_x=cr_reg_length_x
+  s%r%cr_reg_length_y=cr_reg_length_y
+  s%r%cr_reg_length_z=cr_reg_length_z
+  s%r%cr_exp_region=cr_exp_region
+  s%r%cr_reg_group=cr_reg_group
+  s%r%cr_fx_region=cr_fx_region
+  s%r%cr_fy_region=cr_fy_region
+  s%r%cr_fz_region=cr_fz_region
+#endif
 
   s%r%periodic=periodic
   s%r%nbound=nbound
@@ -1574,6 +1651,11 @@ subroutine m_read_params(pst)
   s%r%rt_u_bound=rt_u_bound
   s%r%rt_v_bound=rt_v_bound
   s%r%rt_w_bound=rt_w_bound
+#endif
+#ifdef CR
+  s%r%cr_fx_bound=cr_fx_bound
+  s%r%cr_fy_bound=cr_fy_bound
+  s%r%cr_fz_bound=cr_fz_bound
 #endif
 
   s%r%cooling=cooling
@@ -1748,6 +1830,9 @@ subroutine m_read_params(pst)
 
   ! Read RT parameters from namelist
   if(rt)call m_read_rt_params(pst)
+
+  ! Read CR parameters from namelist
+  if(cr)call m_read_cr_params(pst)
 
   ! Broadcast parameters to all CPUs.
   call m_broadcast_params(pst)

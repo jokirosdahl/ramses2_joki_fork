@@ -287,7 +287,7 @@ end subroutine r_output_frame
 !=======================================================================
 subroutine output_frame(s,ind_proj,ind_var,map_size,map)
   use amr_parameters, only:ndim, nvector, twotondim
-  use hydro_parameters, only: nvar
+  use hydro_parameters, only: nvar, nener, ie
   use rt_parameters, only: nrtgrp
   use ramses_commons, only: ramses_t
   implicit none
@@ -324,7 +324,9 @@ subroutine output_frame(s,ind_proj,ind_var,map_size,map)
   logical::perspective
   character(len=6)::shader
   character(len=10)::method
-
+#if NENER>0
+  integer::irad
+#endif
   associate(r=>s%r,g=>s%g,m=>s%m)
 
   if(r%levelmax_frame==0)then
@@ -608,6 +610,11 @@ subroutine output_frame(s,ind_proj,ind_var,map_size,map)
                     do idim=1,3
                        ekk=ekk+0.5d0*m%uold(ind,idim+1,igrid)**2/max(dble(m%uold(ind,1,igrid)),r%smallr)
                     enddo
+#if NENER>0
+                    do irad=1,nener
+                      ekk = ekk+m%uold(ind,5+irad,igrid)
+                    enddo
+#endif
                     temp=(r%gamma-1d0)*(m%uold(ind,5,igrid)-ekk)
                     temp=max(temp/max(dble(m%uold(ind,1,igrid)),r%smallr),r%smallc**2)*scale_T2
                     uvar = temp

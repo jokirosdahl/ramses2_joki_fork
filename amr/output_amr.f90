@@ -13,6 +13,7 @@ subroutine m_dump_all(pst,write_bkp_file)
   use mdl_module, only: mdl_mkdir, mdl_wtime
   use cooling_module, only: output_cool
   use output_rt_module, only: r_output_rt,file_descriptor_rt,output_rtinfo
+  use output_cr_module, only: r_output_cr,file_descriptor_cr,output_crinfo
   use turb_commons, only: write_turb_fields
   implicit none
   type(pst_t)::pst
@@ -119,6 +120,12 @@ subroutine m_dump_all(pst,write_bkp_file)
         filename=TRIM(filedir)//'rt_info.txt'
         call output_rtinfo(r,g,filename)
      end if
+     if(r%cr)then
+        filename=TRIM(filedir)//'cr_header.txt'
+        call file_descriptor_cr(r,filename)
+        filename=TRIM(filedir)//'cr_info.txt'
+        call output_crinfo(r,g,filename)
+     end if
      if(r%poisson)then
         filename=TRIM(filedir)//'grav_header.txt'
         call file_descriptor_poisson(r,filename,write_bkp_file)
@@ -197,6 +204,14 @@ subroutine m_dump_all(pst,write_bkp_file)
         input_array=transfer(filename,input_array)
         if(r%verbose)write(*,*)'Writing RT files'
         call r_output_rt(pst,input_array,flen/4,dummy,0)
+     end if
+
+     ! Output CR data
+     if(r%cr)then
+        filename=TRIM(filedir)//'cr.'
+        input_array=transfer(filename,input_array)
+        if(r%verbose)write(*,*)'Writing CR files'
+        call r_output_cr(pst,input_array,flen/4,dummy,0)
      end if
 
      ttend = mdl_wtime(mdl)

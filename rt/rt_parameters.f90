@@ -4,7 +4,7 @@ module rt_parameters
 #ifdef NRTGRP
   integer,parameter::nrtgrp=NRTGRP             ! # of photon groups (set in Makefile)
 #else
-  integer,parameter::nrtgrp=1
+  integer,parameter::nrtgrp=0
 #endif
   integer,parameter::nrtvar=nrtgrp*(1+ndim)    ! # of RT variables (photon density and flux)
 
