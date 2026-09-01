@@ -19,6 +19,7 @@ subroutine m_read_rt_params(pst)
   implicit none
   type(pst_t)::pst
 
+#ifdef RT
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------
@@ -330,6 +331,7 @@ subroutine m_read_rt_params(pst)
 
 212 format (' Using a level-variable speed of light, with f_c= '20(1pe12.3))
 213 format (' Using a uniform reduced speed of light fraction of f_c='1pe10.3)
+#endif
 end subroutine m_read_rt_params
 !#########################################################################
 !#########################################################################
