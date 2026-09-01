@@ -302,6 +302,7 @@ subroutine load_balance(s,ilevel)
   use amr_parameters, only: ndim, twotondim, nhilbert
   use oct_commons, only: oct
   use ramses_commons, only: ramses_t
+  use cr_parameters, only: ncruvar
   use hilbert
   use hash
   use cache_commons
