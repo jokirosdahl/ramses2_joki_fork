@@ -191,11 +191,10 @@ subroutine pack_fetch_emissivity(mesh,igrid,msg_size,msg_array)
   integer,dimension(1:msg_size),optional::msg_array
   type(msg_rt_emissivity_realdp)::msg
 
-#ifdef RT  
+#ifdef RT
   msg%realdp(:,:)=mesh%emissivity(:,:,igrid)
-#endif
-
   msg_array=transfer(msg,msg_array)
+#endif
 
 end subroutine pack_fetch_emissivity
 !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -251,9 +250,8 @@ subroutine pack_flush_emissivity(mesh,igrid,msg_size,msg_array)
 
 #ifdef RT
   msg%realdp(:,:)=mesh%emissivity(:,:,igrid)
-#endif
-
   msg_array=transfer(msg,msg_array)
+#endif
 
 end subroutine pack_flush_emissivity
 !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
