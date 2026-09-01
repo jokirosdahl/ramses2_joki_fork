@@ -72,7 +72,7 @@ if log:
 ax1.set_xlabel('t [Gyr]')
 ax1.set_ylabel('SFR [Msol/yr]')
 
-cum_mass=np.cumsum(sfr)*(bins[1]-bins[0])*1e9
+cum_mass=np.cumsum(sfr[::-1])[::-1]*(bins[1]-bins[0])*1e9
 time_bins=0.5*(bins[:-1]+bins[1:])
 
 ax2 = ax1.twinx()
