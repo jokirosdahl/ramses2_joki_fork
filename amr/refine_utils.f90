@@ -770,6 +770,9 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
   use amr_parameters, only: ndim, nhilbert, twotondim, twondim, nvector
   use hydro_parameters, only: nvar
   use ramses_commons, only: ramses_t
+#ifdef CRS
+  use cr_parameters, only: ncruvar
+#endif
   use nbors_utils
   use cache_commons
   use hilbert
