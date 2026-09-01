@@ -64,11 +64,22 @@ if np.max(time) < bin_size:
 n_bin=int(np.max(time)/bin_size)
 bins=np.linspace(0,np.max(time),n_bin)
 unit_m=i.unit_d*i.unit_l**3/2e33/(bins[1]-bins[0])/1e9
-plt.hist(time,weights=s.mass*unit_m,bins=bins)
+
+fig, ax1 = plt.subplots()
+sfr, _, _ = ax1.hist(time,weights=s.mass*unit_m,bins=bins)
 if log:
-    plt.yscale("log")
-plt.xlabel('t [Gyr]')
-plt.ylabel('SFR [Msol/yr]')
+    ax1.set_yscale("log")
+ax1.set_xlabel('t [Gyr]')
+ax1.set_ylabel('SFR [Msol/yr]')
+
+cum_mass=np.cumsum(sfr)*(bins[1]-bins[0])*1e9
+time_bins=0.5*(bins[:-1]+bins[1:])
+
+ax2 = ax1.twinx()
+ax2.plot(time_bins,cum_mass,color='r')
+ax2.set_ylabel('Cumulative Mass [Msol]')
+if log:
+    ax2.set_yscale("log")
 
 if args.out:
     plt.savefig(args.out)
