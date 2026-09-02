@@ -53,10 +53,10 @@ init_part.o: amr_commons.o amr_parameters.o mdl.o mdl_commons.o pm_commons.o pm_
 init_refine_adaptive.o: cr_upload.o flag_utils.o init_part.o input_hydro_grafic.o input_part.o input_part_zoom.o ramses_commons.o refine_utils.o rt_upload.o upload.o
 init_refine_basegrid.o: amr_parameters.o flag_utils.o hash.o hilbert.o input_hydro_grafic.o mdl.o mdl_commons.o ramses_commons.o
 init_refine_ramses.o: amr_parameters.o hash.o hilbert.o hydro_parameters.o init_refine_basegrid.o input_hydro_condinit.o load_balance.o mdl.o mdl_commons.o output_amr.o ramses_commons.o read_params.o
-init_refine_restart.o: amr_parameters.o hash.o hilbert.o hydro_parameters.o init_refine_basegrid.o load_balance.o mdl.o mdl_commons.o output_amr.o ramses_commons.o read_params.o rt_parameters.o
+init_refine_restart.o: amr_parameters.o cr_parameters.o hash.o hilbert.o hydro_parameters.o init_refine_basegrid.o load_balance.o mdl.o mdl_commons.o output_amr.o ramses_commons.o read_params.o rt_parameters.o
 init_rt.o: amr_commons.o mdl.o mdl_commons.o ramses_commons.o
 init_time.o: amr_commons.o amr_parameters.o cooling_module.o coolrates_module.o cr_init_flow_fine.o gadgetreadfile.o init_cooling.o init_neq_chem.o mdl.o mdl_commons.o ramses_commons.o rt_spectra.o
-init_xion.o: amr_commons.o amr_parameters.o constants.o cooling_module.o coolrates_module.o hydro_parameters.o mdl.o mdl_commons.o ramses_commons.o upload.o
+init_xion.o: amr_commons.o amr_parameters.o constants.o cooling_module.o coolrates_module.o hydro_parameters.o mdl.o mdl_commons.o neq_cooling_module.o ramses_commons.o rt_parameters.o upload.o
 input_hydro_condinit.o: amr_commons.o amr_parameters.o hydro_parameters.o mdl.o mdl_commons.o ramses_commons.o
 input_hydro_gadget.o: amr_parameters.o boundaries.o cache.o cache_commons.o godunov_fine.o hydro_parameters.o input_hydro_condinit.o marshal.o mdl.o mdl_commons.o nbors_utils.o ramses_commons.o
 input_hydro_grafic.o: amr_commons.o amr_parameters.o hydro_parameters.o mdl.o mdl_commons.o ramses_commons.o
@@ -99,7 +99,7 @@ ramses_commons.o: amr_commons.o amr_parameters.o clfind_commons.o cooling_module
 read_cr_params.o: amr_parameters.o constants.o cr_parameters.o hydro_parameters.o mdl.o movie.o ramses_commons.o
 read_params.o: amr_commons.o amr_parameters.o constants.o cr_parameters.o hydro_parameters.o mdl.o mdl_commons.o movie.o ramses_commons.o read_cr_params.o read_rt_params.o rt_parameters.o
 read_rt_params.o: amr_parameters.o constants.o hydro_parameters.o mdl.o movie.o ramses_commons.o rt_parameters.o
-refine_utils.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.o call_back.o cr_parameters.o hash.o hilbert.o hydro_parameters.o init_refine_basegrid.o load_balance.o marshal.o mdl.o mdl_commons.o nbors_utils.o oct_commons.o ramses_commons.o rt_parameters.o
+refine_utils.o: amr_commons.o amr_parameters.o boundaries.o cache.o cache_commons.o call_back.o cr_parameters.o hash.o hilbert.o hydro_parameters.o init_refine_basegrid.o init_xion.o load_balance.o marshal.o mdl.o mdl_commons.o nbors_utils.o oct_commons.o ramses_commons.o rt_parameters.o
 rho_ana.o: amr_parameters.o
 rho_fine.o: amr_commons.o amr_parameters.o cache.o cache_commons.o hilbert.o mdl.o mdl_commons.o nbors_utils.o pm_commons.o pm_parameters.o ramses_commons.o
 rt_commons.o: amr_parameters.o oct_commons.o rt_parameters.o
@@ -218,10 +218,30 @@ turb_update.o: gpu_manager.o
 upload.o: gpu_runner.o
 endif
 
-ifeq ($(CR),1)
+ifeq ($(DO_CR),1)
 cr_godunov_fine.o: cr_flux_module.o
 cr_source_terms.o: cr_flux_module.o
 refine_utils.o: cr_parameters.o
+endif
+
+ifeq ($(DO_RTZ),0)
+cooling_fine.o: neq_cooling_module.o
+init_neq_chem.o: neq_cooling_module.o
+init_xion.o: neq_cooling_module.o
+rt_init_flow_fine.o: neq_cooling_module.o
+endif
+
+ifeq ($(DO_RTZ),1)
+cooling_fine.o: rtz_cooling_module.o rtz_module.o
+init_neq_chem.o: charge_exchange_module.o cosmic_ray_ionization_module.o photoionization_UVB_module.o rtz_cooling_module.o rtz_coolrates_module.o
+init_xion.o: rtz_module.o
+input_hydro_condinit.o: rtz_module.o
+output_rt.o: rtz_module.o
+read_params.o: rtz_module.o
+read_rt_params.o: cross_sections_module.o rt_spectra.o
+rt_init_flow_fine.o: rtz_cooling_module.o
+rt_spectra.o: constants.o rt_parameters.o rtz_module.o
+task_manager.o: rtz_module.o
 endif
 
 ifeq ($(GRAV),1)
@@ -244,26 +264,5 @@ endif
 ifeq ($(MHD),1)
 godunov_utils.o: amr_commons.o amr_parameters.o hydro_parameters.o
 umuscl.o: amr_commons.o amr_parameters.o hydro_parameters.o
-endif
-
-ifeq ($(RTZ),0)
-cooling_fine.o: neq_cooling_module.o
-init_neq_chem.o: neq_cooling_module.o
-init_xion.o: amr_commons.o amr_parameters.o hydro_parameters.o neq_cooling_module.o ramses_commons.o rt_parameters.o
-refine_utils.o: init_xion.o
-rt_init_flow_fine.o: neq_cooling_module.o
-endif
-
-ifeq ($(RTZ),1)
-cooling_fine.o: rtz_cooling_module.o rtz_module.o
-init_neq_chem.o: charge_exchange_module.o cosmic_ray_ionization_module.o photoionization_UVB_module.o rtz_cooling_module.o rtz_coolrates_module.o
-init_xion.o: rtz_module.o
-input_hydro_condinit.o: rtz_module.o
-output_rt.o: rtz_module.o
-read_params.o: rtz_module.o
-read_rt_params.o: cross_sections_module.o rt_spectra.o
-rt_init_flow_fine.o: rtz_cooling_module.o
-rt_spectra.o: constants.o rt_parameters.o rtz_module.o
-task_manager.o: rtz_module.o
 endif
 

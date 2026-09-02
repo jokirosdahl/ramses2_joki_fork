@@ -33,13 +33,13 @@ BASENAME_OVERRIDE = {
 
 # Fortran preprocessor macro -> Makefile variable (guard emitted as ifeq ($(VAR),1))
 MACRO_TO_MAKE = {
-    'HYDRO': 'HYDRO',
-    'MHD':   'MHD',
-    'GRAV':  'GRAV',
-    'RT':    'RT',
-    'RTZ':   'RTZ',
-    'TURB':  'TURB',
-    'CR':    'CR',
+    'HYDRO':  'HYDRO',
+    'MHD':    'MHD',
+    'GRAV':   'GRAV',
+    'DO_RT':  'DO_RT',
+    'DO_RTZ': 'DO_RTZ',
+    'TURB':   'TURB',
+    'DO_CR':  'DO_CR',
 }
 
 # Macros whose guard is a full literal ifeq string (not the $(VAR),1 pattern)

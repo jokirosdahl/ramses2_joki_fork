@@ -295,7 +295,7 @@ MODOBJ = amr_parameters.o hydro_parameters.o rt_parameters.o cr_parameters.o oct
 	 collisional_ionization_module.o recombination_module.o \
 	 cosmic_ray_ionization_module.o photoionization_UVB_module.o dust_recombination_module.o \
 	 molecules_module.o charge_exchange_module.o rtz_module.o
-ifeq ($(RTZ),1)
+ifeq ($(DO_RTZ),1)
    MODOBJ += rtz_coolrates_module.o rtz_cooling_module.o
 else
    MODOBJ += neq_cooling_module.o
