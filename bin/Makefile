@@ -9,9 +9,9 @@ MPI = 0
 HYDRO = 1
 GRAV = 0
 MHD = 0
-RT = 0
-CR = 0
-RTZ = 0
+DO_RT = 0
+DO_CR = 0
+DO_RTZ = 0
 INIT =
 UNITS =
 NENER = 0
@@ -51,15 +51,15 @@ EXTRA_DEFINES =
 #############################################################################
 # Compute NVAR
 NHYDRO = 5
-ifeq ($(RTZ),1)
+ifeq ($(DO_RTZ),1)
 NION := $(N_CARBON_IONS)+$(N_NITROGEN_IONS)+$(N_OXYGEN_IONS)
 NION := $(NION)+$(N_NEON_IONS)+$(N_MAGNESIUM_IONS)+$(N_SILICON_IONS)
 NION := $(NION)+$(N_SULFUR_IONS)+$(N_IRON_IONS)
 NION := $(NION)+$(N_HYDROGEN_IONS)+$(N_H2)+$(N_HELIUM_IONS)
 endif
-ifeq ($(CR),1)
+ifeq ($(DO_CR),1)
    NENER := $(NENER)+$(NCRGRP)
-   DEFINES += -DMHD -DCR -DNCRGRP=$(NCRGRP)
+   DEFINES += -DMHD -DDO_CR -DNCRGRP=$(NCRGRP)
 endif
 NVAR := $(NHYDRO)+$(NENER)+$(NPSCAL)+$(NMETAL)+$(NION)
 #############################################################################
@@ -73,7 +73,7 @@ DEFINES += -DNDIM=$(NDIM) -DNVAR=$(NVAR)
 DEFINES += $(EXTRA_DEFINES)
 #############################################################################
 # RTZ options
-ifeq ($(RTZ),1)
+ifeq ($(DO_RTZ),1)
 DEFINES += -DN_HYDROGEN_IONS=$(N_HYDROGEN_IONS)
 DEFINES += -DN_HELIUM_IONS=$(N_HELIUM_IONS)
 DEFINES += -DN_CARBON_IONS=$(N_CARBON_IONS)
@@ -109,11 +109,11 @@ endif
 ifneq ($(NENER),0)
    DEFINES += -DNENER=$(NENER)
 endif
-ifeq ($(RT),1)
-   DEFINES += -DRT -DNRTGRP=$(NRTGRP)
+ifeq ($(DO_RT),1)
+   DEFINES += -DDO_RT -DNRTGRP=$(NRTGRP)
 endif
-ifeq ($(RTZ),1)
-   DEFINES += -DRTZ
+ifeq ($(DO_RTZ),1)
+   DEFINES += -DDO_RTZ
 endif
 ifneq ($(NVECTOR),32)
    DEFINES += -DNVECTOR=$(NVECTOR)

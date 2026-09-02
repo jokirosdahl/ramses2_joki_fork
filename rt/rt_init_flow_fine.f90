@@ -61,7 +61,7 @@ contains
 recursive subroutine r_rt_neq_updates(pst, nstep_coarse, input_size)
   use mdl_module
   use coolrates_module, only: update_rt_c, update_coolrates_tables
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_cooling_module, only: rtz_updateRTGroups_CoolConstants
 #else
   use neq_cooling_module, only: updateRTGroups_CoolConstants, update_metal_cooling
@@ -98,7 +98,7 @@ recursive subroutine r_rt_neq_updates(pst, nstep_coarse, input_size)
 
      ! Update radiation heating and cooling constants
      if(r%cosmo.or.(r%rt))then
-#ifdef RTZ
+#ifdef DO_RTZ
         call rtz_updateRTGroups_CoolConstants(r, s%tables)
 #else
         call updateRTGroups_CoolConstants(r, s%tables)
@@ -106,7 +106,7 @@ recursive subroutine r_rt_neq_updates(pst, nstep_coarse, input_size)
      endif
 
      ! Update UV background constants for metal cooling
-#ifndef RTZ
+#ifndef DO_RTZ
      if(r%neq_chem .and. r%cosmo) &
         call update_metal_cooling(s%tables, dble(g%aexp))
 #endif

@@ -65,7 +65,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   use amr_commons, only: run_t, global_t, mesh_t
   use cooling_module, only: cooling_t, solve_cooling, T2_min_fix
   use coolrates_module, only: neq_cooling_t
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_cooling_module, only: rtz_solve_cooling
   use rtz_module, only: n_elements, elements
 #else
@@ -89,12 +89,12 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   real(kind=8),dimension(1:nvector)::T2min,Zsolar,boost
   real(kind=8)::factor1, factor2, factor3
   !  logical,dimension(1:nvector)::cooling_on=.true.
-#ifdef RTZ
+#ifdef DO_RTZ
   real(kind=8),dimension(1:n_elements, 1:n_elements, 1:nvector):: xion
 #else
   real(kind=8),dimension(nion, 1:nvector):: xion
 #endif
-#ifdef RT
+#ifdef DO_RT
   integer::ig,iNp
   real(kind=8),dimension(1:ndim)::Fpnew
   real(kind=8),dimension(nrtgrp, 1:nvector):: Np, dNpdt=0d0
@@ -102,7 +102,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
   real(kind=8),dimension(ndim, 1:nvector):: p_gas
   real(kind=8)::scale_Np,scale_Fp,Npnew
 #endif
-#ifdef RTZ
+#ifdef DO_RTZ
   real(kind=8), dimension(n_elements, 1:nvector):: nElement
   real(kind=8):: dx_SS_H2
 #endif
@@ -115,7 +115,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
 
   ! Conversion factor from user units to cgs units
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-#ifdef RT
+#ifdef DO_RT
   call rt_units(r,g,scale_Np,scale_Fp)
 #endif
   ! Density for isothermal/polytropic EOS in H/cc
@@ -224,7 +224,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         endif
 
         ! Compute ionization fraction
-#ifdef RTZ
+#ifdef DO_RTZ
         counter = 0
         e_counter = 0
         do ii=1,n_elements ! loop over elements
@@ -265,7 +265,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
 #endif
 
         ! Get photon densities and flux magnitudes
-#ifdef RT
+#ifdef DO_RT
         do ig=1,nrtgrp
            iNp=1+(ig-1)*(ndim+1)
            do i=1,nleaf
@@ -276,7 +276,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
 #endif
 
         ! Compute gas momentum for radiation force
-#ifdef RT
+#ifdef DO_RT
         do i=1,nleaf
            p_gas(1:ndim,i) = m%uold(ind,2:1+ndim,ind_leaf(i)) * scale_d * scale_v
         end do
@@ -325,7 +325,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         ! Compute cooling time step in second
         dtcool = g%dtnew(ilevel)*scale_t
 
-#ifdef RT
+#ifdef DO_RT
         ! Isotropic emission (star and sink particles) in cgs units
         do ig=1,nrtgrp
            do i=1,nleaf
@@ -356,7 +356,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         else if(r%cooling_ism)then
            ! Use cooling from cooling_module_frig described in Audit & Hennebelle 2005
            call solve_cooling_ism(nH,T2,dtcool,delta_T2,r%gamma,r%mu_mol,nleaf)
-#ifdef RTZ
+#ifdef DO_RTZ
         else if(r%neq_chem.and.r%rtz_cooling) then
            ! If both non-equilibrium chemistry and rtz_cooling are turned on
            ! we use a detailed model for the chemistry
@@ -383,14 +383,14 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
            endif
 
            call rtz_solve_cooling(r, tables, T2, g%aexp, xion, nElement, &
-#ifdef RT
+#ifdef DO_RT
                 & Np, Fp, p_gas, dNpdt, dFpdt, ilevel, &
 #endif
                 & dtcool, nleaf, dx_SS_H2)   
 #else        
         else if(r%neq_chem)then
            call neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
-#ifdef RT
+#ifdef DO_RT
                 & Np, Fp, p_gas, dNpdt, dFpdt, ilevel, &
 #endif
                 & dtcool, nleaf)
@@ -403,7 +403,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         end do
 
         ! Update fluid momentum and kinetic energy due to radiation force
-#ifdef RT
+#ifdef DO_RT
         do i=1,nleaf
            m%uold(ind,2:1+ndim,ind_leaf(i)) = p_gas(1:ndim,i) / scale_d / scale_v
         end do
@@ -444,7 +444,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         endif
 
         ! Update ionization fraction
-#ifdef RTZ
+#ifdef DO_RTZ
         counter = 0
         do ii=1,n_elements ! loop over elements
            if (elements(ii)%atomic_number.gt.0) then
@@ -499,7 +499,7 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
         endif
 
         ! Update photon densities and flux magnitudes
-#ifdef RT
+#ifdef DO_RT
         do ig=1,nrtgrp
            iNp=1+(ig-1)*(ndim+1)
            do i=1,nleaf

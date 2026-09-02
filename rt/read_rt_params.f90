@@ -12,14 +12,14 @@ subroutine m_read_rt_params(pst)
   use ramses_commons, only: pst_t
   use mdl_module
   use movie_module, only: set_movie_vars
-#ifdef RTZ
+#ifdef DO_RTZ
   use SED_module, only: initialize_cross_sections_from_blackbody, initialize_group_energies_from_blackbody
   use cross_sections_module, only: initialize_cross_sections
 #endif
   implicit none
   type(pst_t)::pst
 
-#ifdef RT
+#ifdef DO_RT
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------
@@ -80,7 +80,7 @@ subroutine m_read_rt_params(pst)
 
   ! Group props: avg and energy weigthed photoionization c-section (cm2), avg. energy (ev)
   ! Indices nrtgrp, nion stand for photon group vs species (e.g. 1=H, 2=He).
-#ifdef RTZ
+#ifdef DO_RTZ
   real(kind=8),dimension(nrtgrp,1:27,1:27)::group_csn=0                   !    Cross sections (cm2)
   real(kind=8),dimension(nrtgrp,1:27,1:27)::group_cse=0                   !    Cross sections (cm2)
 #else
@@ -255,7 +255,7 @@ subroutine m_read_rt_params(pst)
   if(.not. rt_vsla) write(*,213) rt_c_fraction(s%r%levelmin)
 
 #if NRTGRP>0
-#ifdef RTZ
+#ifdef DO_RTZ
   ! in the case of RTZ, perform initialization after reading in group
   ! energies
 

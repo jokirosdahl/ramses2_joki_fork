@@ -85,7 +85,7 @@ subroutine cr_upload_fine(s,ilevel)
      do ivar=1,ncruvar
         do ind=1,twotondim
            if(m%grid(ioct)%refined(ind))then
-#ifdef CR
+#ifdef DO_CR
               m%cruold(ind,ivar,ioct)=0.0
 #endif
            endif
@@ -109,12 +109,12 @@ subroutine cr_upload_fine(s,ilevel)
      do ivar=1,ncruvar
         average=0.0d0
         do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
            average=average+m%cruold(ind,ivar,ioct)
 #endif
         end do
         ! Scatter result to parent cell
-#ifdef CR
+#ifdef DO_CR
         m%cruold(icell,ivar,igrid)=average/dble(twotondim)
 #endif
      end do
@@ -145,7 +145,7 @@ subroutine init_flush_upload_cr(mesh,igrid,hash_key)
 
   do ivar=1,ncruvar
      do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
         mesh%cruold(ind,ivar,igrid)=0.0d0
 #endif
      end do
@@ -171,7 +171,7 @@ subroutine pack_flush_upload_cr(mesh,igrid,msg_size,msg_array)
 
   do ivar=1,ncruvar
      do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
 #endif
      end do
@@ -204,7 +204,7 @@ subroutine unpack_flush_upload_cr(mesh,igrid,msg_size,msg_array,hash_key)
 
   do ivar=1,ncruvar
      do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
         if(mesh%grid(igrid)%refined(ind))then
            mesh%cruold(ind,ivar,igrid)=mesh%cruold(ind,ivar,igrid)+msg%realdp_cr(ind,ivar)
         endif
@@ -250,7 +250,7 @@ subroutine pack_fetch_cr(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-#ifdef CR
+#ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -300,7 +300,7 @@ subroutine unpack_fetch_cr(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef CR
+#ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)

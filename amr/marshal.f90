@@ -55,7 +55,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
   end do
 #endif
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         msg%realdp_rt(ind,ivar)=mesh%rtuold(ind,ivar,igrid)
@@ -63,7 +63,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
   end do
 #endif
   
-#ifdef CR
+#ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -134,7 +134,7 @@ subroutine unpack_fetch_refine(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtuold(ind,ivar,igrid)=msg%realdp_rt(ind,ivar)
@@ -142,7 +142,7 @@ subroutine unpack_fetch_refine(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef CR
+#ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)

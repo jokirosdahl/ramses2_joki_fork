@@ -63,7 +63,7 @@ subroutine init_xion(r,g,m,tables,ilevel)
   use hydro_parameters, only: nener, nion
   use amr_commons, only:run_t,global_t,mesh_t
   use cooling_module, only:cooling_t
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: elements, n_elements
 #else
   use neq_cooling_module, only: cmp_equilibrium_abundances
@@ -85,7 +85,7 @@ subroutine init_xion(r,g,m,tables,ilevel)
 #if NENER>0
   integer::irad
 #endif
-#ifdef RTZ
+#ifdef DO_RTZ
   integer::counter, iE, iI
 #endif
 
@@ -177,7 +177,7 @@ subroutine init_xion(r,g,m,tables,ilevel)
         end do
 
         ! Do the main computation of equilibrium abundances
-#ifdef RTZ
+#ifdef DO_RTZ
         ! In the case of RTZ, we set everything to neutral to start
         do i=1,nleaf ! loop over cells
           counter = 1
@@ -240,7 +240,7 @@ subroutine calc_equilibrium_xion(s, uold, &
 #ifdef MHD
      & bold, &
 #endif
-#ifdef RT
+#ifdef DO_RT
      & rtuold, &
 #endif
      & ilevel, xion)
@@ -264,7 +264,7 @@ subroutine calc_equilibrium_xion(s, uold, &
 #ifdef MHD
   real(kind=8),dimension(1:6)::bold
 #endif
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:nrtvar)::rtuold
 #endif
   integer::ilevel
@@ -282,14 +282,14 @@ subroutine calc_equilibrium_xion(s, uold, &
 #ifdef HYDRO
   ! Conversion factor from user units to cgs units
   call units(s%r,s%g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-#ifdef RT
+#ifdef DO_RT
   call rt_units(s%r,s%g,scale_Np,scale_Fp)
 #endif
   ! Calculate photoionization rates:
   phI_rates(:)=0.0
   do ip=1, nrtgrp
      iNp=1+(ip-1)*(ndim+1)
-#ifdef RT
+#ifdef DO_RT
      do iI=1,nion
         phI_rates(iI) = phI_rates(iI) &
                       + rtuold(iNp) &

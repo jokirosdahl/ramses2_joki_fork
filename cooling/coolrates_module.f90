@@ -41,9 +41,9 @@ MODULE coolrates_module
 
      ! UV background heating and ionization rates
      real(kind=8),dimension(nion,2) :: UVrates
-#ifdef RT
+#ifdef DO_RT
      ! Contribution of each group to photo-ionization rates
-#ifdef RTZ
+#ifdef DO_RTZ
      real(kind=8),dimension(nrtgrp,1:27,1:27,MAXLEVEL) :: signc
 
      ! Contribution of each group to photo-heating rates

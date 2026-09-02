@@ -96,7 +96,7 @@ subroutine rt_flag(s,ilevel)
               icelld=icelln(2*idim  )
               igridg=igridn(2*idim-1)
               igridd=igridn(2*idim  )
-#ifdef RT
+#ifdef DO_RT
               uug(ivar)=m%rtuold(icellg,ivar,igridg)*c_factor(2*idim-1)
               uum(ivar)=m%rtuold(ind,ivar,igrid)*g%rt_c(ilevel)
               uud(ivar)=m%rtuold(icelld,ivar,igridd)*c_factor(2*idim)
@@ -148,7 +148,7 @@ subroutine pack_fetch_rt(mesh,igrid,msg_size,msg_array)
      endif
   end do
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         msg%realdp_rt(ind,ivar)=mesh%rtuold(ind,ivar,igrid)
@@ -189,7 +189,7 @@ subroutine unpack_fetch_rt(mesh,igrid,msg_size,msg_array,hash_key)
      endif
   end do
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtuold(ind,ivar,igrid)=msg%realdp_rt(ind,ivar)

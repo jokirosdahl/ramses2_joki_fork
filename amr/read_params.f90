@@ -13,7 +13,7 @@ subroutine m_read_params(pst)
   use rt_params_module
   use cr_params_module
   use constants
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: elements, n_elements !, initialize_elements
 #endif
   implicit none
@@ -235,7 +235,7 @@ subroutine m_read_params(pst)
 #endif
 
   ! Initial condition rt variables
-#ifdef RT
+#ifdef DO_RT
   integer::rt_nregion=0
   character(LEN=10),dimension(1:MAXREGION)::rt_region_type='square'
   real(kind=8),dimension(1:MAXREGION)::rt_reg_x_center=0.
@@ -253,7 +253,7 @@ subroutine m_read_params(pst)
 #endif
 
   ! Initial condition CR variables
-#ifdef CR
+#ifdef DO_CR
   integer::cr_nregion=0
   character(LEN=10),dimension(1:MAXREGION)::cr_region_type='square'
   real(kind=8),dimension(1:MAXREGION)::cr_reg_x_center=0.
@@ -301,7 +301,7 @@ subroutine m_read_params(pst)
   real(kind=8),dimension(1:MAXLEVEL)::jeans_refine=-1.0
 
   ! Refinement parameters for rt
-#ifdef RT
+#ifdef DO_RT
   real(kind=8)::rt_err_grad_cn(nrtgrp)=-1 ! Photon flux gradient for refinement
   real(kind=8)::rt_floor_cn(nrtgrp)=1d-10 ! Photon flux floor for refinement
   real(kind=8)::rt_refine_aexp=-1.0      ! Start expansion factor for RT refinements
@@ -397,13 +397,13 @@ subroutine m_read_params(pst)
 #if NVAR>5+NENER
   real(kind=8),dimension(1:MAXBOUND,1:NVAR-5-NENER)::var_bound=0
 #endif
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_n_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_u_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_v_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
 #endif
-#ifdef CR
+#ifdef DO_CR
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fx_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fy_bound=0.0d0
   real(kind=8),dimension(1:MAXBOUND,1:ncrgrp)::cr_fz_bound=0.0d0
@@ -430,7 +430,7 @@ subroutine m_read_params(pst)
   real(kind=8) ::X_H=0.7600d0     !                Hydrogen mass fraction
   real(kind=8) ::Y_He=0.2400d0    !                  Helium mass fraction
   integer::iIons,ixHI=0,ixHII=0,ixHeII=0,ixHeIII=0 !   Ionization indices
-#ifdef RTZ
+#ifdef DO_RTZ
   integer::element_first_idx(1:27)       !  Start idx of elements in uold
   integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold 
   real(kind=8),dimension(1:27,1:27)::ionEvs=0.     !  Ionization energies
@@ -581,7 +581,7 @@ subroutine m_read_params(pst)
   real(kind=8) :: turb_rms=1.0        ! rms turbulent forcing acceleration
   real(kind=8) :: turb_min_rho=1d-50  ! Minimum density for turbulence
   
-#ifdef RTZ
+#ifdef DO_RTZ
   integer::i_Element, i_Iion
 #endif
 
@@ -635,14 +635,14 @@ subroutine m_read_params(pst)
 #ifdef MHD
        & ,B_region,C_region,A_ave,B_ave,C_ave &
 #endif
-#ifdef RT
+#ifdef DO_RT
        & ,rt_nregion, rt_region_type                           &
        & ,rt_reg_x_center, rt_reg_y_center, rt_reg_z_center    &
        & ,rt_reg_length_x, rt_reg_length_y, rt_reg_length_z    &
        & ,rt_exp_region, rt_reg_group                          &
        & ,rt_n_region, rt_u_region, rt_v_region, rt_w_region   &
 #endif
-#ifdef CR
+#ifdef DO_CR
        & ,cr_nregion, cr_region_type                             &
        & ,cr_reg_x_center, cr_reg_y_center, cr_reg_z_center      &
        & ,cr_reg_length_x, cr_reg_length_y, cr_reg_length_z      &
@@ -668,7 +668,7 @@ subroutine m_read_params(pst)
 #if NVAR>5+NENER
        & ,err_grad_var &
 #endif
-#ifdef RT
+#ifdef DO_RT
        & ,rt_err_grad_cn, rt_floor_cn, rt_refine_aexp &
 #endif
        & ,err_grad_xHI, err_grad_xHII, floor_xHI, floor_xHII &
@@ -688,10 +688,10 @@ subroutine m_read_params(pst)
 #if NVAR>5+NENER
        & ,var_bound &
 #endif
-#ifdef RT
+#ifdef DO_RT
        & ,rt_n_bound,rt_u_bound,rt_v_bound,rt_w_bound &
 #endif
-#ifdef CR
+#ifdef DO_CR
        & ,cr_fx_bound,cr_fy_bound,cr_fz_bound &
 #endif
        & ,d_bound,u_bound,v_bound,w_bound,p_bound
@@ -783,10 +783,10 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif
 #endif
-#ifdef RT
+#ifdef DO_RT
   write(*,'(" Using radiation solver with nrtgrp = ",I0)')nrtgrp
 #endif
-#ifdef CR
+#ifdef DO_CR
   write(*,'(" Using 2-moment cosmic rays solver with ncrgrp = ",I2)')ncrgrp
 #endif
 
@@ -961,7 +961,7 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif
 #endif
-#ifdef RT
+#ifdef DO_RT
   if(.not. rt)then
      write(*,*)'You are not using the rt solver but'
      write(*,*)'the code was compiled with RT=1'
@@ -975,7 +975,7 @@ subroutine m_read_params(pst)
      call mdl_abort(s%mdl)
   endif
 #endif
-#ifdef CR
+#ifdef DO_CR
   if(.not. cr)then
      write(*,*)'You are not using the cr solver but'
      write(*,*)'the code was compiled with CR=1'
@@ -1191,7 +1191,7 @@ subroutine m_read_params(pst)
   !----------------------------------------------------------------
   if(neq_chem) then
      iCount=0
-#ifdef RTZ
+#ifdef DO_RTZ
      do i_Element=1,n_elements ! loop over elements
         if (elements(i_Element)%atomic_number.gt.0) then 
            do i_Iion=1,elements(i_Element)%n_ions ! loop over ions
@@ -1248,7 +1248,7 @@ subroutine m_read_params(pst)
      ! Output indices for the user to check
      write(*,'(A39, I4)') 'The number of ionization fractions is:',iCount
      write(*,*) 'Their indices in U are:'
-#ifdef RTZ
+#ifdef DO_RTZ
      do i_Element=1,n_elements ! Loop over elements
         if (elements(i_Element)%atomic_number.gt.0) then 
            write(*,'(A10, I4)') 'i' // trim(elements(i_Element)%element_name) // '=', iIons-1+element_first_idx(i_Element)
@@ -1538,7 +1538,7 @@ subroutine m_read_params(pst)
   s%r%err_grad_xHII=err_grad_xHII
   s%r%floor_xHI=floor_xHI
   s%r%floor_xHII=floor_xHII
-#ifdef RT
+#ifdef DO_RT
   s%r%rt_err_grad_cn=rt_err_grad_cn
   s%r%rt_floor_cn=rt_floor_cn
   s%r%rt_refine_aexp=rt_refine_aexp
@@ -1583,7 +1583,7 @@ subroutine m_read_params(pst)
   s%r%B_ave=B_ave
   s%r%C_ave=C_ave
 #endif
-#ifdef RT
+#ifdef DO_RT
   s%r%rt_nregion=rt_nregion
   s%r%rt_region_type=rt_region_type
   s%r%rt_reg_x_center=rt_reg_x_center
@@ -1599,7 +1599,7 @@ subroutine m_read_params(pst)
   s%r%rt_v_region=rt_v_region
   s%r%rt_w_region=rt_w_region
 #endif
-#ifdef CR
+#ifdef DO_CR
   s%r%cr_nregion=cr_nregion
   s%r%cr_region_type=cr_region_type
   s%r%cr_reg_x_center=cr_reg_x_center
@@ -1646,13 +1646,13 @@ subroutine m_read_params(pst)
 #if NVAR>5+NENER
   s%r%var_bound=var_bound
 #endif
-#ifdef RT
+#ifdef DO_RT
   s%r%rt_n_bound=rt_n_bound
   s%r%rt_u_bound=rt_u_bound
   s%r%rt_v_bound=rt_v_bound
   s%r%rt_w_bound=rt_w_bound
 #endif
-#ifdef CR
+#ifdef DO_CR
   s%r%cr_fx_bound=cr_fx_bound
   s%r%cr_fy_bound=cr_fy_bound
   s%r%cr_fz_bound=cr_fz_bound
@@ -1698,7 +1698,7 @@ subroutine m_read_params(pst)
   s%r%rtz_primary_cosmic_ray_ionization_rate=rtz_primary_cosmic_ray_ionization_rate
   s%r%rtz_max_cool_timestep=rtz_max_cool_timestep
   s%r%rtz_eqm_min_its=rtz_eqm_min_its
-#ifdef RTZ
+#ifdef DO_RTZ
   s%r%element_first_idx=element_first_idx
   s%r%molecules_first_idx=molecules_first_idx
 #endif

@@ -232,6 +232,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
   use amr_parameters, only: dp, nhilbert, ndim, twotondim, nvector
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncruvar
   use ramses_commons, only: ramses_t
   use hash
   use hilbert
@@ -243,10 +244,10 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
   integer(kind=8),dimension(1:nhilbert,0:s%g%ncpu)::bound_key_target
 
   ! Local variables
-  integer::icpu,iskip_amr=0,iskip_hydro=0,iskip_grav=0,iskip_rt,ilun
+  integer::icpu,iskip_amr=0,iskip_hydro=0,iskip_grav=0,iskip_rt,iskip_cr,ilun
   integer::i,ind,istart,iend,noct_tmp,ilev,ioct,i1,j1,k1
   integer::igrid,igrid_start,nleft,nright,ileft,iright
-  character(LEN=80)::file_params,file_amr,file_hydro,file_grav,file_rt
+  character(LEN=80)::file_params,file_amr,file_hydro,file_grav,file_rt,file_cr
   character(LEN=5)::nchar,ncharcpu
   logical::clean
 
@@ -266,6 +267,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
   logical,dimension(1:twotondim)::refined
   real(dp),dimension(1:twotondim,1:nvar)::uold
   real(dp),dimension(1:twotondim,1:nrtvar)::rtuold
+  real(dp),dimension(1:twotondim,1:ncruvar)::cruold
   real(dp),dimension(1:twotondim,1:6)::bold
   real(dp),dimension(1:twotondim,1:3)::f
   real(dp),dimension(1:twotondim)::phi
@@ -381,6 +383,13 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
         iskip_rt=17+4*(nlevelmax_file-levelmin_file+1)+(8*twotondim*nrtvar)*nskip_file(icpu)
      endif
 
+     ! Prepare reading the CR file
+     if(r%cr)then
+        file_cr='backup_'//TRIM(nchar)//'/cr.'//TRIM(ncharcpu)
+        open(unit=14,file=file_cr,access="stream",action="read",form='unformatted')
+        iskip_cr=17+4*(nlevelmax_file-levelmin_file+1)+(8*twotondim*ncruvar)*nskip_file(icpu)
+     endif
+
      ! Loop over useful octs in file
      do i=istart,iend
 
@@ -420,6 +429,11 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
            ipos=iskip_rt+(8*twotondim*nrtvar)*(i-1)
            read(13,POS=ipos)rtuold
         endif
+        ! Read values from CR files
+        if(r%cr)then
+           ipos=iskip_cr+(8*twotondim*ncruvar)*(i-1)
+           read(14,POS=ipos)cruold
+        endif
         ! Create new oct in memory
         igrid=igrid+1
         if(igrid.GT.m%ngridmax)then
@@ -451,8 +465,13 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
 #endif
         endif
         if(r%rt)then
-#ifdef RT
+#ifdef DO_RT
            m%rtuold(:,:,igrid)=rtuold(:,:)
+#endif
+        endif
+        if(r%cr)then
+#ifdef DO_CR
+           m%cruold(:,:,igrid)=cruold(:,:)
 #endif
         endif
         ! Set flag1 to preserve refinements

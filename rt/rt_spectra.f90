@@ -119,7 +119,7 @@ FUNCTION fSig(run, lambda, f, species, ion)
   type(run_t) :: run
   real(kind=8):: fSig, lambda, f
   integer :: species, ion
-#ifdef RTZ
+#ifdef DO_RTZ
   fSig = f * getCrosssection_rtz(lambda, species, ion)
 #else
   fSig = f * getCrosssection(run, lambda, species)
@@ -130,7 +130,7 @@ FUNCTION fSigLambda(run, lambda, f, species, ion)
   type(run_t) :: run
   real(kind=8):: fSigLambda, lambda, f
   integer :: species, ion
-#ifdef RTZ
+#ifdef DO_RTZ
   fSigLambda = f * lambda * getCrosssection_rtz(lambda, species, ion)
 #else
   fSigLambda = f * lambda * getCrosssection(run, lambda, species)
@@ -141,7 +141,7 @@ FUNCTION fSigdivLambda(run, lambda, f, species, ion)
   type(run_t) :: run
   real(kind=8):: fSigdivLambda, lambda, f
   integer :: species, ion
-#ifdef RTZ
+#ifdef DO_RTZ
   fSigdivLambda = f / lambda * getCrosssection_rtz(lambda, species, ion)
 #else
   fSigdivLambda = f / lambda * getCrosssection(run, lambda, species)
@@ -239,7 +239,7 @@ MODULE SED_module
 
   PUBLIC sed_table_t, init_SED_table, inp_SED_table &
         ,update_SED_group_props, getNPhotonsEmitted 
-#ifdef RTZ
+#ifdef DO_RTZ
   PUBLIC initialize_cross_sections_from_blackbody &
         ,initialize_group_energies_from_blackbody
 #endif
@@ -286,7 +286,7 @@ SUBROUTINE init_SED_table(r, g, SED)
   ! metallicity.  The SED is read from a directory specified by sed_dir.
   !-------------------------------------------------------------------------
   use spectrum_integrator_module
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module
 #endif
 #ifndef WITHOUTMPI
@@ -314,7 +314,7 @@ SUBROUTINE init_SED_table(r, g, SED)
   integer,parameter::tag=1132
 
 ! set nv to the correct value depending on whether we are using rtz or not
-#ifdef RTZ
+#ifdef DO_RTZ
   nv=3+2
   do i=1,n_elements
      if (elements(i)%atomic_number.gt.0) then 
@@ -416,7 +416,7 @@ SUBROUTINE init_SED_table(r, g, SED)
      do ia = locid+1,nAges,ncpu2                                ! Loop age
         tbl(ia,iz,1) = getSEDLuminosity(r,Ls,SEDs(:,ia,iz),nLs,pL0,pL1)
         tbl(ia,iz,3) = getSEDEgy(r,Ls,SEDs(:,ia,iz),nLs,pL0,pL1)
-#ifdef RTZ
+#ifdef DO_RTZ
         counter = 1
         do ii=1, n_elements ! Loop over elements
            ! Cross sections for atomic species
@@ -507,7 +507,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
   use amr_commons, only: global_t
   use hydro_parameters, only: nion
   use constants, only: Gyr2sec
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: elements, n_elements
 #endif
   type(run_t) :: r
@@ -523,7 +523,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
   real(kind=8), dimension(1:nrtgrp) :: egy_star
   real(kind=8), dimension(1:nrtgrp) :: sum_L_cpu, sum_L_all
   real(kind=8), dimension(1:nrtgrp) :: sum_egy_cpu, sum_egy_all
-#ifdef RTZ
+#ifdef DO_RTZ
   real(kind=8), dimension(1:nrtgrp,1:27,1:27) :: csn_star, cse_star
   real(kind=8), dimension(1:nrtgrp,1:27,1:27) :: sum_csn_cpu, sum_csn_all
   real(kind=8), dimension(1:nrtgrp,1:27,1:27) :: sum_cse_cpu, sum_cse_all
@@ -566,7 +566,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
      call inp_SED_table(SED, age, Z, 1, .false., L_star)     !  [# s-1 M_sun-1]
      call inp_SED_table(SED, age, Z, 3, .true., egy_star)    !             [eV]
 
-#ifdef RTZ
+#ifdef DO_RTZ
      counter = 1
      do ii=1, n_elements ! Loop over elements
      ! Cross sections for atomic species
@@ -598,7 +598,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
         L_star(ip) = L_star(ip) * mass                  !       [# photons s-1]
         sum_L_cpu(ip) = sum_L_cpu(ip) + L_star(ip)
         sum_egy_cpu(ip) = sum_egy_cpu(ip) + L_star(ip) * egy_star(ip)
-#ifdef RTZ
+#ifdef DO_RTZ
         sum_csn_cpu(ip,1:27,1:27) = sum_csn_cpu(ip,1:27,1:27) + L_star(ip) * csn_star(ip,1:27,1:27)
         sum_cse_cpu(ip,1:27,1:27) = sum_cse_cpu(ip,1:27,1:27) + L_star(ip) * cse_star(ip,1:27,1:27)
 #else
@@ -620,7 +620,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
                      MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, info)
   call MPI_ALLREDUCE(sum_egy_cpu, sum_egy_all, nrtgrp,               &
                      MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, info)
-#ifdef RTZ
+#ifdef DO_RTZ
   call MPI_ALLREDUCE(sum_csn_cpu, sum_csn_all, nrtgrp*27*27,         &
                      MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, info)
   call MPI_ALLREDUCE(sum_cse_cpu, sum_cse_all, nrtgrp*27*27,         &
@@ -641,7 +641,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
      ! We have star particles already
      if(sum_L_all(ip) .gt. 0.) then
         r%group_egy(ip) = sum_egy_all(ip) / sum_L_all(ip)
-#ifdef RTZ
+#ifdef DO_RTZ
         r%group_csn(ip,1:27,1:27) = sum_csn_all(ip,1:27,1:27) / sum_L_all(ip)
         r%group_cse(ip,1:27,1:27) = sum_cse_all(ip,1:27,1:27) / sum_L_all(ip)
 #else
@@ -650,7 +650,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
 #endif
      else ! no stars -> assign zero-age zero-metallicity props
         r%group_egy(ip) = SED%table(1,1,ip,3)
-#ifdef RTZ
+#ifdef DO_RTZ
      counter = 1
      do ii=1, n_elements ! Loop over elements
      ! Cross sections for atomic species
@@ -747,7 +747,7 @@ FUNCTION getSEDcsn(run, X, Y, N, e0, e1, species, ion)
   !-------------------------------------------------------------------------
   real(kind=8) :: norm
   !-------------------------------------------------------------------------
-#ifdef RTZ
+#ifdef DO_RTZ
   if(e1 .gt. 0. .and. e1 .le. run%ionEvs(species, ion)) then
 #else
   if(e1 .gt. 0. .and. e1 .le. run%ionEvs(species)) then
@@ -775,7 +775,7 @@ FUNCTION getSEDcse(run, X, Y, N, e0, e1, species, ion)
   !-------------------------------------------------------------------------
   real(kind=8) :: norm
   !-------------------------------------------------------------------------
-#ifdef RTZ
+#ifdef DO_RTZ
   if(e1 .gt. 0. .and. e1 .le. run%ionEvs(species, ion)) then
 #else
   if(e1 .gt. 0. .and. e1 .le. run%ionEvs(species)) then
@@ -908,7 +908,7 @@ SUBROUTINE write_SED_table(SED)
   ! and HeII; H2 and He are optional
   !-------------------------------------------------------------------------
   use hydro_parameters, only: nion
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: n_elements, elements
 #endif
   type(sed_table_t) :: SED
@@ -917,7 +917,7 @@ SUBROUTINE write_SED_table(SED)
   integer :: ip, i, j, k, nv
   !-------------------------------------------------------------------------
 
-#ifdef RTZ
+#ifdef DO_RTZ
   do i=1,n_elements
      if (elements(i)%atomic_number.gt.0) then 
         nv = nv + (2 * elements(i)%n_ions)
@@ -939,7 +939,7 @@ SUBROUTINE write_SED_table(SED)
                 SED%ages(i)        ,    SED%zeds(j)        ,            &
                 SED%table(i,j,ip,1),    SED%table(i,j,ip,2),            &
                 SED%table(i,j,ip,3)
-#ifdef RTZ
+#ifdef DO_RTZ
            do k=1,(nv/2)-1
               write(10,901,advance='no') SED%table(i,j,ip,2+2*k), SED%table(i,j,ip,3+2*k)
            end do
@@ -1049,7 +1049,7 @@ SUBROUTINE getNPhotonsEmitted(run, SED, age1_Gyr, dt_Gyr, Z, ret)
 
 END SUBROUTINE getNPhotonsEmitted
 
-#ifdef RTZ
+#ifdef DO_RTZ
 FUNCTION blackbody(T, lambda) result(B_lam)
   ! Blackbody function B_lam
   ! Harley addition so that it is easier to make default

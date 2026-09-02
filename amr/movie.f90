@@ -618,7 +618,7 @@ subroutine output_frame(s,ind_proj,ind_var,map_size,map)
                     temp=(r%gamma-1d0)*(m%uold(ind,5,igrid)-ekk)
                     temp=max(temp/max(dble(m%uold(ind,1,igrid)),r%smallr),r%smallc**2)*scale_T2
                     uvar = temp
-#ifdef RT
+#ifdef DO_RT
                  else if(ind_var.ge.nvar+1 .and. ind_var.le.nvar+nrtgrp)then
                     uvar = m%rtuold(ind,1+(ind_var-nvar-1)*(ndim+1),igrid)*g%rt_c(ilevel)
 #endif
