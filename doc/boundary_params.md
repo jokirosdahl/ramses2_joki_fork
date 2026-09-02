@@ -28,4 +28,6 @@ The block named `&BOUNDARY_PARAMS` contains the parameters related to boundary c
 | `p_bound`          | `real array`     | (0,0,...,0)          | Pressure in the corresponding BC region. Used in case `bound_type=3`. |
 | `prad_bound`       | `real array`     | (0,0,...,0)          | Non-thermal pressure in the corresponding BC region. Used in case `bound_type=3`. |
 | `var_bound`        | `real array`     | (0,0,...,0)          | Passive scalar in the corresponding BC region. Used in case `bound_type=3`. |
-
+| `cr_fx_bound`      | `real array`     | (0,0,...,0)          | X component of the cosmic ray flux in the corresponding BC region. 2D array with dimensions `(1:MAXBOUND, 1:ncrgrp)`. Used in case `bound_type=3`. Only available if compiled with `CR=1`. |
+| `cr_fy_bound`      | `real array`     | (0,0,...,0)          | Y component of the cosmic ray flux in the corresponding BC region. 2D array with dimensions `(1:MAXBOUND, 1:ncrgrp)`. Used in case `bound_type=3`. Only available if compiled with `CR=1`. |
+| `cr_fz_bound`      | `real array`     | (0,0,...,0)          | Z component of the cosmic ray flux in the corresponding BC region. 2D array with dimensions `(1:MAXBOUND, 1:ncrgrp)`. Used in case `bound_type=3`. Only available if compiled with `CR=1`. |

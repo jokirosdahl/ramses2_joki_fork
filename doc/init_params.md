@@ -42,5 +42,16 @@ This sets of parameters, contained in the namelist block `&INIT_PARAMS`. This is
 | `rt_u_region=0.0`  | `real arrays` | Photon reduced flux direction (x coordinate). |
 | `rt_v_region=0.0`  | `real arrays` | Photon reduced flux direction (y coordinate). |
 | `rt_w_region=0.0`  | `real arrays` | Photon reduced flux direction (z coordinate). |
-
-
+| `cr_nregion=0`  | `integer` | Number of independent regions in the computational box used to set up initial cosmic ray flux variables. Only available if compiled with `CR=1`. |
+| `cr_region_type='square'`  | `10*char` | Geometry defining each CR region. `square` defines a generalized ellipsoidal shape. |
+| `cr_reg_x_center=0.0`  | `real arrays` | X coordinate of the center of each CR region. |
+| `cr_reg_y_center=0.0`  | `real arrays` | Y coordinate of the center of each CR region. |
+| `cr_reg_z_center=0.0`  | `real arrays` | Z coordinate of the center of each CR region. |
+| `cr_reg_length_x=1.E10`  | `real arrays` | Size in X direction of each CR region. Used only for `square` regions. |
+| `cr_reg_length_y=1.E10`  | `real arrays` | Size in Y direction of each CR region. Used only for `square` regions. |
+| `cr_reg_length_z=1.E10`  | `real arrays` | Size in Z direction of each CR region. Used only for `square` regions. |
+| `cr_exp_region=2.0`  | `real arrays` | Exponent defining the norm used to compute distances for the generalized ellipsoid. `cr_exp_region=2` corresponds to a spheroid, `cr_exp_region=1` to a diamond shape, `cr_exp_region>=10` to a perfect square. |
+| `cr_reg_group=1`  | `integer` | Index of the cosmic ray group into which the CR region injects flux. |
+| `cr_fx_region=0.0`  | `real arrays` | X component of the cosmic ray flux in the region. |
+| `cr_fy_region=0.0`  | `real arrays` | Y component of the cosmic ray flux in the region. |
+| `cr_fz_region=0.0`  | `real arrays` | Z component of the cosmic ray flux in the region. |
