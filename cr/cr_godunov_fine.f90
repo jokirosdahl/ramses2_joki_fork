@@ -123,11 +123,12 @@ subroutine set_crunew(r,m,ilevel)
   integer::i
 
   ! For CR energies, stored in NENER
+#ifdef HYDRO
   do i=m%head(ilevel),m%tail(ilevel)
      m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)=m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)
      m%unew(:,5,i)=m%uold(:,5,i)
   end do
-
+#endif
   ! And for CR fluxes, stored in cruold
 #ifdef DO_CR
   do i=m%head(ilevel),m%tail(ilevel)
@@ -216,12 +217,13 @@ subroutine set_cruold(r, g, m, ilevel)
 
 #endif
 
+#ifdef HYDRO
   ! CR energies, stored in NENER
   do i=m%head(ilevel),m%tail(ilevel)
      m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)=m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)
      m%uold(:,5,i)=m%unew(:,5,i)
   end do
-
+#endif
 
 end subroutine set_cruold
 !###########################################################
@@ -482,9 +484,11 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                        k3=1+2*(kk1-1)+k2
 #endif             
                        ! Gather hydro variables
+#ifdef HYDRO
                        do ivar=1,nvar
                           h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ind_oct)
                        end do
+#endif
 #ifdef MHD
                        ! Gather MHD variables
                        do ivar=1,6
@@ -571,13 +575,14 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                     end do
                     call mdl_abort(mdl)
                  endif
-
+#ifdef HYDRO
                  ! Gather hydro variables
                  do inbor=0,twondim
                     do ivar=1,nvar
                        u1(inbor,ivar)=m%uold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
                     end do
                  end do
+#endif
 #ifdef MHD
                  ! Gather B field variables
                  do inbor=0,twondim
@@ -652,11 +657,12 @@ subroutine cr_godfine1(s,ind_grid,ilevel,h)
                        ! If neighboring grid exists, use refined grid values
                        !----------------------------------------------------
                        if(ichild>0)then
-
+#ifdef HYDRO
                           ! Gather hydro variables
                           do ivar=1,nvar
                              h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ichild)
                           end do
+#endif
 #ifdef MHD
                           ! Gather MHD variables
                           do ivar=1,6

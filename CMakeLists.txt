@@ -55,11 +55,12 @@ set(NENER    0    CACHE STRING "Number of non-thermal energy variables")
 set(NMETAL   0    CACHE STRING "Number of metal species")
 set(NPSCAL   0    CACHE STRING "Number of passive scalar tracers")
 set(NION     0    CACHE STRING "Number of ionisation species (auto-computed when RTZ=ON)")
-set(NRTGRP   0    CACHE STRING "Number of RT photon groups (used when RT=ON)")
+set(NRTGRP   0    CACHE STRING "Number of RT photon groups (used when DO_RT=ON)")
+set(NCRGRP   1    CACHE STRING "Number of CR groups (used when DO_CR=ON)")
 set(UNITS    ""   CACHE STRING "Unit system (e.g. COSMO, COEUR; empty = default)")
 set(INIT     ""   CACHE STRING "Initial condition module (e.g. LOOP, COEUR; empty = default)")
 
-# RTZ per-species ion counts (only relevant when RTZ=ON)
+# RTZ per-species ion counts (only relevant when DO_RTZ=ON)
 set(N_HYDROGEN_IONS  0  CACHE STRING "RTZ: number of hydrogen  ion states")
 set(N_H2             0  CACHE STRING "RTZ: number of H2 states")
 set(N_HELIUM_IONS    0  CACHE STRING "RTZ: number of helium    ion states")
@@ -76,8 +77,9 @@ set(N_IRON_IONS      0  CACHE STRING "RTZ: number of iron      ion states")
 option(HYDRO  "Activate hydrodynamics solver"          ON)
 option(GRAV   "Activate self-gravity / Poisson solver" OFF)
 option(MHD    "Activate MHD solver"                    OFF)
-option(RT     "Activate radiative transfer"            OFF)
-option(RTZ    "Activate RTZ (metal-line RT) solver"    OFF)
+option(DO_RT  "Activate radiative transfer"            OFF)
+option(DO_RTZ "Activate RTZ (metal-line RT) solver"    OFF)
+option(DO_CR  "Activate cosmic rays"                   OFF)
 option(TURB   "Activate turbulence driving"            OFF)
 option(TRCFLX "Activate tracer-flux advection"         OFF)
 
@@ -99,15 +101,20 @@ set(EXEC ramses${NDIM}d)
 # Derived variables
 # =============================================================================
 
-# Compute NION from per-species counts when RTZ is on
-if(RTZ)
+# Compute NION from per-species counts when DO_RTZ is on
+if(DO_RTZ)
     math(EXPR NION "${N_HYDROGEN_IONS} + ${N_H2} + ${N_HELIUM_IONS} + ${N_CARBON_IONS} + ${N_NITROGEN_IONS} + ${N_OXYGEN_IONS} + ${N_NEON_IONS} + ${N_MAGNESIUM_IONS} + ${N_SILICON_IONS} + ${N_SULFUR_IONS} + ${N_IRON_IONS}")
+endif()
+
+# CR adds NCRGRP energy variables and forces MHD
+if(DO_CR)
+    math(EXPR NENER "${NENER} + ${NCRGRP}")
 endif()
 
 # NVAR = 5 (hydro) + NENER + NPSCAL + NMETAL + NION
 math(EXPR NVAR "5 + ${NENER} + ${NPSCAL} + ${NMETAL} + ${NION}")
 
-cmake_print_variables(COMPILER NDIM NVAR NENER NION NRTGRP UNITS INIT HYDRO GRAV MHD RT RTZ TURB)
+cmake_print_variables(COMPILER NDIM NVAR NENER NION NRTGRP NCRGRP UNITS INIT HYDRO GRAV MHD DO_RT DO_RTZ DO_CR TURB)
 
 # =============================================================================
 # Preprocessor defines
@@ -141,11 +148,11 @@ endif()
 if(MHD)
     list(APPEND defines MHD)
 endif()
-if(RT)
-    list(APPEND defines RT NRTGRP=${NRTGRP})
+if(DO_RT)
+    list(APPEND defines DO_RT NRTGRP=${NRTGRP})
 endif()
-if(RTZ)
-    list(APPEND defines RTZ
+if(DO_RTZ)
+    list(APPEND defines DO_RTZ
         N_HYDROGEN_IONS=${N_HYDROGEN_IONS}
         N_H2=${N_H2}
         N_HELIUM_IONS=${N_HELIUM_IONS}
@@ -158,6 +165,9 @@ if(RTZ)
         N_SULFUR_IONS=${N_SULFUR_IONS}
         N_IRON_IONS=${N_IRON_IONS}
     )
+endif()
+if(DO_CR)
+    list(APPEND defines MHD DO_CR NCRGRP=${NCRGRP})
 endif()
 if(TURB)
     list(APPEND defines TURB)
@@ -410,6 +420,24 @@ set(fortran_files
   cooling/init_neq_chem.f90
   cooling/cooling_fine.f90
 
+  # Cosmic rays
+  cr/cr_parameters.f90
+  cr/cr_commons.f90
+  cr/cr_flux_module.f90
+  cr/cr_godunov_utils.f90
+  cr/cr_godunov_fine.f90
+  cr/cr_source_terms.f90
+  cr/cr_input_condinit.f90
+  cr/cr_init_flow_fine.f90
+  cr/cr_condinit.f90
+  cr/cr_boundana.f90
+  cr/cr_upload.f90
+  cr/interpol_cr.f90
+  cr/read_cr_params.f90
+  cr/output_cr.f90
+  cr/cr_step.f90
+  cr/init_cr.f90
+
   # Radiative transfer
   rt/rt_parameters.f90
   rt/rt_commons.f90
@@ -468,8 +496,8 @@ set(fortran_files
   ${CMAKE_BINARY_DIR}/write_patch.f90
 )
 
-# RTZ-conditional cooling modules (neq vs rtz variants)
-if(RTZ)
+# DO_RTZ-conditional cooling modules (neq vs rtz variants)
+if(DO_RTZ)
     list(APPEND fortran_files
         cooling/rtz_coolrates_module.f90
         cooling/rtz_cooling_module.f90
