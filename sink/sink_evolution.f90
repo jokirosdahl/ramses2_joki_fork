@@ -369,7 +369,7 @@ contains
 #endif
 
 #if NENER>0
-       ! Deal with RT
+       ! Deal with NENER
        erad = 0.0d0
        do irad=1,nener
           erad = erad + m%uold(icelln,5+irad,igridn)

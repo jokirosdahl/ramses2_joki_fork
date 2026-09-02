@@ -44,6 +44,7 @@ subroutine condinit(r,g,x,q,dx,nn)
 #define COLLAPSE 11
 
   integer::i
+  real(kind=8)::xx,yy,zz,rr,theta,pi,xcenter,ttmin,ttmax
 #if INIT==COEUR
   real(kind=8)::r2,rx,ry,rz,d,p,vx,vy,vz,r_trunc,r2_trunc,c2
   real(kind=8)::omega_code,AU,Msol,pi,M,sigma,r_min,r2_min,omega_const,r_vortex,invr2_vortex
@@ -57,9 +58,9 @@ subroutine condinit(r,g,x,q,dx,nn)
 #elif INIT==OT
   real(kind=8)::pi,xc,yc
 #elif INIT==PONO
-  real(kind=8)::xx,yy,zz,vx,vy,vz,rr,tt,omega,R0,twopi
+  real(kind=8)::vx,vy,vz,tt,omega,R0,twopi
 #elif INIT==ABC
-  real(kind=8)::xx,yy,zz,vx,vy,vz,A0,twopi
+  real(kind=8)::vx,vy,vz,A0,twopi
 #elif INIT==CURRENTSHEET
   real(kind=8)::pi,xc,yc,beta,v0
 #elif INIT==RTZEQM
@@ -418,5 +419,37 @@ subroutine condinit(r,g,x,q,dx,nn)
   if(r%metal)then
      q(1:nn,r%imetal)=r%z_ave*0.02
   endif
+
+#ifdef CR
+  if(r%cr_test_setup=='streaming_triangle') then
+     q(1:nn,6)=(2d0-1d0*sqrt((x(1:nn,1)-r%box_size(1)*0.5d0)**2))/3.
+  else if(r%cr_test_setup=='diffusion') then
+    q(1:nn,6)=exp(-40d0*(x(1:nn,1)-r%box_size(1)*0.5d0)**2)/3.
+  else if(r%cr_test_setup=='1d_cr_cloud') then
+     q(1:nn,1)=0.1d0+(10d0-0.1d0)*(1d0+tanh((x(1:nn,1)-200d0)/25d0)) &
+          &                       *(1d0+tanh((200d0-x(1:nn,1))/25d0))
+  else if(r%cr_test_setup=='circular_diffusion') then
+     ! CR energy: enhanced on one arc of the loop (around the z-axis).
+     ! atan2 replaces atan(yy/xx) to avoid a divide-by-zero FPE at xx=0;
+     ! it is identical in the xx>0 region that the arc condition selects.
+     pi=acos(-1d0)
+     ttmin=-pi/12d0
+     ttmax= pi/12d0
+     xcenter=r%box_size(1)*0.5d0
+     do i=1,nn
+        xx=x(i,1)-xcenter
+        yy=x(i,2)-xcenter
+        rr=sqrt(xx**2+yy**2)
+        theta=atan2(yy,xx)
+        if(rr>0.25d0*r%box_size(1) .and. rr<0.35d0*r%box_size(1) .and. theta>ttmin .and. &
+            & theta<ttmax .and. xx>0d0 .and. zz>-0.1d0*r%box_size(1) .and. zz<0.1d0*r%box_size(1))then
+          q(i,6)=1.2d1
+        else
+          q(i,6)=1.0d1
+        endif
+     end do
+  endif
+#endif
+
 
 end subroutine condinit

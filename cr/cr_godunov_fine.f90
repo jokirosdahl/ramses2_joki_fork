@@ -1,10 +1,10 @@
-module rt_godunov_fine_module
+module cr_godunov_fine_module
 contains
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-recursive subroutine r_rt_godunov_fine(pst,ilevel,input_size)
+recursive subroutine r_cr_godunov_fine(pst,ilevel,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
@@ -16,19 +16,19 @@ recursive subroutine r_rt_godunov_fine(pst,ilevel,input_size)
   integer::rID
 
   if(pst%nLower>0)then
-     rID = mdl_send_request(pst%s%mdl,MDL_RT_GODUNOV_FINE,pst%iUpper+1,input_size,0,ilevel)
-     call r_rt_godunov_fine(pst%pLower,ilevel,input_size)
+     rID = mdl_send_request(pst%s%mdl,MDL_CR_GODUNOV_FINE,pst%iUpper+1,input_size,0,ilevel)
+     call r_cr_godunov_fine(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call rt_godunov_fine(pst%s,ilevel)
+     call cr_godunov_fine(pst%s,ilevel)
   endif
 
-end subroutine r_rt_godunov_fine
+end subroutine r_cr_godunov_fine
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine rt_godunov_fine(s,ilevel)
+subroutine cr_godunov_fine(s,ilevel)
   use ramses_commons, only: ramses_t
   use cache_commons
   use cache
@@ -41,8 +41,8 @@ subroutine rt_godunov_fine(s,ilevel)
   !--------------------------------------------------------------------------
   ! This routine is a wrapper to the second order Godunov solver.
   ! Small grids (2x2x2) are gathered from level ilevel and sent to the
-  ! hydro solver. On entry, hydro variables are gathered from array rtuold.
-  ! On exit, rtunew has been updated. 
+  ! hydro solver. On entry, hydro variables are gathered from array cruold.
+  ! On exit, crunew has been updated. 
   !--------------------------------------------------------------------------
   integer::igrid
 
@@ -52,25 +52,26 @@ subroutine rt_godunov_fine(s,ilevel)
 
   call open_cache(mdl, m, pack_size=storage_size(dummy_large_realdp)/32, &
        pack=pack_fetch_refine, unpack=unpack_fetch_refine, &
-       init=init_flush_rt_godunov, flush=pack_flush_rt_godunov, &
-       combine=unpack_flush_rt_godunov, bound=init_bound_refine)
+       init=init_flush_cr_godunov, flush=pack_flush_cr_godunov, &
+       combine=unpack_flush_cr_godunov, bound=init_bound_refine)
 
   ! Loop over active grids by vector sweeps
   igrid=m%head(ilevel)
   do while(igrid.LE.m%tail(ilevel))
      SELECT CASE (m%grid(igrid)%superoct)
+     ! For now just re-using the hydro kernel for CR. Might change this later.
      CASE(1)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_1)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_1)
      CASE(2**ndim)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_2)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_2)
      CASE(4**ndim)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_4)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_4)
      CASE(8**ndim)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_8)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_8)
      CASE(16**ndim)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_16)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_16)
      CASE(32**ndim)
-        call rt_godfine1(s,igrid,ilevel,m%rt_w%kernel_32)
+        call cr_godfine1(s,igrid,ilevel,m%cr_w%kernel_32)
      END SELECT
      igrid=igrid+m%grid(igrid)%superoct
   end do
@@ -79,40 +80,12 @@ subroutine rt_godunov_fine(s,ilevel)
 
   end associate
 
-end subroutine rt_godunov_fine
+end subroutine cr_godunov_fine
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-recursive subroutine r_set_emissivity(pst,ilevel,input_size)
-  use mdl_module
-  use ramses_commons, only: pst_t
-  use mdl_parameters
-  implicit none
-  type(pst_t)::pst
-  integer,VALUE::input_size
-  integer::ilevel
-
-  integer::rID, i
-
-  if(pst%nLower>0)then
-     rID = mdl_send_request(pst%s%mdl,MDL_SET_EMISSIVITY,pst%iUpper+1,input_size,0,ilevel)
-     call r_set_emissivity(pst%pLower,ilevel,input_size)
-     call mdl_get_reply(pst%s%mdl,rID,0)
-  else
-#ifdef RT
-     do i=pst%s%m%head(ilevel),pst%s%m%tail(ilevel)
-        pst%s%m%emissivity(:,:,i)=0
-     end do
-#endif
-  endif
-
-end subroutine r_set_emissivity
-!###########################################################
-!###########################################################
-!###########################################################
-!###########################################################
-recursive subroutine r_set_rtunew(pst,ilevel,input_size)
+recursive subroutine r_set_crunew(pst,ilevel,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
@@ -124,43 +97,51 @@ recursive subroutine r_set_rtunew(pst,ilevel,input_size)
   integer::rID
 
   if(pst%nLower>0)then
-     rID = mdl_send_request(pst%s%mdl,MDL_SET_RTUNEW,pst%iUpper+1,input_size,0,ilevel)
-     call r_set_rtunew(pst%pLower,ilevel,input_size)
+     rID = mdl_send_request(pst%s%mdl,MDL_SET_CRUNEW,pst%iUpper+1,input_size,0,ilevel)
+     call r_set_crunew(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call set_rtunew(pst%s%m,ilevel)
+     call set_crunew(pst%s%r, pst%s%m,ilevel)
   endif
 
-end subroutine r_set_rtunew
+end subroutine r_set_crunew
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine set_rtunew(m,ilevel)
-  use amr_parameters, only: ndim, twotondim
-  use amr_commons, only: run_t, global_t, mesh_t
+subroutine set_crunew(r,m,ilevel)
+  use amr_commons, only: run_t, mesh_t
+  use cr_parameters, only: ncrgrp
   implicit none
+  type(run_t)::r
   type(mesh_t)::m
   integer::ilevel
   !--------------------------------------------------------------------------
-  ! This routine sets array rtunew to its initial value rtuold before calling
-  ! the hydro scheme. rtunew is set to zero in virtual boundaries.
+  ! This routine sets array crunew to its initial value cruold before calling
+  ! the hydro scheme. crunew is set to zero in virtual boundaries.
   !--------------------------------------------------------------------------
   integer::i
 
-  ! Set rtunew to rtuold for myid cells
-#ifdef RT
+  ! For CR energies, stored in NENER
   do i=m%head(ilevel),m%tail(ilevel)
-     m%rtunew(:,:,i)=m%rtuold(:,:,i)
+     m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)=m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)
+     m%unew(:,5,i)=m%uold(:,5,i)
+  end do
+
+  ! And for CR fluxes, stored in cruold
+#ifdef CR
+  do i=m%head(ilevel),m%tail(ilevel)
+     m%crunew(:,:,i)=m%cruold(:,:,i)
   end do
 #endif
 
-end subroutine set_rtunew
+
+end subroutine set_crunew
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-recursive subroutine r_set_rtuold(pst,ilevel,input_size)
+recursive subroutine r_set_cruold(pst,ilevel,input_size)
   use mdl_module
   use ramses_commons, only: pst_t
   use mdl_parameters
@@ -171,20 +152,20 @@ recursive subroutine r_set_rtuold(pst,ilevel,input_size)
   integer::rID
 
   if(pst%nLower>0)then
-     rID = mdl_send_request(pst%s%mdl,MDL_SET_RTUOLD,pst%iUpper+1,input_size,0,ilevel)
-     call r_set_rtuold(pst%pLower,ilevel,input_size)
+     rID = mdl_send_request(pst%s%mdl,MDL_SET_CRUOLD,pst%iUpper+1,input_size,0,ilevel)
+     call r_set_cruold(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-     call set_rtuold(pst%s%r, pst%s%g, pst%s%m, ilevel)
+     call set_cruold(pst%s%r, pst%s%g, pst%s%m, ilevel)
   endif
 
-end subroutine r_set_rtuold
+end subroutine r_set_cruold
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine set_rtuold(r, g, m, ilevel)
-  use rt_parameters, only: nrtgrp, smallNp
+subroutine set_cruold(r, g, m, ilevel)
+  use cr_parameters, only: ncrgrp, smallecr
   use amr_parameters, only: ndim, twotondim
   use amr_commons, only: run_t, global_t, mesh_t
   implicit none
@@ -192,84 +173,166 @@ subroutine set_rtuold(r, g, m, ilevel)
   type(global_t) :: g
   type(mesh_t) :: m
   integer :: ilevel
-  real(kind=8)::Npc,fred
+  real(kind=8)::Ecrc,fred,sqrt3
   !---------------------------------------------------------
-  ! This routine sets array rtuold to its new value rtunew 
+  ! This routine sets array cruold to its new value crunew 
   ! after the hydro step.
   !---------------------------------------------------------
-  integer :: i, j, ig, iN
+  integer :: i, j, ig, iE, iFlx
 
-  ! Add emissivity source term
-#ifdef RT
-  if(.not.r%neq_chem)then
-     do ig=1,nrtgrp
-        iN=1+(ig-1)*ndim
-        do i=m%head(ilevel),m%tail(ilevel)
-           m%rtunew(1:twotondim,iN,i)=m%rtunew(1:twotondim,iN,i) + &
-                & m%emissivity(1:twotondim,ig,i)*g%dtnew(ilevel)
+  if(r%cr_isotropic_pressure)then
+     sqrt3=sqrt(3d0)
+  else
+     sqrt3=1.0d0
+  endif
+ ! Set cruold to crunew
+#ifdef CR
+  if (r%cr_reduced_flux_correction) then
+     ! Make a CR conservation fix
+     do ig = 1, ncrgrp
+        iE = r%iecr+ig-1
+        iFlx = 1 + (ig-1)*ndim
+        do i = m%head(ilevel), m%tail(ilevel)
+           do j = 1, twotondim
+              ! No negative CR densities:
+              m%unew(j,iE,i) = max(m%unew(j,iE,i),smallecr)
+              Ecrc=m%unew(j,iE,i)*g%cr_c(ilevel)
+              ! Reduced flux, should always be .le. 1
+              fred = sqrt(sum((m%crunew(j,iFlx:iFlx+ndim-1,i))**2))/Ecrc*sqrt3
+              if(fred .gt. 1d0) then ! Too big so normalize
+                 m%crunew(j,iFlx:iFlx+ndim-1,i) &
+                      = m%unew(j,iFlx:iFlx+ndim-1,i)/fred
+              endif
+           end do
         end do
      end do
+     ! End CR conservation fix
   endif
-#endif
 
-  if(r%neq_chem.and.r%rt_smooth)return
-
- ! Set rtuold to rtunew
-#ifdef RT
+  ! CR fluxes, stored in cruold
   do i = m%head(ilevel), m%tail(ilevel)
-     m%rtuold(:,:,i) = m%rtunew(:,:,i)
+     m%cruold(:,:,i) = m%crunew(:,:,i)
   end do
-
-  ! Make a photon conservation fix (prevent light explosions)
-  do ig = 1, nrtgrp
-      iN = 1 + (ig-1)*ndim
-      do i = m%head(ilevel), m%tail(ilevel)
-        do j = 1, twotondim
-          ! No negative photon densities:
-          m%rtuold(j,iN,i) = max(m%rtuold(j,iN,i),smallNp)
-          Npc=m%rtuold(j,iN,i)*g%rt_c(ilevel)
-          ! Reduced flux, should always be .le. 1
-          fred = sqrt(sum((m%rtuold(j,iN+1:iN+ndim,i))**2))/Npc
-          if(fred .gt. 1d0) then ! Too big so normalize flux to one
-            m%rtuold(j,iN+1:iN+ndim,i) &
-                = m%rtuold(j,iN+1:iN+ndim,i)/fred
-          endif
-        end do
-      end do
-  end do
-  ! End photon conservation fix
 
 #endif
 
-end subroutine set_rtuold
+  ! CR energies, stored in NENER
+  do i=m%head(ilevel),m%tail(ilevel)
+     m%uold(:,r%iecr:r%iecr+ncrgrp-1,i)=m%unew(:,r%iecr:r%iecr+ncrgrp-1,i)
+     m%uold(:,5,i)=m%unew(:,5,i)
+  end do
+
+
+end subroutine set_cruold
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine rt_godfine1(s,ind_grid,ilevel,h)
+recursive subroutine r_conserve_cr_flux(pst,ilevel,input_size)
+  use mdl_module
+  use ramses_commons, only: pst_t
+  use mdl_parameters
+  implicit none
+  type(pst_t)::pst
+  integer,VALUE::input_size
+  integer::ilevel
+  integer::rID
+
+  if (.not. pst%s%r%cr_reduced_flux_correction) return
+
+  if(pst%nLower>0)then
+     rID = mdl_send_request(pst%s%mdl,MDL_CONSERVE_CR_FLUX,pst%iUpper+1,input_size,0,ilevel)
+     call r_conserve_cr_flux(pst%pLower,ilevel,input_size)
+     call mdl_get_reply(pst%s%mdl,rID,0)
+  else
+     call conserve_cr_flux(pst%s%r, pst%s%g, pst%s%m, ilevel)
+  endif
+
+end subroutine r_conserve_cr_flux
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine conserve_cr_flux(r, g, m, ilevel)
+  use cr_parameters, only: ncrgrp, smallecr
+  use amr_parameters, only: ndim, twotondim
+  use amr_commons, only: run_t, global_t, mesh_t
+  implicit none
+  type(run_t) :: r
+  type(global_t) :: g
+  type(mesh_t) :: m
+  integer :: ilevel
+  real(kind=8)::Ecrc,fred,sqrt3
+  !---------------------------------------------------------
+  ! This routine sets array cruold to its new value crunew 
+  ! after the hydro step.
+  !---------------------------------------------------------
+  integer :: i, j, ig, iE, iFlx
+
+  if(r%cr_isotropic_pressure)then
+     sqrt3=sqrt(3d0)
+  else
+     sqrt3=1.0d0
+  endif
+
+#ifdef CR
+  if (r%cr_reduced_flux_correction) then
+     ! Make a CR conservation fix
+     do ig = 1, ncrgrp
+        iE = r%iecr+ig-1
+        iFlx = 1 + (ig-1)*ndim
+        do i = m%head(ilevel), m%tail(ilevel)
+           do j = 1, twotondim
+              ! No negative CR densities:
+              m%uold(j,iE,i) = max(m%uold(j,iE,i),smallecr)
+              Ecrc=m%uold(j,iE,i)*g%cr_c(ilevel)
+              ! Reduced flux, should always be .le. 1
+              fred = sqrt(sum((m%cruold(j,iFlx:iFlx+ndim-1,i))**2))/Ecrc*sqrt3
+              if(fred .gt. 1d0) then ! Too big so normalize
+                 m%cruold(j,iFlx:iFlx+ndim-1,i) &
+                      = m%uold(j,iFlx:iFlx+ndim-1,i)/fred
+              endif
+           end do
+        end do
+     end do
+     ! End CR conservation fix
+  endif
+
+#endif
+
+end subroutine conserve_cr_flux
+!###########################################################
+!###########################################################
+!###########################################################
+!###########################################################
+subroutine cr_godfine1(s,ind_grid,ilevel,h)
   use mdl_module
   use amr_parameters, only: ndim, twondim, twotondim
-  use rt_parameters, only: nrtvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncrvar,ncruvar,ncrgrp
+
   use ramses_commons, only: ramses_t
   use nbors_utils
-  use rt_commons
+  use cr_commons
   use hash
-  use rt_flux_module, only: rt_unsplit
+#ifdef CR
+  use cr_flux_module, only: cr_unsplit
+#endif
   implicit none
   type(ramses_t)::s
   integer::ind_grid,ilevel
-  type(rt_kernel_t)::h
+  type(cr_kernel_t)::h
   !-------------------------------------------------------------------
-  ! This routine gathers first RT variables from neighboring grids
-  ! to set initial conditions in a 6x6x6 grid. It interpolate from
+  ! This routine gathers first CR variables from neighboring grids
+  ! to set initial conditions in a 6x6x6 grid. It interpolates from
   ! coarser level missing grid variables. It then calls the
   ! Godunov solver that computes fluxes. These fluxes are zeroed at 
   ! coarse-fine boundaries, since contribution from finer levels has
   ! already been taken into account. Conservative variables are updated 
-  ! and stored in array rtunew(:), both at the current level and at the 
+  ! and stored in array crunew(:), both at the current level and at the 
   ! coarser level if necessary.
   !-------------------------------------------------------------------
-  integer::ivar,idim,ind_son,ind_oct
+  integer::ivar,idim,ind_son,ind_oct,ind
   integer::icell,inbor,ipass
   integer::igrid,ichild
   integer::i0,j0,k0,i1,j1,k1,i2,j2,k2,i3,j3,k3
@@ -278,20 +341,35 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   integer::ii1min,ii1max,jj1min,jj1max,kk1min,kk1max
   integer::i2min,i2max,j2min,j2max,k2min,k2max
   integer::i3min,i3max,j3min,j3max,k3min,k3max
+  integer::igrp, icr_f, icr_u
+#ifdef MHD
+  real(kind=8),dimension(0:twondim  ,1:6)::b1
+  real(kind=8),dimension(1:twotondim,1:6)::b2
+  real(kind=8),dimension(1:twondim,1:twotondim,1:6)::b3
+  logical,dimension(1:twondim)::refined
+  integer,dimension(1:3,1:6),save::shift=reshape(&
+       & (/-1,0,0,1,0,0,0,-1,0,0,1,0,0,0,-1,0,0,1/),(/3,6/))
+  integer::igridn
+  integer,dimension(1:twondim)::igrid_son_nbor
+#endif
   integer,dimension(1:ndim)::ckey_corner,ckey
-  integer(kind=8),dimension(0:ndim)::hash_nbor
-  integer,dimension(0:twondim)::icell_nbor
+  integer(kind=8),dimension(0:ndim)::hash_nbor,hash_son_nbor
+  integer,dimension(0:twondim)::ind_nbor
   integer,dimension(0:twondim)::igrid_nbor
-  real(kind=8)::dx,oneontwotondim,rt_c_diff
-  real(kind=8),dimension(0:twondim  ,1:nrtvar)::u1
-  real(kind=8),dimension(1:twotondim,1:nrtvar)::u2
+  real(kind=8)::dx,oneontwotondim
+#ifdef CR
+  real(kind=8),dimension(0:twondim  ,1:ncruvar)::cr1 ! CR vars
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cr2
+#endif
+  real(kind=8),dimension(0:twondim  ,1:nvar)::u1    ! Hydro vars
+  real(kind=8),dimension(1:twotondim,1:nvar)::u2
   logical::okx,oky,okz,oknbor
 
   i2min=0; i2max=0; j2min=0; j2max=0; k2min=0; k2max=0
   i3min=1; i3max=1; j3min=1; j3max=1; k3min=1; k3max=1
   okx=.true.; oky=.true.; okz=.true.
 
-  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
+  associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl,iecr=>s%r%iecr)
 
   oneontwotondim = 1.d0/dble(twotondim)
 
@@ -318,8 +396,8 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   ind_oct=ind_grid
   h%inkernel=.false.
 
-  ! Loop over 3x3x3 neighboring father cells using 7 passes
-  do ipass = 1, 1+2*ndim
+  ! Loop over 3x3x3 neighboring father cells using 27 passes
+  do ipass = 1, threetondim
 
   if(ipass == 1)then
      ii1min = i1min+1; ii1max = i1max-1
@@ -332,24 +410,28 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
      kk1min = kk1min+1; kk1max = kk1max-1
 #endif
   endif
-  if(ipass == 2)then
+  if(MOD(ipass,3) == 2)then ! ipass = 2, 5, 8, 11, 14, 17, 20, 23, 26
      ii1min = i1min; ii1max = i1min
   endif
-  if(ipass == 3)then
+  if(MOD(ipass,3) == 0)then ! ipass = 3, 6, 9, 12, 15, 18, 21, 24, 27
      ii1min = i1max; ii1max = i1max
   endif
-  if(ipass == 4)then
+  if(MOD(ipass,9) == 4)then ! ipass = 4, 13, 22
      ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1min; jj1max = j1min
   endif
-  if(ipass == 5)then
+  if(MOD(ipass,9) == 7)then ! ipass = 7, 16, 25
+     ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1max; jj1max = j1max
   endif
-  if(ipass == 6)then
+  if(ipass == 10)then
+     ii1min = i1min+1; ii1max = i1max-1
      jj1min = j1min+1; jj1max = j1max-1
      kk1min = k1min; kk1max = k1min
   endif
-  if(ipass == 7)then
+  if(ipass == 19)then
+     ii1min = i1min+1; ii1max = i1max-1
+     jj1min = j1min+1; jj1max = j1max-1
      kk1min = k1max; kk1max = k1max
   endif
 
@@ -399,12 +481,22 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
 #if NDIM>2
                        k3=1+2*(kk1-1)+k2
 #endif             
-                       ! Gather RT variables
-                       do ivar=1,nrtvar
-#ifdef RT
-                          h%rtuloc(i3,j3,k3,ivar)=m%rtuold(ind_son,ivar,ind_oct)
-#endif
+                       ! Gather hydro variables
+                       do ivar=1,nvar
+                          h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ind_oct)
                        end do
+#ifdef MHD
+                       ! Gather MHD variables
+                       do ivar=1,6
+                          h%bloc(i3,j3,k3,ivar)=m%bold(ind_son,ivar,ind_oct)
+                       end do
+#endif
+#ifdef CR
+                       ! Gather CR variables
+                       do ivar=1,ncruvar
+                          h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ind_oct)
+                       end do
+#endif
                        ! Gather refinement flag
                        h%okloc(i3,j3,k3)=m%grid(ind_oct)%refined(ind_son)
                     end do
@@ -441,31 +533,36 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
               do inbor=0,twondim
                  igrid_nbor(inbor)=0
               end do
+#ifdef MHD
+              do inbor=1,twondim
+                 igrid_son_nbor(inbor)=0
+              end do
+#endif
               ! Get neighboring grid index with read-only cache
               call get_grid(s,hash_nbor,ichild,flush_cache=.false.,fetch_cache=.true.,lock=.true.)
 
               !----------------------------------------------------
-              ! If grid does not exist, interpolate RT variables
+              ! If grid does not exist, interpolate CR variables
               !----------------------------------------------------
               if(ichild==0)then
 
                  ! Get parent father cell with read-write cache
                  call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.true.,fetch_cache=.true.,lock=.true.)
                  if(igrid==0)then
-                    write(*,*)'RT-GODUNOV: parent_cell should exist'
+                    write(*,*)'CR-GODUNOV: parent_cell should exist'
                     write(*,*)'PE ',g%myid,hash_nbor
                     call mdl_abort(mdl)
                  endif
 
                  ! Get 2ndim neighboring father cells with read-write cache
                  ! Note that possible cache grids are locked inside the routine
-                 call get_twondim_nbor_parent_cell(s,hash_nbor,igrid_nbor,icell_nbor,flush_cache=.true.,fetch_cache=.true.)
+                 call get_twondim_nbor_parent_cell(s,hash_nbor,igrid_nbor,ind_nbor,flush_cache=.true.,fetch_cache=.true.)
                  oknbor=.true.
                  do inbor=0,twondim
                     oknbor=oknbor.and.(igrid_nbor(inbor)>0)
                  end do
                  if(.not. oknbor)then
-                    write(*,*)"RT-GODUNOV: parent neighbors should exist"
+                    write(*,*)"CR-GODUNOV: parent neighbors should exist"
                     write(*,*)'PE ',g%myid,hash_nbor
                     write(*,*)igrid_nbor(0)
                     do idim=1,ndim
@@ -475,16 +572,58 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                     call mdl_abort(mdl)
                  endif
 
-                 ! Gather RT variables
+                 ! Gather hydro variables
                  do inbor=0,twondim
-                    do ivar=1,nrtvar
-#ifdef RT
-                       u1(inbor,ivar)=m%rtuold(icell_nbor(inbor),ivar,igrid_nbor(inbor))
-#endif
+                    do ivar=1,nvar
+                       u1(inbor,ivar)=m%uold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
                     end do
                  end do
-                 ! Interpolate using rt variables
-                 call interpol_rt(u1,u2,r%interpol_type)
+#ifdef MHD
+                 ! Gather B field variables
+                 do inbor=0,twondim
+                    do ivar=1,6
+                       b1(inbor,ivar)=m%bold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
+                    end do
+                 end do
+                 ! Get neighboring children grids
+                 hash_son_nbor(0)=ilevel
+                 do inbor=1,twondim
+                    hash_son_nbor(1:ndim)=hash_nbor(1:ndim)+shift(1:ndim,inbor)
+                    ! Periodic boundary conditions
+                    do idim=1,ndim
+                       if(r%periodic(idim))then
+                          if(hash_son_nbor(idim)< m%box_ckey_min(idim,ilevel))hash_son_nbor(idim)=m%box_ckey_max(idim,ilevel)-1
+                          if(hash_son_nbor(idim)>=m%box_ckey_max(idim,ilevel))hash_son_nbor(idim)=m%box_ckey_min(idim,ilevel)
+                       endif
+                    enddo
+                    call get_grid(s,hash_son_nbor,igridn,flush_cache=.false.,fetch_cache=.true.,lock=.true.)
+                    igrid_son_nbor(inbor)=igridn
+                    refined(inbor)=(igridn>0)
+                    if(refined(inbor))then
+                       do ind=1,twotondim
+                          do ivar=1,6
+                             b3(inbor,ind,ivar)=m%bold(ind,ivar,igridn)
+                          end do
+                       end do
+                    endif
+                 end do
+
+                 ! Interpolate using MHD variables
+                 call interpol_mhd(u1,u2,b1,b2,b3,refined,r%interpol_var,r%interpol_type,r%smallr)
+#else
+                 ! Interpolate using hydro variables
+                 call interpol_hydro(u1,u2,r%interpol_var,r%interpol_type,r%smallr)
+#endif
+#ifdef CR
+                 ! Gather CR variables
+                 do inbor=0,twondim
+                    do ivar=1,ncruvar
+                       cr1(inbor,ivar)=m%cruold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
+                    end do
+                 end do
+                 ! Interpolate using cr variables
+                 call interpol_cr(cr1,cr2,r%interpol_type)
+#endif
               endif
 
               ! Store grid index
@@ -514,34 +653,47 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                        !----------------------------------------------------
                        if(ichild>0)then
 
+                          ! Gather hydro variables
+                          do ivar=1,nvar
+                             h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ichild)
+                          end do
+#ifdef MHD
+                          ! Gather MHD variables
+                          do ivar=1,6
+                             h%bloc(i3,j3,k3,ivar)=m%bold(ind_son,ivar,ichild)
+                          end do
+#endif
+#ifdef CR
+                          ! Gather CR variables
+                          do ivar=1,ncruvar
+                             h%cruloc(i3,j3,k3,ivar)=m%cruold(ind_son,ivar,ichild)
+                          end do
+#endif
                           ! Gather refinement flag
                           h%okloc(i3,j3,k3)=m%grid(ichild)%refined(ind_son)
-                          ! Gather RT variables
-                          do ivar=1,nrtvar
-#ifdef RT
-                             h%rtuloc(i3,j3,k3,ivar)=m%rtuold(ind_son,ivar,ichild)
-#endif
-                          end do
 
                        !-----------------------------------------------------------
                        ! If neighboring grid doesn't exist, use interpolated values
                        !-----------------------------------------------------------
                        else
 
-                          ! Gather refinement flag
-                          h%okloc(i3,j3,k3)=.false.
                           ! Gather interpolated hydro variables
-                          do ivar=1,nrtvar
-#ifdef RT
-                             h%rtuloc(i3,j3,k3,ivar)=u2(ind_son,ivar)
-                             if(mod(ivar,ndim+1)==1) then
-                                ! Variable light speed correction for coarser level
-                                h%rtuloc(i3,j3,k3,ivar)           &
-                                  = h%rtuloc(i3,j3,k3,ivar)       &
-                                  * g%rt_c(ilevel-1)/g%rt_c(ilevel)
-                             endif
-#endif
+                          do ivar=1,nvar
+                             h%uloc(i3,j3,k3,ivar)=u2(ind_son,ivar)
                           end do
+#ifdef MHD
+                          ! Gather interpolated MHD variables
+                          do ivar=1,6
+                             h%bloc(i3,j3,k3,ivar)=b2(ind_son,ivar)
+                          end do
+#endif
+#ifdef CR
+                          do ivar=1,ncruvar
+                             h%cruloc(i3,j3,k3,ivar)=cr2(ind_son,ivar)
+                          end do
+#endif
+                          ! Gather refinement flag
+                          h%okloc(i3,j3,k3)=.false.                          
                        end if
 
                     end do
@@ -552,23 +704,20 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
         end do
      end do
   end do
-  ! End over octs
+  ! End loop over octs
   end do
 
   !-------------------------------------------------
   ! Compute flux using second-order Godunov method
   !-------------------------------------------------
-#ifdef RT
-  call rt_unsplit(h%rtuloc,h%rtflux,h%cFlx,        &
-       & g%rt_c(ilevel),dx,dx,dx,g%dtnew(ilevel),  &
-       & h%iu1,h%iu2,h%ju1,h%ju2,h%ku1,h%ku2,      &
-       & h%if1,h%if2,h%jf1,h%jf2,h%kf1,h%kf2)
+#ifdef CR
+  call cr_unsplit(r,h,g%cr_c(ilevel),dx,g%dtnew(ilevel))
 #endif
 
   !-------------------------------------------------
   ! Reset flux along direction at refined interfaces
   !-------------------------------------------------
-  if(r%rt_nsubcycle.eq.1) then
+  if(r%cr_nsubcycle.eq.1) then
   do idim=1,ndim
      i0=0; j0=0; k0=0
      if(idim==1)i0=1
@@ -578,9 +727,9 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
         do j3=j3min,j3max+j0
            do i3=i3min,i3max+i0
               if(h%okloc(i3-i0,j3-j0,k3-k0) .or. h%okloc(i3,j3,k3))then
-                 do ivar=1,nrtvar
-#ifdef RT
-                    h%rtflux(i3,j3,k3,ivar,idim)=0.0d0
+                 do ivar=1,ncrvar
+#ifdef CR
+                    h%crflux(i3,j3,k3,ivar,idim)=0.0d0
 #endif
                  end do
               end if
@@ -627,13 +776,22 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
 #endif
                        ! Update conservative variables new state vector
                        if(.not. h%okloc(i3,j3,k3)) then
-                        do ivar=1,nrtvar
-#ifdef RT
-                          m%rtunew(ind_son,ivar,ichild)=m%rtunew(ind_son,ivar,ichild)+ &
-                               & (h%rtflux(i3   ,j3   ,k3   ,ivar,idim) &
-                               & -h%rtflux(i3+i0,j3+j0,k3+k0,ivar,idim))
+                          do igrp=1,ncrgrp
+                            icr_u = 1+(igrp-1)*ndim
+                            icr_f = 1+(igrp-1)*(ndim+1)
+#ifdef CR
+                            m%unew(ind_son,iEcr+igrp-1,ichild)=m%unew(ind_son,iEcr+igrp-1,ichild) &
+                               & +(h%crflux(i3   ,j3   ,k3   ,icr_f,idim)                         &
+                               &  -h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim))
+                            m%unew(ind_son,5,ichild)=m%unew(ind_son,5,ichild)                     &
+                               & +(h%crflux(i3   ,j3   ,k3   ,icr_f,idim)                         &
+                               & - h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim))
+                            m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild) =               &
+                              & m%crunew(ind_son,icr_u:icr_u+ndim-1,ichild)             &
+                              & +(h%crflux(i3  ,j3   ,k3   ,icr_f+1:icr_f+ndim,idim)    &
+                              & -h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim))
 #endif
-                        end do
+                          end do
                        endif
                     end do
                  end do
@@ -649,7 +807,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   !--------------------------------------
   ! Conservative update at level ilevel-1
   !--------------------------------------
-  if(r%rt_nsubcycle.eq.1) then
+  if(r%cr_nsubcycle.eq.1) then
   ! Loop over dimensions
   do idim=1,ndim
      i0=0; j0=0; k0=0
@@ -703,17 +861,17 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                           k3=1+2*(k1+k0-1)+k2
 #endif
                           ! Conservative update of new state variables
-                          do ivar=1,nrtvar
-                             ! For VSLA, when updating coarser level, rescale radiation flux
-                             ! to the expression which would be seen from there.
-                             rt_c_diff = g%rt_c(ilevel-1)/g%rt_c(ilevel)
-                             if (mod(ivar,ndim+1)==1) then
-                                rt_c_diff=1.d0
-                             end if
-#ifdef RT
-                             m%rtunew(icell,ivar,igrid)=m%rtunew(icell,ivar,igrid) &
-                                  & -h%rtflux(i3,j3,k3,ivar,idim)              &
-                                  & * oneontwotondim * rt_c_diff
+                          do igrp=1,ncrgrp
+                             icr_u = 1+(igrp-1)*ndim
+                             icr_f = 1+(igrp-1)*(ndim+1)
+#ifdef CR
+                             m%unew(icell,iEcr+igrp-1,igrid)=m%unew(icell,iEcr+igrp-1,igrid)      &
+                               & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
+                             m%unew(icell,5,igrid)=m%unew(icell,5,igrid)                          &
+                               & -h%crflux(i3,j3,k3,icr_f,idim) * oneontwotondim
+                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                          &
+                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                       &
+                               & -h%crflux(i3,j3,k3,icr_f+1:icr_f+ndim,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -759,16 +917,17 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                           k3=1+2*(k1-k0-1)+k2
 #endif
                           ! Conservative update of new state variables
-                          do ivar=1,nrtvar
-                             ! Rescale for VSLA, as above
-                             rt_c_diff = g%rt_c(ilevel-1)/g%rt_c(ilevel)
-                             if (mod(ivar,ndim+1)==1) then
-                                rt_c_diff=1.d0
-                             end if
-#ifdef RT
-                             m%rtunew(icell,ivar,igrid)=m%rtunew(icell,ivar,igrid) &
-                                  & +h%rtflux(i3+i0,j3+j0,k3+k0,ivar,idim)     &
-                                  & *oneontwotondim * rt_c_diff
+                          do igrp=1,ncrgrp
+                             icr_u = 1+(igrp-1)*ndim
+                             icr_f = 1+(igrp-1)*(ndim+1)
+#ifdef CR
+                             m%unew(icell,iEcr+igrp-1,igrid)=m%unew(icell,iEcr+igrp-1,igrid) &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
+                             m%unew(icell,5,igrid)=m%unew(icell,5,igrid)                     &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f,idim) * oneontwotondim
+                             m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)=                     &
+                               & m%crunew(icell,icr_u:icr_u+(ndim-1),igrid)                  &
+                               & +h%crflux(i3+i0,j3+j0,k3+k0,icr_f+1:icr_f+ndim,idim) * oneontwotondim
 #endif
                           end do
                        end do
@@ -782,7 +941,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
      ! End loop over boundary octs
   end do
   ! End loop over dimensions
-  endif ! if(r%rt_nsubcycle.eq.1)
+  endif ! if(r%cr_nsubcycle.eq.1)
 
   endif
 
@@ -815,14 +974,15 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
 
   end associate
 
-end subroutine rt_godfine1
+end subroutine cr_godfine1
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine init_flush_rt_godunov(mesh,igrid,hash_key)
+subroutine init_flush_cr_godunov(mesh,igrid,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use rt_parameters, only: nrtvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   type(mesh_t)::mesh
   integer::igrid
@@ -833,22 +993,31 @@ subroutine init_flush_rt_godunov(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-#ifdef RT
-  do ivar=1,nrtvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-        mesh%rtunew(ind,ivar,igrid)=0.0d0
+        mesh%unew(ind,ivar,igrid)=0.0d0
      enddo
   enddo
 #endif
 
-end subroutine init_flush_rt_godunov
+#ifdef CR
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%crunew(ind,ivar,igrid)=0.0d0
+     enddo
+  enddo
+#endif
+
+end subroutine init_flush_cr_godunov
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine pack_flush_rt_godunov(mesh,igrid,msg_size,msg_array)
+subroutine pack_flush_cr_godunov(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: twotondim
-  use rt_parameters, only: nrtvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -859,24 +1028,32 @@ subroutine pack_flush_rt_godunov(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_large_realdp)::msg
 
-#ifdef RT
-  do ivar=1,nrtvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-        msg%realdp_rt(ind,ivar)=mesh%rtunew(ind,ivar,igrid)
+        msg%realdp_hydro(ind,ivar)=mesh%unew(ind,ivar,igrid)
+     end do
+  end do
+#endif
+#ifdef CR
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        msg%realdp_cr(ind,ivar)=mesh%crunew(ind,ivar,igrid)
      end do
   end do
 #endif
 
   msg_array=transfer(msg,msg_array)
 
-end subroutine pack_flush_rt_godunov
+end subroutine pack_flush_cr_godunov
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-subroutine unpack_flush_rt_godunov(mesh,igrid,msg_size,msg_array,hash_key)
+subroutine unpack_flush_cr_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_parameters, only: ndim, twotondim
-  use rt_parameters, only: nrtvar
+  use hydro_parameters, only: nvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -892,17 +1069,26 @@ subroutine unpack_flush_rt_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef RT
-  do ivar=1,nrtvar
+#ifdef HYDRO
+  do ivar=1,nvar
      do ind=1,twotondim
-        mesh%rtunew(ind,ivar,igrid)=mesh%rtunew(ind,ivar,igrid)+msg%realdp_rt(ind,ivar)
+        mesh%unew(ind,ivar,igrid)=mesh%unew(ind,ivar,igrid)+msg%realdp_hydro(ind,ivar)
      end do
   end do
 #endif
 
-end subroutine unpack_flush_rt_godunov
+#ifdef CR
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%crunew(ind,ivar,igrid) = &
+            & mesh%crunew(ind,ivar,igrid) + msg%realdp_cr(ind,ivar)
+     end do
+  end do
+#endif
+
+end subroutine unpack_flush_cr_godunov
 !###########################################################
 !###########################################################
 !###########################################################
 !###########################################################
-end module rt_godunov_fine_module
+end module cr_godunov_fine_module

@@ -264,6 +264,9 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
   integer::refined_int
   logical,dimension(1:twotondim)::refined
   real(kind=4),dimension(1:twotondim,1:nprim)::qout
+#if NENER>0
+  integer::irad
+#endif
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 

@@ -34,6 +34,8 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   use lightcone_module, only: m_output_lightcone
   use rt_godunov_fine_module, only: r_set_rtunew,r_set_emissivity
   use rt_step_module, only: m_rt_step
+  use cr_godunov_fine_module, only: r_set_crunew, r_conserve_cr_flux
+  use cr_step_module, only: m_cr_step
   use sink_evolution_module, only: r_sink_evolution, out_accretion_t
   use sink_merger_module, only: r_sink_merger
   use turb_driving, only: r_drive_turb
@@ -254,7 +256,8 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !-----------------------
   ! Set unew equal to uold
   !-----------------------
-  if(r%hydro.and..not.r%static_gas)then
+  !if(r%hydro.and..not.r%static_gas)then
+  if(r%hydro)then
      call m_timer('hydro - set unew','start')
      call r_set_unew(pst,ilevel,1)
   endif
@@ -266,6 +269,14 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
      call m_timer('radiative transfer','start')
      call r_set_rtunew(pst,ilevel,1)
      call r_set_emissivity(pst,ilevel,1)
+  endif
+
+  !---------------------------
+  ! Set crunew equal to cruold
+  !---------------------------
+  if(r%cr)then
+     call m_timer('cosmic rays','start')
+     call r_set_crunew(pst,ilevel,1)
   endif
 
   !---------------------------
@@ -350,10 +361,10 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   !-----------
   if(r%hydro)then
 
-     if(.not.r%static_gas)then
+     !if(.not.r%static_gas)then
         ! Hyperbolic solver
         call m_timer('hydro - godunov','start')
-        call r_godunov_fine(pst,ilevel,1)
+        if(.not. r%static_gas) call r_godunov_fine(pst,ilevel,1)
 
         ! Add gravity source terms to unew with half time step
         if(r%poisson.or.maxval(abs(r%constant_gravity))>0)then
@@ -365,9 +376,21 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         call m_timer('hydro - source','start')
         call r_source_hydro_fine(pst,ilevel,1)
 
+        !------------------------
+        ! Cosmic rays step
+        !------------------------
+        if(r%cr)then
+          if(r%cr_advect)then
+            call m_timer('cosmic rays','start')
+            call m_cr_step(pst,ilevel)
+          endif
+        endif
+
         ! Set uold equal to unew
         call m_timer('hydro - set uold','start')
         call r_set_uold(pst,ilevel,1)
+
+        if(r%cr)call r_conserve_cr_flux(pst,ilevel,1)
 
         ! Add gravity source terms to uold with half time step
         ! to complete the time step with old force (will be removed later)
@@ -381,7 +404,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
            call m_timer('hydro - turbulence','start')
            call m_turb_hydro(pst,ilevel,dble(g%dtnew(ilevel)))
         endif
-     endif
+     !endif
 
      ! Restriction operator
      if(ilevel<r%nlevelmax)then

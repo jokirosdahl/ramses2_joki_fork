@@ -47,6 +47,7 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
   use amr_parameters, only: ndim, twotondim
   use ramses_commons, only: ramses_t
   use pm_commons, only: part_t
+  use cr_parameters, only: ncrgrp
   use nbors_utils
   use cache_commons
   use cache
@@ -75,6 +76,9 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
   real(kind=8)::birth_time,t_sn,e_sn,dteff,dold
   type(msg_large_realdp)::dummy_large_realdp
   logical::ok_level,ok_leaf
+#if NENER>0
+  integer::igrp
+#endif
 
 #ifdef HYDRO
 #if NDIM==3
@@ -176,6 +180,14 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
      m%unew(icell,5,igrid)=m%unew(icell,5,igrid)+ekinetic+ethermal
      if(r%metal)m%unew(icell,r%imetal,igrid)=m%unew(icell,r%imetal,igrid)+dzloss
 
+     if(r%cr) then
+#if NENER>0
+        do igrp=1,ncrgrp
+          m%unew(icell,r%iEcr+igrp-1,igrid) = m%unew(icell,r%iEcr+igrp-1,igrid) + ethermal * r%fecr(igrp)
+        enddo      
+#endif
+     endif
+
      ! If dual energy scheme is activated, update entropy
      if(r%entropy.and.r%dual_energy.GE.0)then
         dold = m%uold(icell,1,igrid)
@@ -265,6 +277,7 @@ end subroutine r_mechanical_feedback
 subroutine mechanical_feedback(s,p,ilevel,msn_loc)
   use amr_parameters, only: ndim, twotondim
   use hydro_parameters, only: nvar
+  use cr_parameters, only: ncrgrp
   use ramses_commons, only: ramses_t
   use pm_commons, only: part_t
   use nbors_utils
@@ -311,13 +324,14 @@ subroutine mechanical_feedback(s,p,ilevel,msn_loc)
   integer,dimension(1:ndim)::ckey,ckey_ref,ckey_nbor
   integer(kind=8),dimension(0:ndim)::hash_cell,hash_nbor
   integer::i,j,k,ipart,ind,idim,ivar,ipart_ref
-  integer::igrid,igridn,icell,icelln
+  integer::igrid,igridn,icell,icelln,igrp
   integer,dimension(1:nSNnei)::igrid_nbor,icell_nbor,level_nbor
   integer,dimension(1:ndim)::ix
   real(kind=8)::scale_nH,scale_T2,scale_l,scale_d,scale_t,scale_v
   real(kind=8)::dx_loc,vol_loc,vol_cell
   real(kind=8)::mejecta,ekinetic,ethermal
-  real(kind=8)::birth_time,t_sn,e_sn,dteff,dold,num_SN
+  real(kind=8)::birth_time,t_sn,e_sn,dteff,dold,num_SN,fecrtot
+  real(kind=8),dimension(ncrgrp)::e_sn_crs
   real(kind=8),dimension(1:3)::xcen,xnei
   real(kind=8),dimension(1:nvar)::q
   type(msg_large_realdp)::dummy_large_realdp
@@ -375,6 +389,17 @@ subroutine mechanical_feedback(s,p,ilevel,msn_loc)
 
   ! Supernovae progenitor mass in code units
   m_SN=r%M_SNII*2d33/(scale_d*scale_l**3)
+
+  if(r%cr) then
+      ! Reserve part of the SN energy for cosmic rays
+      fecrtot = 0.0
+      e_SN_crs(:) = 0.0
+      do igrp=1,ncrgrp
+        e_SN_crs(igrp) = e_SN * r%fecr(igrp)
+        fecrtot = fecrtot + r%fecr(igrp)
+      enddo
+      e_SN = e_SN * (1.0-fecrtot)
+  endif
 
   ! Total mass of ejecta
   msn_loc=0d0
@@ -529,6 +554,16 @@ subroutine mechanical_feedback(s,p,ilevel,msn_loc)
         q(ivar)=m%uold(icell,ivar,igrid)/max(dble(m%uold(icell,1,igrid)),r%smallr)
         m%unew(icell,ivar,igrid)=m%unew(icell,ivar,igrid)+(dloss-dloss*f_LOAD-d*f_LOAD_CEN)*q(ivar)
      end do
+
+     if(r%cr) then
+        ! Inject cosmic rays
+#if NENER>0
+        do igrp=1,ncrgrp
+          m%unew(icell,r%iEcr+igrp-1,igrid) = m%unew(icell,r%iEcr+igrp-1,igrid) + e_SN_crs(igrp) * dloss
+          m%unew(icell,5,igrid) = m%unew(icell,5,igrid) + e_SN_crs(igrp) * dloss
+        enddo      
+#endif
+     endif
 
      ! Update conservative variables in neighboring cells
      dm_ejecta = dloss*f_LOAD/dble(nSNnei)

@@ -102,7 +102,6 @@ subroutine backup_rt(r,g,m,mdl,filename)
   character(LEN=5)::nchar
   character(LEN=flen)::fileloc
   logical::file_exist
-#ifdef RT
   ilun=10+mdl_core(mdl)
   call title(g%myid,nchar)
   fileloc=TRIM(filename)//TRIM(nchar)
@@ -121,11 +120,12 @@ subroutine backup_rt(r,g,m,mdl,filename)
   enddo
   do ilevel=r%levelmin,r%nlevelmax
      do igrid=m%head(ilevel),m%tail(ilevel)
+#ifdef RT
         write(ilun)m%rtuold(:,:,igrid)
+#endif
      end do
   enddo
   close(ilun)
-#endif
 end subroutine backup_rt
 !########################################################################
 !########################################################################

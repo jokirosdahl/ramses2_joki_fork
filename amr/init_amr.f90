@@ -94,6 +94,7 @@ subroutine init_amr(r,g,m,type)
   use amr_parameters, ONLY: nhilbert, ndim, twotondim, threetondim, dp
   use hydro_parameters, ONLY: nvar
   use rt_parameters, ONLY: nrtvar, nrtgrp
+  use cr_parameters, ONLY: ncruvar
   use amr_commons, ONLY: run_t, global_t, mesh_t
   use hash
   use hilbert
@@ -149,6 +150,10 @@ subroutine init_amr(r,g,m,type)
      allocate(m%rtuold(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
      allocate(m%rtunew(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
      allocate(m%emissivity(1:twotondim,1:nrtgrp,1:m%ngridmax+m%ncachemax))
+#endif
+#ifdef CR
+     allocate(m%cruold(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
+     allocate(m%crunew(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
 #endif
 #ifdef TURB
      allocate(m%fturb(1:twotondim,1:3,1:m%ngridmax+m%ncachemax))

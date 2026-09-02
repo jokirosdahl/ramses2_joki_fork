@@ -146,6 +146,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   use nbors_utils
   use hydro_parameters, only: nvar, nion
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncruvar
 #ifndef RTZ
   use init_xion_module, only: calc_equilibrium_xion
 #endif
@@ -189,6 +190,10 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #ifdef RT
   real(kind=8),dimension(1:nrtvar)::rtuold
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold_tmp
+#endif
+#ifdef CR
+  real(kind=8),dimension(1:nrtvar)::cruold
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold_tmp
 #endif
 #ifdef GRAV
   real(kind=8),dimension(1:twotondim,1:3)::f_tmp
@@ -432,6 +437,9 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #ifdef RT
         rtuold_tmp=m%rtuold(:,:,j)
 #endif
+#ifdef CR
+        cruold_tmp=m%cruold(:,:,j)
+#endif
 #ifdef GRAV
         f_tmp=m%f(:,:,j)
         phi_tmp=m%phi(:,j)
@@ -451,6 +459,9 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #endif
 #ifdef RT
            m%rtuold(:,:,i)=m%rtuold(:,:,inew)
+#endif
+#ifdef CR
+           m%cruold(:,:,i)=m%cruold(:,:,inew)
 #endif
 #ifdef GRAV
            m%f(:,:,i)=m%f(:,:,inew)
@@ -478,6 +489,9 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
 #endif
 #ifdef RT
         m%rtuold(:,:,i)=rtuold_tmp
+#endif
+#ifdef CR
+        m%cruold(:,:,i)=cruold_tmp
 #endif
 #ifdef GRAV
         m%f(:,:,i)=f_tmp
@@ -545,6 +559,7 @@ subroutine pack_flush_refine(mesh,igrid,msg_size,msg_array)
   use amr_parameters, only: ndim, twotondim
   use hydro_parameters, only: nvar
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncruvar
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   type(mesh_t)::mesh
@@ -591,6 +606,14 @@ subroutine pack_flush_refine(mesh,igrid,msg_size,msg_array)
   end do
 #endif
 
+#ifdef CR
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
+     end do
+  end do
+#endif
+
   msg_array=transfer(msg,msg_array)
 
 end subroutine pack_flush_refine
@@ -604,6 +627,7 @@ subroutine unpack_flush_refine(mesh,igrid,msg_size,msg_array,hash_key)
   use amr_commons, only: mesh_t
   use cache_commons, only: msg_large_realdp
   use rt_parameters, only: nrtvar
+  use cr_parameters, only: ncruvar
   type(mesh_t)::mesh
   integer::igrid
   integer::msg_size
@@ -653,6 +677,14 @@ subroutine unpack_flush_refine(mesh,igrid,msg_size,msg_array,hash_key)
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtuold(ind,ivar,igrid)=msg%realdp_rt(ind,ivar)
+     end do
+  end do
+#endif
+
+#ifdef CR
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)
      end do
   end do
 #endif
@@ -738,6 +770,9 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
   use amr_parameters, only: ndim, nhilbert, twotondim, twondim, nvector
   use hydro_parameters, only: nvar
   use ramses_commons, only: ramses_t
+#ifdef CR
+  use cr_parameters, only: ncruvar
+#endif
   use nbors_utils
   use cache_commons
   use hilbert
@@ -781,6 +816,10 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
 #ifdef RT
   real(kind=8),dimension(0:twondim  ,1:nrtvar)::rtu1
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtu2
+#endif
+#ifdef CR
+  real(kind=8),dimension(0:twondim  ,1:ncruvar)::cru1
+  real(kind=8),dimension(1:twotondim,1:ncruvar)::cru2
 #endif
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
@@ -897,6 +936,13 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
      end do
   end do
 #endif
+#ifdef CR
+  do inbor=0,twondim
+     do ivar=1,ncruvar
+        cru1(inbor,ivar)=m%cruold(ind_nbor(inbor),ivar,igrid_nbor(inbor))
+     end do
+  end do
+#endif
 #ifdef MHD
   ! Store parent cell MHD variables
   do inbor=0,twondim
@@ -950,7 +996,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
 #endif
 #ifdef RT
   ! Interpolate using rt variables
-  call interpol_rt(rtu1,rtu2,r%interpol_var,r%interpol_type,smallnp)
+  call interpol_rt(rtu1,rtu2,r%interpol_type)
   ! Store children cell rt variables
   do ivar=1,nrtvar
      do ind=1,twotondim
@@ -959,6 +1005,16 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
         if(mod(ivar,ndim+1).eq.1)then
            m%rtuold(ind,ivar,ichild) = m%rtuold(ind,ivar,ichild) * g%rt_c(ilevel-1)/g%rt_c(ilevel)
         end if
+     end do
+  end do
+#endif
+#ifdef CR
+  ! Interpolate using CR variables
+  call interpol_cr(cru1,cru2,r%interpol_type)
+  ! Store children cell CR variables
+  do ivar=1,ncruvar
+     do ind=1,twotondim
+        m%cruold(ind,ivar,ichild)=cru2(ind,ivar)
      end do
   end do
 #endif

@@ -10,6 +10,7 @@ subroutine m_init_refine_adaptive(pst)
   use refine_utils, only: m_refine_fine
   use upload_module, only: m_upload_fine
   use rt_upload_module, only: m_rt_upload_fine
+  use cr_upload_module, only: m_cr_upload_fine
 #ifdef GRAV
   use rho_fine_module, only: m_rho_fine
 #endif
@@ -62,6 +63,16 @@ subroutine m_init_refine_adaptive(pst)
         end do
         do ilevel=pst%s%r%nlevelmax-1,pst%s%r%levelmin,-1
            call m_rt_upload_fine(pst,ilevel)
+        end do
+     endif
+
+     ! Initialize cr variables on the fine grids
+     if(pst%s%r%cr)then
+        do ilevel=pst%s%r%nlevelmax,pst%s%r%levelmin+1,-1
+           call m_cr_init_flow_fine(pst,ilevel)
+        end do
+        do ilevel=pst%s%r%nlevelmax-1,pst%s%r%levelmin,-1
+           call m_cr_upload_fine(pst,ilevel)
         end do
      endif
 

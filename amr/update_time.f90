@@ -13,6 +13,7 @@ subroutine m_update_time(pst,ilevel,done)
   use ramses_commons, only: pst_t
   use mdl_module
   use update_rt_c_module, only: r_rt_neq_updates
+  use update_cr_c_module, only: r_cr_updates
   use turb_update_module, only: r_update_turb
   implicit none
   type(pst_t)::pst
@@ -99,6 +100,11 @@ subroutine m_update_time(pst,ilevel,done)
         ! RT and non-equilibrium chemistry updates
         !----------------------------------------------
         call r_rt_neq_updates(pst, pst%s%g%nstep_coarse, 1)
+
+        !----------------------------------------------
+        ! CR updates
+        !----------------------------------------------
+        call r_cr_updates(pst, pst%s%g%nstep_coarse, 1)
 
         !----------------------------------------------
         ! Output mass and energy conservation to screen

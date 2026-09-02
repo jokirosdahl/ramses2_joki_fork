@@ -35,6 +35,7 @@ end subroutine r_init_time
   use cooling_module, only: cooling_t,set_table
   use init_cooling_module, only: init_cooling
   use coolrates_module, only: neq_cooling_t, update_rt_c
+  use update_cr_c_module, only: update_cr_vars
   use init_neq_chem_module, only: init_neq_chem
   use SED_module, only: sed_table_t, init_SED_table
   implicit none
@@ -110,6 +111,9 @@ end subroutine r_init_time
      call init_SED_table(r,g,sed)
   endif
 
+  if(r%cr)then
+     call update_cr_vars(r,g)
+  endif
 end subroutine init_time
 !###########################################################
 !###########################################################

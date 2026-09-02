@@ -56,19 +56,50 @@ print("Reading output number ",nout)
 
 s=ram.rd_part(nout,path=path,prefix='star',center=center,radius=radius)
 i=ram.rd_info(nout,path=path)
-time=abs(s.birth_date*i.unit_t/i.aexp**2/(365*24*3600*1e9))
+is_cosmo = bool(np.any(s.birth_date < 0))
+
+if is_cosmo:
+    time = abs(s.birth_date * i.unit_t / i.aexp**2 / (365 * 24 * 3600 * 1e9))
+    xlabel = 'Lookback time [Gyr]'
+else:
+    time = s.birth_date * i.unit_t / (365 * 24 * 3600 * 1e9)
+    xlabel = 'Time [Gyr]'
+
 if np.max(time) < bin_size:
-    print("Reduce bin size, bin=",bin_size," max(time)=",np.max(time))
+    print("Reduce bin size, bin=", bin_size, " max(time)=", np.max(time))
     exit()
 
-n_bin=int(np.max(time)/bin_size)
-bins=np.linspace(0,np.max(time),n_bin)
-unit_m=i.unit_d*i.unit_l**3/2e33/(bins[1]-bins[0])/1e9
-plt.hist(time,weights=s.mass*unit_m,bins=bins)
+n_bin = int(np.max(time) / bin_size)
+bins = np.linspace(0, np.max(time), n_bin)
+
+if is_cosmo:
+    hist, _ = np.histogram(time, bins=bins)
+    imin = np.where(hist > 0)[0][0]
+    bins = bins[imin:]
+
+unit_m = i.unit_d * i.unit_l**3 / 2e33 / (bins[1] - bins[0]) / 1e9
+
+fig, ax1 = plt.subplots()
+sfr, _, _ = ax1.hist(time, weights=s.mass * unit_m, bins=bins)
 if log:
-    plt.yscale("log")
-plt.xlabel('t [Gyr]')
-plt.ylabel('SFR [Msol/yr]')
+    ax1.set_yscale("log")
+ax1.set_xlabel(xlabel)
+ax1.set_ylabel('SFR [Msol/yr]')
+
+if is_cosmo:
+    cum_mass = np.cumsum(sfr[::-1])[::-1] * (bins[1] - bins[0]) * 1e9
+else:
+    cum_mass = np.cumsum(sfr) * (bins[1] - bins[0]) * 1e9
+
+time_bins = 0.5 * (bins[:-1] + bins[1:])
+
+ax2 = ax1.twinx()
+ax2.plot(time_bins, cum_mass, color='r')
+ax2.set_ylabel('Cumulative Mass [Msol]')
+if log:
+    ax2.set_yscale("log")
+
+ax1.set_xlim(bins[0], bins[-1])
 
 if args.out:
     plt.savefig(args.out)

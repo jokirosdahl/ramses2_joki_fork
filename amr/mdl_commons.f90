@@ -136,6 +136,17 @@ module mdl_parameters
      enumerator::MDL_UPDATE_TURB
      enumerator::MDL_DRIVE_TURB
      enumerator::MDL_TURB_HYDRO
+     enumerator::MDL_INIT_CR
+     enumerator::MDL_CR_INPUT_CONDINIT
+     enumerator::MDL_CR_UPDATES
+     enumerator::MDL_BROADCAST_CR_C
+     enumerator::MDL_CR_UPLOAD_FINE
+     enumerator::MDL_OUTPUT_CR
+     enumerator::MDL_CR_GODUNOV_FINE
+     enumerator::MDL_CR_SOURCE_TERMS
+     enumerator::MDL_SET_CRUNEW
+     enumerator::MDL_SET_CRUOLD
+     enumerator::MDL_CONSERVE_CR_FLUX
   end enum
 
   ! Maximum number of cpus
