@@ -100,7 +100,7 @@ recursive subroutine r_set_emissivity(pst,ilevel,input_size)
      call r_set_emissivity(pst%pLower,ilevel,input_size)
      call mdl_get_reply(pst%s%mdl,rID,0)
   else
-#ifdef RT
+#ifdef DO_RT
      do i=pst%s%m%head(ilevel),pst%s%m%tail(ilevel)
         pst%s%m%emissivity(:,:,i)=0
      end do
@@ -149,7 +149,7 @@ subroutine set_rtunew(m,ilevel)
   integer::i
 
   ! Set rtunew to rtuold for myid cells
-#ifdef RT
+#ifdef DO_RT
   do i=m%head(ilevel),m%tail(ilevel)
      m%rtunew(:,:,i)=m%rtuold(:,:,i)
   end do
@@ -200,7 +200,7 @@ subroutine set_rtuold(r, g, m, ilevel)
   integer :: i, j, ig, iN
 
   ! Add emissivity source term
-#ifdef RT
+#ifdef DO_RT
   if(.not.r%neq_chem)then
      do ig=1,nrtgrp
         iN=1+(ig-1)*ndim
@@ -215,7 +215,7 @@ subroutine set_rtuold(r, g, m, ilevel)
   if(r%neq_chem.and.r%rt_smooth)return
 
  ! Set rtuold to rtunew
-#ifdef RT
+#ifdef DO_RT
   do i = m%head(ilevel), m%tail(ilevel)
      m%rtuold(:,:,i) = m%rtunew(:,:,i)
   end do
@@ -401,7 +401,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
 #endif             
                        ! Gather RT variables
                        do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                           h%rtuloc(i3,j3,k3,ivar)=m%rtuold(ind_son,ivar,ind_oct)
 #endif
                        end do
@@ -478,7 +478,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                  ! Gather RT variables
                  do inbor=0,twondim
                     do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                        u1(inbor,ivar)=m%rtuold(icell_nbor(inbor),ivar,igrid_nbor(inbor))
 #endif
                     end do
@@ -518,7 +518,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                           h%okloc(i3,j3,k3)=m%grid(ichild)%refined(ind_son)
                           ! Gather RT variables
                           do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                              h%rtuloc(i3,j3,k3,ivar)=m%rtuold(ind_son,ivar,ichild)
 #endif
                           end do
@@ -532,7 +532,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                           h%okloc(i3,j3,k3)=.false.
                           ! Gather interpolated hydro variables
                           do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                              h%rtuloc(i3,j3,k3,ivar)=u2(ind_son,ivar)
                              if(mod(ivar,ndim+1)==1) then
                                 ! Variable light speed correction for coarser level
@@ -558,7 +558,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   !-------------------------------------------------
   ! Compute flux using second-order Godunov method
   !-------------------------------------------------
-#ifdef RT
+#ifdef DO_RT
   call rt_unsplit(h%rtuloc,h%rtflux,h%cFlx,        &
        & g%rt_c(ilevel),dx,dx,dx,g%dtnew(ilevel),  &
        & h%iu1,h%iu2,h%ju1,h%ju2,h%ku1,h%ku2,      &
@@ -579,7 +579,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
            do i3=i3min,i3max+i0
               if(h%okloc(i3-i0,j3-j0,k3-k0) .or. h%okloc(i3,j3,k3))then
                  do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                     h%rtflux(i3,j3,k3,ivar,idim)=0.0d0
 #endif
                  end do
@@ -628,7 +628,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                        ! Update conservative variables new state vector
                        if(.not. h%okloc(i3,j3,k3)) then
                         do ivar=1,nrtvar
-#ifdef RT
+#ifdef DO_RT
                           m%rtunew(ind_son,ivar,ichild)=m%rtunew(ind_son,ivar,ichild)+ &
                                & (h%rtflux(i3   ,j3   ,k3   ,ivar,idim) &
                                & -h%rtflux(i3+i0,j3+j0,k3+k0,ivar,idim))
@@ -710,7 +710,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                              if (mod(ivar,ndim+1)==1) then
                                 rt_c_diff=1.d0
                              end if
-#ifdef RT
+#ifdef DO_RT
                              m%rtunew(icell,ivar,igrid)=m%rtunew(icell,ivar,igrid) &
                                   & -h%rtflux(i3,j3,k3,ivar,idim)              &
                                   & * oneontwotondim * rt_c_diff
@@ -765,7 +765,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                              if (mod(ivar,ndim+1)==1) then
                                 rt_c_diff=1.d0
                              end if
-#ifdef RT
+#ifdef DO_RT
                              m%rtunew(icell,ivar,igrid)=m%rtunew(icell,ivar,igrid) &
                                   & +h%rtflux(i3+i0,j3+j0,k3+k0,ivar,idim)     &
                                   & *oneontwotondim * rt_c_diff
@@ -833,7 +833,7 @@ subroutine init_flush_rt_godunov(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtunew(ind,ivar,igrid)=0.0d0
@@ -859,7 +859,7 @@ subroutine pack_flush_rt_godunov(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_large_realdp)::msg
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         msg%realdp_rt(ind,ivar)=mesh%rtunew(ind,ivar,igrid)
@@ -892,7 +892,7 @@ subroutine unpack_flush_rt_godunov(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtunew(ind,ivar,igrid)=mesh%rtunew(ind,ivar,igrid)+msg%realdp_rt(ind,ivar)

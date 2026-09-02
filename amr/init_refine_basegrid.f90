@@ -36,12 +36,12 @@ subroutine m_init_refine_basegrid(pst)
   if(r%hydro)call m_init_flow_fine(pst,r%levelmin)
 
   ! Initialize rt variables on the base grid
-#ifdef RT
+#ifdef DO_RT
   if(r%rt)call m_rt_init_flow_fine(pst,r%levelmin)
 #endif
 
   ! Initialize cr variables on the base grid
-#ifdef CR
+#ifdef DO_CR
   if(r%cr)call m_cr_init_flow_fine(pst,r%levelmin)
 #endif
 

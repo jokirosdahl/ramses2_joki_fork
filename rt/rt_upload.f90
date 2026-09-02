@@ -86,7 +86,7 @@ subroutine rt_upload_fine(s,ilevel)
      do ivar=1,nrtvar
         do ind=1,twotondim
            if(m%grid(ioct)%refined(ind))then
-#ifdef RT
+#ifdef DO_RT
               m%rtuold(ind,ivar,ioct)=0.0
 #endif
            endif
@@ -110,12 +110,12 @@ subroutine rt_upload_fine(s,ilevel)
      do ivar=1,nrtvar
         average=0.0d0
         do ind=1,twotondim
-#ifdef RT
+#ifdef DO_RT
            average=average+m%rtuold(ind,ivar,ioct)
 #endif
         end do
         ! Scatter result to parent cell
-#ifdef RT
+#ifdef DO_RT
         m%rtuold(icell,ivar,igrid)=average/dble(twotondim)
         ! Rescale according to light speed difference between levels
         if (mod(ivar,ndim+1).eq.1) &
@@ -147,7 +147,7 @@ subroutine init_flush_upload_rt(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         mesh%rtuold(ind,ivar,igrid)=0.0d0
@@ -173,7 +173,7 @@ subroutine pack_flush_upload_rt(mesh,igrid,msg_size,msg_array)
   integer::ind,ivar
   type(msg_realdp)::msg
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         msg%realdp_rt(ind,ivar)=mesh%rtuold(ind,ivar,igrid)
@@ -206,7 +206,7 @@ subroutine unpack_flush_upload_rt(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef RT
+#ifdef DO_RT
   do ivar=1,nrtvar
      do ind=1,twotondim
         if(mesh%grid(igrid)%refined(ind))then

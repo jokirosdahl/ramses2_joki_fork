@@ -91,7 +91,7 @@ END SUBROUTINE neq_set_model
 
 !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
-#ifdef RT
+#ifdef DO_RT
      & Np, Fp, p_gas, dNpdt, dFpdt, ilevel, &
 #endif
      & dt, nCell)
@@ -121,7 +121,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
   real(kind=8),dimension(1:nvector):: T2
   real(kind=8),dimension(1:nion, 1:nvector):: xion
   real(kind=8),dimension(1:nvector):: nH, Zsolar
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:ndim, 1:nvector):: p_gas
   real(kind=8),dimension(1:nrtgrp, 1:nvector):: Np, dNpdt
   real(kind=8),dimension(1:ndim, 1:nrtgrp, 1:nvector):: Fp, dFpdt
@@ -139,7 +139,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
   integer::i, ia, nAct, nAct_next, loopcnt, code
   integer,dimension(1:nvector):: indAct              ! Active cell indexes
   real(kind=8):: one_over_x_FRAC, one_over_T_FRAC
-#ifdef RT
+#ifdef DO_RT
   integer::ig
   real(kind=8):: one_over_rt_c_cgs, one_over_egy_IR_erg
   real(kind=8):: one_over_Np_FRAC, one_over_Fp_FRAC
@@ -155,7 +155,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
   ! Store some temporary variables reduce computations
   one_over_T_FRAC = 1d0 / T_FRAC
   one_over_x_FRAC = 1d0 / x_FRAC
-#ifdef RT
+#ifdef DO_RT
   one_over_Np_FRAC = 1d0 / Np_FRAC
   one_over_Fp_FRAC = 1d0 / Fp_FRAC
   one_over_rt_c_cgs = 1d0 / tables%rt_c_cgs(ilevel)
@@ -194,7 +194,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
            endif
         endif
      endif ! isHe
-#ifdef RT
+#ifdef DO_RT
      do ig=1,nrtgrp
         Np(ig,i) = MAX(smallNp, Np(ig,i))
         call reduce_flux(Fp(:,ig,i),Np(ig,i)*tables%rt_c_cgs(ilevel))
@@ -214,7 +214,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
         call cool_step(i)
         if(loopcnt .gt. 100000) then
            call display_coolinfo(.true., loopcnt, i, dt-tleft(i), dt, ddt(i), nH(i), &
-#ifdef RT
+#ifdef DO_RT
                 &                Np(:,i), Fp(:,:,i), p_gas(:,i), dNp, dFp, dp_gas, ilevel, &
 #endif
                 &                T2(i), xion(:,i), dT2, dXion, code)
@@ -228,7 +228,7 @@ SUBROUTINE neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
         ! Update the cell state (advance the time by ddt):
         T2(i) = T2(i) + dT2
         xion(:,i) = xion(:,i) + dXion(:)
-#ifdef RT
+#ifdef DO_RT
         Np(:,i) = Np(:,i) + dNp(:)
         Fp(:,:,i) = Fp(:,:,i) + dFp(:,:)
         p_gas(:,i) = p_gas(:,i) + dp_gas(:)
@@ -285,7 +285,7 @@ contains
     real(kind=8):: xHI,dxHI, xH2=0d0,dXH2=0d0, xHeI,dxHeI
     real(kind=8):: Crate, dCdT2, X_nHkb, rate, dRate, cr, de=0d0
     real(kind=8):: photoRate, metal_tot, metal_prime, ss_factor, f_dust
-#ifdef RT
+#ifdef DO_RT
     integer:: iion,igroup,idim
     real(kind=8),dimension(ndim):: dmom
     real(kind=8),dimension(nrtgrp):: recRad, phAbs, phSc, dustAbs
@@ -301,7 +301,7 @@ contains
     !-----------------------------------------------------------------------
     associate(ixHI=>r%ixHi,ixHII=>r%ixHII,ixHeII=>r%ixHeII,ixHeIII=>r%ixHeIII)
 
-#ifdef RT
+#ifdef DO_RT
     signc=tables%signc(:,:,ilevel)
     rt_c_fraction = r%rt_c_fraction(ilevel)
     rt_c_cgs = tables%rt_c_cgs(ilevel)
@@ -310,7 +310,7 @@ contains
     nHe=0.25*nH(icell)*r%Y_He/r%X_H       ! Helium number density
     ! U contains the original values, dU the updated ones
     dT2 = T2(icell) ; dXion(:) = xion(:,icell)
-#ifdef RT
+#ifdef DO_RT
     dNp(:) = Np(:,icell) ; dFp(:,:) = Fp(:,:,icell)
     dp_gas(:) = p_gas(:,icell)
 #endif
@@ -349,7 +349,7 @@ contains
     ss_factor = 1d0                  ! UV background self_shielding factor
     if(r%self_shielding) ss_factor = exp(-nH(icell)/1d-2)
     rho = nH(icell) / r%X_H * mH
-#ifdef RT
+#ifdef DO_RT
     ! Set dust opacities--------------------------------------------------
     kAbs_loc = r%kappaAbs
     kSc_loc = r%kappaSc
@@ -502,7 +502,7 @@ contains
     if(.not. r%neq_isTconst .and. .not. r%rt_T_rad) then
        Hrate = 0.                           !  Heating rate [erg cm-3 s-1]
        if(r%haardt_madau) Hrate = Hrate + SUM(nN(:)*tables%UVrates(:,2)) * ss_factor
-#ifdef RT
+#ifdef DO_RT
        if(r%rt_advect) then
           do igroup=1,nrtgrp                            !  Photoheating
              Hrate = Hrate + dNp(igroup) * SUM(nN(:)                     &
@@ -517,7 +517,7 @@ contains
        endif
 #endif
        if(r%isH2) then
-#ifdef RT
+#ifdef DO_RT
                                               ! UV pumping, Baczynski 2015
           cdex  = 1d-12 * (1.4 * exp(-18100. / (TK + 1200.)) * xH2       &
                 + exp(-1000. / TK) * dxion(ixHI))                        &
@@ -575,7 +575,7 @@ contains
        TK=dT2*mu
     endif
 
-#ifdef RT
+#ifdef DO_RT
     if(r%rt_isIR) then
        if(kAbs_loc(iIR) .gt. 0d0 .and. .not. r%rt_T_rad) then
           ! Evolve IR-Dust equilibrium temperature------------------------
@@ -624,7 +624,7 @@ contains
                    + inp_coolrates_table(tables,tables%tbl_Beta_H2H2, TK,.false.) * xH2
        cr = alpha(ixHI) * dxion(ixHI)                        ! H2 Creation
        photoRate=0.
-#ifdef RT
+#ifdef DO_RT
        photoRate = SUM(signc(:,ixHI)*dNp)
 #endif
        if(r%haardt_madau) photoRate = photoRate + tables%UVrates(ixHI,1)*ss_factor
@@ -642,7 +642,7 @@ contains
     beta(ixHII) = inp_coolrates_table(tables,tables%tbl_Beta_HI, TK,.false.) ! Coll.ion.rate
     cr = alpha(ixHII) * ne * dxion(ixHII) + 2. * de * dxH2    !HI creation
     photoRate=0.
-#ifdef RT
+#ifdef DO_RT
     photoRate = SUM(signc(:,ixHII)*dNp)           !                  [s-1]
 #endif
     if(r%haardt_madau) photoRate = photoRate + tables%UVrates(ixHII,1)*ss_factor
@@ -714,7 +714,7 @@ contains
        ! Destruction = collisional ionization+photoionization of HeI
        de = beta(ixHeII) * ne
        if(r%cosmic_rays) de = de + 1.1 * cosray_HI
-#ifdef RT
+#ifdef DO_RT
        de = de + SUM(signc(:,ixHeII)*dNp)
 #endif
        if(r%haardt_madau) de = de + tables%UVrates(ixHeII,1) * ss_factor
@@ -725,7 +725,7 @@ contains
        cr = de * xHeI + alpha(ixHeIII) * ne * dXion(ixHeIII)
        ! Destruction = rec. of HeII + coll.- and photo-ionization of HeII
        photoRate = 0.
-#ifdef RT
+#ifdef DO_RT
        photoRate = SUM(signc(:,ixHeIII)*dNp)
 #endif
        if(r%haardt_madau) photoRate = photoRate + tables%UVrates(ixHeIII,1) * ss_factor
@@ -785,7 +785,7 @@ contains
 
     ! CLEAN UP AND RETURN ************************************************
     dT2 = dT2-T2(icell) ; dXion(:) = dXion(:)-xion(:,icell)
-#ifdef RT
+#ifdef DO_RT
     dNp(:) = dNp(:)-Np(:,icell) ; dFp(:,:) = dFp(:,:)-Fp(:,:,icell)
     dp_gas(:)= dp_gas(:)-p_gas(:,icell)
 #endif
@@ -805,14 +805,14 @@ contains
 
   !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   SUBROUTINE display_coolinfo(stopRun, loopcnt, i, dtDone, dt, ddt, nH,    &
-#ifdef RT
+#ifdef DO_RT
        &                      Np,  Fp,  p_gas, dNp, dFp, dp_gas,ilevel,    &
 #endif
        &                      T2,  xion, dT2, dXion, code)
     ! Print cooling information to standard output, and maybe stop execution.
     !------------------------------------------------------------------------
     real(kind=8),dimension(nion):: xion, dXion
-#ifdef RT
+#ifdef DO_RT
     real(kind=8),dimension(nrtgrp):: Np, dNp
     real(kind=8),dimension(ndim, nrtgrp):: Fp, dFp
     real(kind=8),dimension(ndim):: p_gas, dp_gas
@@ -824,7 +824,7 @@ contains
     !------------------------------------------------------------------------
     if(stopRun) write(*, 111) loopcnt
     if(.true.) then
-#ifdef RT
+#ifdef DO_RT
        write(*,900) loopcnt, code, i, dtDone, dt, ddt, tables%rt_c_cgs(ilevel), nH
        write(*,901) T2,      xion,      Np,      Fp,      p_gas
        write(*,902) dT2,     dXion,     dNp,     dFp,     dp_gas
@@ -1061,7 +1061,7 @@ SUBROUTINE neq_evol_single_cell(r, tables, astart, aend, dasura, &
   real(kind=8)::n_spec(1:7)
   real(kind=8),dimension(1:nvector):: T2
   real(kind=8),dimension(1:nion, 1:nvector):: xion
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:nrtgrp, 1:nvector):: Np, dNpdt
   real(kind=8),dimension(1:ndim, 1:nrtgrp, 1:nvector):: Fp, dFpdt
   real(kind=8),dimension(1:ndim, 1:nvector):: p_gas
@@ -1085,7 +1085,7 @@ SUBROUTINE neq_evol_single_cell(r, tables, astart, aend, dasura, &
   xion(ixHII,1)=n_Spec(4)/(nH_com/aexp**3)              !   HII   fraction
   if(r%isHe) xion(ixHeII,1)=n_Spec(6)/(nH_com/aexp**3)  !   HeII  fraction
   if(r%isHe) xion(ixHeIII,1)=n_Spec(7)/(nH_com/aexp**3) !   HeIII fraction
-#ifdef RT
+#ifdef DO_RT
   Np(:,1)=0. ; Fp(:,:,1)=0.                  ! Photon densities and fluxes
   dNpdt(:,1)=0. ; dFpdt(:,:,1)=0.              ! are set to zero initially
   p_gas(:,1)=0.                                 ! Gas momemtum set to zero
@@ -1104,7 +1104,7 @@ SUBROUTINE neq_evol_single_cell(r, tables, astart, aend, dasura, &
      nH(1) = nH_com/aexp**3
      T2(1) = T2(1)/aexp**2
      call neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
-#ifdef RT
+#ifdef DO_RT
           & Np, Fp, p_gas, dNpdt, dFpdt, r%levelmin, &
 #endif
           & dt_cool, 1)
@@ -1314,7 +1314,7 @@ SUBROUTINE updateRTGroups_CoolConstants(r,tables)
   implicit none
   type(run_t)::r
   type(neq_cooling_t)::tables
-#ifdef RT
+#ifdef DO_RT
   !------------------------------------------------------------------------
   integer::iP, iI, i
   !------------------------------------------------------------------------
@@ -1333,7 +1333,7 @@ SUBROUTINE updateRTGroups_CoolConstants(r,tables)
 #endif
 END SUBROUTINE updateRTGroups_CoolConstants
 !************************************************************************
-#ifdef RT
+#ifdef DO_RT
 SUBROUTINE reduce_flux(Fp, cNp)
   ! Make sure the reduced photon flux is less than one
   !------------------------------------------------------------------------

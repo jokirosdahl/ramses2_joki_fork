@@ -43,10 +43,10 @@ module cache_commons
 #ifdef MHD
      real(kind=8),dimension(1:twotondim,1:6)::realdp_mhd
 #endif
-#ifdef RT
+#ifdef DO_RT
      real(kind=8),dimension(1:twotondim,1:nrtvar)::realdp_rt
 #endif
-#ifdef CR
+#ifdef DO_CR
      real(kind=8),dimension(1:twotondim,1:ncrvar)::realdp_cr
 #endif
   end type msg_realdp
@@ -92,10 +92,10 @@ module cache_commons
 #ifdef HYDRO
      real(kind=8),dimension(1:twotondim,1:nvar)::realdp_hydro
 #endif
-#ifdef RT
+#ifdef DO_RT
      real(kind=8),dimension(1:twotondim,1:nrtvar)::realdp_rt
 #endif
-#ifdef CR
+#ifdef DO_CR
      real(kind=8),dimension(1:twotondim,1:ncrvar)::realdp_cr
 #endif
 #ifdef MHD

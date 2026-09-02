@@ -54,7 +54,7 @@ subroutine output_rt(s,filename)
   logical::overflow_reported=.false.
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-#ifdef RT
+#ifdef DO_RT
   call open_file(s,filename,nskip,ilun)
   overflow_reported=.false.
   do ilevel=r%levelmin,r%nlevelmax
@@ -120,7 +120,7 @@ subroutine backup_rt(r,g,m,mdl,filename)
   enddo
   do ilevel=r%levelmin,r%nlevelmax
      do igrid=m%head(ilevel),m%tail(ilevel)
-#ifdef RT
+#ifdef DO_RT
         write(ilun)m%rtuold(:,:,igrid)
 #endif
      end do
@@ -187,7 +187,7 @@ subroutine output_rtinfo(r, g, filename)
 
   ilun=11
 
-#ifdef RT
+#ifdef DO_RT
   ! Conversion factor from user units to cgs units
   call rt_units(r,g,scale_np,scale_fp)
 #endif
@@ -230,7 +230,7 @@ subroutine write_group_props(r, update, lun)
 !------------------------------------------------------------------------
   use amr_commons, only: run_t
   use rt_parameters, only: nrtgrp
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: elements, n_elements
 #endif
   implicit none
@@ -252,7 +252,7 @@ subroutine write_group_props(r, update, lun)
   do ip = 1, nrtgrp
      write(lun, 907) ip
      write(lun, 904) r%group_egy(ip)
-#ifdef RTZ
+#ifdef DO_RTZ
      do iE=1,n_elements
         if (elements(iE)%atomic_number.gt.0) then
            write(lun, 905) elements(iE)%element_name, r%group_csn(ip,iE,1:elements(iE)%n_ions+elements(iE)%n_mol)
@@ -270,7 +270,7 @@ subroutine write_group_props(r, update, lun)
 902 format ('  groupL1  [eV]  = ', 20f12.3)
 903 format ('  spec2group     = ', 20I12)
 904 format ('  egy      [eV]  = ', 1pe12.3)
-#ifdef RTZ
+#ifdef DO_RTZ
 905 format ('  csn    [cm^2]  = ', A20, 27(1pe12.3))
 906 format ('  cse    [cm^2]  = ', A20, 27(1pe12.3))
 #else

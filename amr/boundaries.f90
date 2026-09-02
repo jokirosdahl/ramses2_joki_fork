@@ -85,7 +85,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
   real(kind=8),dimension(1:nvector,1:ndim)::ff
   real(kind=8),dimension(1:nvector)::phi
   real(kind=8)::dx,rr,vx,vy,vz,pp,eint,ekin,emag,erad
-#ifdef CR
+#ifdef DO_CR
   real(kind=8),dimension(1:nvector,1:ncruvar)::cruu
 #endif
 
@@ -147,7 +147,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #endif
-#ifdef RT
+#ifdef DO_RT
         do ivar=1,nrtvar
            reverse=1
            if(mod(ivar-1, ndim+1) == dir) reverse=-1
@@ -156,7 +156,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
            end do
         end do
 #endif
-#ifdef CR
+#ifdef DO_CR
         do ivar=1,ncruvar
            reverse=1
            if((mod(ivar-1, ndim)+1) == dir) reverse=-1
@@ -193,7 +193,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #endif
-#ifdef RT
+#ifdef DO_RT
         do ivar=1,nrtvar
            reverse=1
            if(mod(ivar-1, ndim+1) == dir) reverse=-1
@@ -202,7 +202,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
            end do
         end do
 #endif
-#ifdef CR
+#ifdef DO_CR
         do ivar=1,ncruvar
            reverse=1
            if((mod(ivar-1, ndim)+1) == dir) reverse=-1
@@ -242,14 +242,14 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #endif
-#ifdef RT
+#ifdef DO_RT
         do ivar=1,nrtvar
            do ind=1,twotondim
               m%rtuold(ind,ivar,igrid)=m%rtuold(ind2_right(ind,dir),ivar,igrid_ref)
            end do
         end do
 #endif
-#ifdef CR
+#ifdef DO_CR
         do ivar=1,ncruvar
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind2_right(ind,dir),ivar,igrid_ref)
@@ -282,14 +282,14 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
 #endif
 #endif
-#ifdef RT
+#ifdef DO_RT
         do ivar=1,nrtvar
            do ind=1,twotondim
               m%rtuold(ind,ivar,igrid)=m%rtuold(ind2_left(ind,dir),ivar,igrid_ref)
            end do
         end do
 #endif
-#ifdef CR
+#ifdef DO_CR
         do ivar=1,ncruvar
            do ind=1,twotondim
               m%cruold(ind,ivar,igrid)=m%cruold(ind2_left(ind,dir),ivar,igrid_ref)
@@ -339,7 +339,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
 #endif
 #endif
      end do
-#ifdef RT
+#ifdef DO_RT
      call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
      call rt_units(r,g,scale_np,scale_fp)
      do ind=1,twotondim
@@ -355,7 +355,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
      end do
 #endif
-#ifdef CR
+#ifdef DO_CR
      do ind=1,twotondim
         do ivar=1,ncrgrp
             m%cruold(ind,1+(ivar-1)*ndim,igrid)= r%cr_fx_bound(ibound,ivar)
@@ -432,7 +432,7 @@ subroutine init_bound_refine(r,g,m,igrid,igrid_ref,ibound)
         end do
      end do
 
-#ifdef CR
+#ifdef DO_CR
      do ind=1,twotondim
         do idim=1,ndim
            nstride=2**(idim-1)

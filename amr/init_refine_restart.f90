@@ -451,7 +451,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
 #endif
         endif
         if(r%rt)then
-#ifdef RT
+#ifdef DO_RT
            m%rtuold(:,:,igrid)=rtuold(:,:)
 #endif
         endif

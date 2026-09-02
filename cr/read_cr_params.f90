@@ -15,7 +15,7 @@ subroutine m_read_cr_params(pst)
   implicit none
   type(pst_t)::pst
 
-#ifdef CR
+#ifdef DO_CR
   !--------------------------------------------------
   ! Local variables
   !--------------------------------------------------

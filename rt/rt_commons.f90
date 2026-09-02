@@ -12,7 +12,7 @@ module rt_commons
      integer,dimension(:,:,:),allocatable::childloc
      integer,dimension(:,:,:),allocatable::gridloc
      integer,dimension(:,:,:,:),allocatable::nborloc
-#ifdef RT
+#ifdef DO_RT
      real(kind=8),dimension(:,:,:,:),allocatable::rtuloc
      real(kind=8),dimension(:,:,:,:,:),allocatable::rtflux
      real(kind=8),dimension(:,:,:,:,:),allocatable::cFlx
@@ -53,7 +53,7 @@ contains
     allocate(h%cellloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2))
     allocate(h%nborloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2,1:twondim))
 
-#ifdef RT
+#ifdef DO_RT
     allocate(h%rtuloc (h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:nrtvar)) 
     allocate(h%rtflux(h%if1:h%if2,h%jf1:h%jf2,h%kf1:h%kf2,1:nrtvar,1:ndim))
     allocate(h%cFlx(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ndim+1,1:ndim))
@@ -75,7 +75,7 @@ contains
     nint=nint+size(transfer(h%cellloc ,(/1/)))
     nint=nint+size(transfer(h%nborloc ,(/1/)))
 
-#ifdef RT
+#ifdef DO_RT
     nint=nint+size(transfer(h%rtuloc,(/1/)))
     nint=nint+size(transfer(h%rtflux,(/1/)))
     nint=nint+size(transfer(h%cFlx,(/1/)))

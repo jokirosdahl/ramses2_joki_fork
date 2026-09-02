@@ -98,7 +98,7 @@ END SUBROUTINE rtz_set_model
 
 !XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
-#ifdef RT
+#ifdef DO_RT
      & Np, Fp, p_gas, dNpdt, dFpdt, ilevel, &
 #endif
      & dt, nCell, dx_SS_H2)
@@ -130,7 +130,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
   real(kind=8),dimension(1:n_elements, 1:n_elements, 1:nvector):: xion
   real(kind=8),dimension(1:n_elements, 1:nvector):: nElement 
   real(kind=8),dimension(1:nvector):: nH
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:ndim, 1:nvector):: p_gas
   real(kind=8),dimension(1:nrtgrp, 1:nvector):: Np, dNpdt
   real(kind=8),dimension(1:ndim, 1:nrtgrp, 1:nvector):: Fp, dFpdt
@@ -149,7 +149,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
   integer::i, ia, nAct, nAct_next, loopcnt, code
   integer,dimension(1:nvector):: indAct              ! Active cell indexes
   real(kind=8):: one_over_x_FRAC, one_over_T_FRAC
-#ifdef RT
+#ifdef DO_RT
   integer::ig
   real(kind=8):: one_over_rt_c_cgs, one_over_egy_IR_erg
   real(kind=8):: one_over_Np_FRAC, one_over_Fp_FRAC
@@ -173,7 +173,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
   ! Store some temporary variables reduce computations
   one_over_T_FRAC = 1d0 / T_FRAC
   one_over_x_FRAC = 1d0 / x_FRAC
-#ifdef RT
+#ifdef DO_RT
   one_over_Np_FRAC = 1d0 / Np_FRAC
   one_over_Fp_FRAC = 1d0 / Fp_FRAC
   one_over_rt_c_cgs = 1d0 / tables%rt_c_cgs(ilevel)
@@ -386,7 +386,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
                end do
             end if
          end do
-#ifdef RT
+#ifdef DO_RT
          do ig=1,nrtgrp
             Np(ig,i) = MAX(smallNp, Np(ig,i))
             call reduce_flux(Fp(:,ig,i),Np(ig,i)*tables%rt_c_cgs(ilevel))
@@ -407,7 +407,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
 
       !         if(loopcnt .gt. 100000) then
       !            call display_coolinfo(.true., loopcnt, i, dt-tleft(i), dt, ddt(i), nH(i), &
-      ! #ifdef RT
+      ! #ifdef DO_RT
       !                 &                Np(:,i), Fp(:,:,i), p_gas(:,i), dNp, dFp, dp_gas, ilevel, &
       ! #endif
       !                 &                T2(i), xion(:,:,i), dT2, dXion, code)
@@ -422,7 +422,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
             ! Update the cell state (advance the time by ddt):
             T2(i) = T2(i) + dT2
             xion(:,:,i) = xion(:,:,i) + dXion(:,:)
-#ifdef RT
+#ifdef DO_RT
             Np(:,i) = Np(:,i) + dNp(:)
             Fp(:,:,i) = Fp(:,:,i) + dFp(:,:)
             p_gas(:,i) = p_gas(:,i) + dp_gas(:)
@@ -484,7 +484,7 @@ contains
     real(kind=8):: xHI,dxHI, xH2=0d0,dXH2=0d0, xHeI,dxHeI
     real(kind=8):: Crate, Crate_prime, dCdT2, X_nHkb, rate, dRate, cr, de=0d0
     real(kind=8):: photoRate, ss_factor, f_dust
-#ifdef RT
+#ifdef DO_RT
     integer::igroup,idim
     real(kind=8),dimension(ndim):: dmom
     real(kind=8),dimension(nrtgrp):: recRad, phAbs, phSc, dustAbs
@@ -541,7 +541,7 @@ contains
 
     ! END RTZ variable initialization
 
-#ifdef RT
+#ifdef DO_RT
     signc=tables%signc(:,:,:,ilevel)
     rt_c_fraction = r%rt_c_fraction(ilevel)
     rt_c_cgs = tables%rt_c_cgs(ilevel)
@@ -549,7 +549,7 @@ contains
     dt_ok=.false.
     ! U contains the original values, dU the updated ones
     dT2 = T2(icell) ; dXion(:,:) = xion(:,:,icell)
-#ifdef RT
+#ifdef DO_RT
     dNp(:) = Np(:,icell) ; dFp(:,:) = Fp(:,:,icell)
     dp_gas(:) = p_gas(:,icell)
 #endif
@@ -575,7 +575,7 @@ contains
     cosmic_ray_scale_factor = H2_cosmic_ray_ionization_rate / 1.d-16
     ! END RTZ
 
-#ifdef RT
+#ifdef DO_RT
     ! Set dust opacities--------------------------------------------------
     kAbs_loc = r%kappaAbs
     kSc_loc = r%kappaSc
@@ -747,7 +747,7 @@ contains
        TK=dT2*mu
     endif
 
-#ifdef RT
+#ifdef DO_RT
     if(r%rt_isIR) then
        if(kAbs_loc(iIR) .gt. 0d0 .and. .not. r%rt_T_rad) then
           ! Evolve IR-Dust equilibrium temperature------------------------
@@ -824,7 +824,7 @@ contains
          de_H2 = de_H2 + H2_cosmic_ray_ionization_rate
        end if
 
-#ifdef RT
+#ifdef DO_RT
        ! Photodissociation from the local radiation field
        if (r%rtz_include_photoionization.and.r%rt_advect) then
           do igroup=1,nrtgrp
@@ -938,7 +938,7 @@ contains
                end if
              end if
 
-#ifdef RT
+#ifdef DO_RT
              ! Photoionization of less excited state from the local radiation field
              if (r%rtz_include_photoionization.and.r%rt_advect) then
                 if (iIon > 1) then 
@@ -1004,7 +1004,7 @@ contains
                end if
              end if
 
-#ifdef RT
+#ifdef DO_RT
              ! Photoionization  from the local radiation field
              if (r%rtz_include_photoionization.and.r%rt_advect) then
                 if (iIon .lt. n_ions) then 
@@ -1118,7 +1118,7 @@ contains
 
     ! CLEAN UP AND RETURN ************************************************
     dT2 = dT2-T2(icell) ; dXion(:,:) = dXion(:,:)-xion(:,:,icell)
-#ifdef RT
+#ifdef DO_RT
     dNp(:) = dNp(:)-Np(:,icell) ; dFp(:,:) = dFp(:,:)-Fp(:,:,icell)
     dp_gas(:)= dp_gas(:)-p_gas(:,icell)
 #endif
@@ -1146,7 +1146,7 @@ SUBROUTINE rtz_updateRTGroups_CoolConstants(r,tables)
   implicit none
   type(run_t)::r
   type(neq_cooling_t)::tables
-#ifdef RT
+#ifdef DO_RT
   !------------------------------------------------------------------------
   integer::iP, iE, iI, i
   !------------------------------------------------------------------------
@@ -1320,7 +1320,7 @@ FUNCTION get_n_rtz(element_number_densities, ne) result(rho_n)
    rho_n = rho_n + ne
 END FUNCTION get_n_rtz
 
-#ifdef RT
+#ifdef DO_RT
 SUBROUTINE reduce_flux(Fp, cNp)
   ! Make sure the reduced photon flux is less than one
   !------------------------------------------------------------------------

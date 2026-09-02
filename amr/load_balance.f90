@@ -338,10 +338,10 @@ subroutine load_balance(s,ilevel)
 #ifdef MHD
   real(kind=8),dimension(1:twotondim,1:6)::bold_tmp
 #endif
-#ifdef RT
+#ifdef DO_RT
   real(kind=8),dimension(1:twotondim,1:nrtvar)::rtuold_tmp
 #endif
-#ifdef CR
+#ifdef DO_CR
   real(kind=8),dimension(1:twotondim,1:ncruvar)::cruold_tmp
 #endif
 #ifdef GRAV
@@ -399,10 +399,10 @@ subroutine load_balance(s,ilevel)
 #ifdef MHD
            m%bold(:,:,ichild)=m%bold(:,:,ioct)
 #endif
-#ifdef RT
+#ifdef DO_RT
            m%rtuold(:,:,ichild)=m%rtuold(:,:,ioct)
 #endif
-#ifdef CR
+#ifdef DO_CR
            m%cruold(:,:,ichild)=m%cruold(:,:,ioct)
 #endif
 #ifdef GRAV
@@ -545,10 +545,10 @@ subroutine load_balance(s,ilevel)
 #ifdef MHD
         bold_tmp=m%bold(:,:,j)
 #endif
-#ifdef RT
+#ifdef DO_RT
         rtuold_tmp=m%rtuold(:,:,j)
 #endif
-#ifdef CR
+#ifdef DO_CR
         cruold_tmp=m%cruold(:,:,j)
 #endif
 #ifdef GRAV
@@ -568,10 +568,10 @@ subroutine load_balance(s,ilevel)
 #ifdef MHD
            m%bold(:,:,i)=m%bold(:,:,inew)
 #endif
-#ifdef RT
+#ifdef DO_RT
            m%rtuold(:,:,i)=m%rtuold(:,:,inew)
 #endif
-#ifdef CR
+#ifdef DO_CR
            m%cruold(:,:,i)=m%cruold(:,:,inew)
 #endif
 #ifdef GRAV
@@ -598,10 +598,10 @@ subroutine load_balance(s,ilevel)
 #ifdef MHD
         m%bold(:,:,i)=bold_tmp
 #endif
-#ifdef RT
+#ifdef DO_RT
         m%rtuold(:,:,i)=rtuold_tmp
 #endif
-#ifdef CR
+#ifdef DO_CR
         m%cruold(:,:,i)=cruold_tmp
 #endif
 #ifdef GRAV
@@ -705,7 +705,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
   end do
 #endif
 
-#ifdef RT
+#ifdef DO_RT
   do ind=1,twotondim
      do ivar=1,nrtvar
         msg%realdp_rt(ind,ivar)=mesh%rtuold(ind,ivar,igrid)
@@ -713,7 +713,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
   end do
 #endif
   
-#ifdef CR
+#ifdef DO_CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -782,7 +782,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef RT
+#ifdef DO_RT
   do ind=1,twotondim
      do ivar=1,nrtvar
         mesh%rtuold(ind,ivar,igrid)=msg%realdp_rt(ind,ivar)
@@ -790,7 +790,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
   end do
 #endif
 
-#ifdef CR
+#ifdef DO_CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)

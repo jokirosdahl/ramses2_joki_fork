@@ -438,7 +438,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
   use amr_parameters, only: nvector, ndim
   use hydro_parameters, only: nvar, nener
   use amr_commons, only: run_t, global_t
-#ifdef RTZ
+#ifdef DO_RTZ
   use rtz_module, only: elements, n_elements
 #endif
   implicit none
@@ -461,7 +461,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
 #endif
   integer::i,k
   real(kind=8)::vol,rad,weight,xn,yn,zn,en
-#ifdef RTZ
+#ifdef DO_RTZ
   integer::counter
   real(kind=8)::total_mass_density
 #endif
@@ -525,7 +525,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
               do ivar=6+nener,nvar
                  q(i,ivar)=r%var_region(k,ivar-5-nener)
               end do
-#ifdef RTZ
+#ifdef DO_RTZ
               counter = 0
               total_mass_density = 0.d0
               do ivar=1,n_elements ! loop over elements

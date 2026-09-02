@@ -146,12 +146,12 @@ subroutine init_amr(r,g,m,type)
      allocate(m%bold(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
      allocate(m%bnew(1:twotondim,1:6,1:m%ngridmax+m%ncachemax))
 #endif
-#ifdef RT
+#ifdef DO_RT
      allocate(m%rtuold(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
      allocate(m%rtunew(1:twotondim,1:nrtvar,1:m%ngridmax+m%ncachemax))
      allocate(m%emissivity(1:twotondim,1:nrtgrp,1:m%ngridmax+m%ncachemax))
 #endif
-#ifdef CR
+#ifdef DO_CR
      allocate(m%cruold(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
      allocate(m%crunew(1:twotondim,1:ncruvar,1:m%ngridmax+m%ncachemax))
 #endif

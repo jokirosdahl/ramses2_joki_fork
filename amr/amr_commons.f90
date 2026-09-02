@@ -333,7 +333,7 @@ module amr_commons
      logical::isHe=.true.                             !      He ionization fractions tracked?
      logical::isH2=.false.                            !                           H2 tracked?
      integer::iIons, ixHI, ixHII, ixHeII, ixHeIII     !       Indexes of ionization fractions
-#ifdef RTZ
+#ifdef DO_RTZ
      integer::element_first_idx(1:27)       !  Start idx of elements in uold
      integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold 
      real(kind=8),dimension(1:27,1:27)::ionEvs        !                   Ionization energies
@@ -551,7 +551,7 @@ module amr_commons
      ! Group props: avg and energy weigthed photoionization c-section (cm2), avg. energy (ev)
      ! Indexes nrtgrp, nIon stand for photon group vs species (e.g. 1=H, 2=He)
      ! Note that this is not true in the case of RTZ
-#ifdef RTZ
+#ifdef DO_RTZ
      real(kind=8),dimension(nrtgrp,1:27,1:27)::group_csn=0, group_cse=0         ! Cross sections (cm2)
 #else
      real(kind=8),dimension(nrtgrp,nIon)::group_csn=0, group_cse=0         ! Cross sections (cm2)
@@ -790,12 +790,12 @@ module amr_commons
      real(dp),allocatable,dimension(:,:,:)::bold
      real(dp),allocatable,dimension(:,:,:)::bnew
 #endif
-#ifdef RT
+#ifdef DO_RT
      real(dp),allocatable,dimension(:,:,:)::rtuold
      real(dp),allocatable,dimension(:,:,:)::rtunew
      real(dp),allocatable,dimension(:,:,:)::emissivity
 #endif
-#ifdef CR
+#ifdef DO_CR
      real(dp),allocatable,dimension(:,:,:)::cruold
      real(dp),allocatable,dimension(:,:,:)::crunew
 #endif

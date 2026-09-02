@@ -941,14 +941,14 @@ subroutine pack_fetch_kick_dust(mesh,igrid,msg_size,msg_array)
      msg%realdp_poisson(ind,3)=mesh%f(ind,3,igrid)
   end do
 #endif
-#ifdef RT
+#ifdef DO_RT
   do ind=1,twotondim
      do ivar=1,nrtvar
         msg%realdp_rt(ind,ivar)=mesh%rtuold(ind,ivar,igrid)
      end do
   end do
 #endif
-#ifdef CR
+#ifdef DO_CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         msg%realdp_cr(ind,ivar)=mesh%cruold(ind,ivar,igrid)
@@ -1001,14 +1001,14 @@ subroutine unpack_fetch_kick_dust(mesh,igrid,msg_size,msg_array,hash_key)
      mesh%f(ind,3,igrid)=msg%realdp_poisson(ind,3)
   end do
 #endif
-#ifdef RT
+#ifdef DO_RT
   do ind=1,twotondim
      do ivar=1,nrtvar
         mesh%rtuold(ind,ivar,igrid)=msg%realdp_rt(ind,ivar)
      end do
   end do
 #endif
-#ifdef CR
+#ifdef DO_CR
   do ind=1,twotondim
      do ivar=1,ncruvar
         mesh%cruold(ind,ivar,igrid)=msg%realdp_cr(ind,ivar)

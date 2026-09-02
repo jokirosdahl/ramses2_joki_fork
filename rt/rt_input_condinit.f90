@@ -67,7 +67,7 @@ subroutine rt_input_condinit(r,g,m,ilevel)
         ! Scatter primitive variables to main memory
         do ivar=1,nrtvar
            do i=1,ngrid
-#ifdef RT
+#ifdef DO_RT
               m%rtuold(ind,ivar,igrid+i-1)=qq(i,ivar)
 #endif
            end do
@@ -256,7 +256,7 @@ subroutine rt_input_source_regions(r,g,m,ilevel)
         ! Add what is already in the grid
         do ivar=1,nrtvar
            do i=1,ngrid
-#ifdef RT
+#ifdef DO_RT
               qq(i,ivar) = m%rtunew(ind,ivar,igrid+i-1)
 #endif
            end do
@@ -268,7 +268,7 @@ subroutine rt_input_source_regions(r,g,m,ilevel)
         ! Scatter primitive variables to main memory
         do ivar=1,nrtvar
            do i=1,ngrid
-#ifdef RT
+#ifdef DO_RT
               m%rtunew(ind,ivar,igrid+i-1)=qq(i,ivar)
 #endif
            end do

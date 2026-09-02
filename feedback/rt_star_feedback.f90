@@ -70,7 +70,7 @@ subroutine star_rt_feedback(s, p, ilevel)
   logical::ok_level
   real(kind=8),dimension(nrtgrp)::part_NpInp, lum
 
-#ifdef RT
+#ifdef DO_RT
 #if NDIM==3
   associate(r=>s%r, g=>s%g, m=>s%m, mdl=>s%mdl)
 
@@ -191,7 +191,7 @@ subroutine pack_fetch_emissivity(mesh,igrid,msg_size,msg_array)
   integer,dimension(1:msg_size),optional::msg_array
   type(msg_rt_emissivity_realdp)::msg
 
-#ifdef RT
+#ifdef DO_RT
   msg%realdp(:,:)=mesh%emissivity(:,:,igrid)
   msg_array=transfer(msg,msg_array)
 #endif
@@ -214,7 +214,7 @@ subroutine unpack_fetch_emissivity(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef RT
+#ifdef DO_RT
   mesh%emissivity(:,:,igrid)=msg%realdp(:,:)
 #endif
 
@@ -231,7 +231,7 @@ subroutine init_flush_emissivity(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
 
-#ifdef RT
+#ifdef DO_RT
   mesh%emissivity(:,:,igrid)=0.0d0
 #endif
 
@@ -248,7 +248,7 @@ subroutine pack_flush_emissivity(mesh,igrid,msg_size,msg_array)
   integer,dimension(1:msg_size),optional::msg_array
   type(msg_rt_emissivity_realdp)::msg
 
-#ifdef RT
+#ifdef DO_RT
   msg%realdp(:,:)=mesh%emissivity(:,:,igrid)
   msg_array=transfer(msg,msg_array)
 #endif
@@ -271,7 +271,7 @@ subroutine unpack_flush_emissivity(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
 
-#ifdef RT
+#ifdef DO_RT
   mesh%emissivity(:,:,igrid)=mesh%emissivity(:,:,igrid)+msg%realdp(:,:)
 #endif
 

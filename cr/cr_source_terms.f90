@@ -33,7 +33,7 @@ subroutine cr_source_terms(s,ilevel)
   use boundaries, only: init_bound_refine
   use cache
   use cache_commons, only: msg_large_realdp
-#ifdef CR
+#ifdef DO_CR
   use cr_flux_module, only: invrotatevec, rotatevec
 #endif
   use cr_parameters, only: ncrgrp, smallecr
@@ -43,7 +43,7 @@ subroutine cr_source_terms(s,ilevel)
   implicit none
   type(ramses_t)::s
   integer::ilevel
-#ifdef CR
+#ifdef DO_CR
   integer::i,ind,igrid,idim,ngrid,nleaf,iGrp,i_nbor,icelld,icellg,icellp
   integer::igridd,igridg,igridp
   integer,dimension(1:nvector)::ind_leaf
@@ -362,7 +362,7 @@ subroutine init_flush_cr_source_terms(mesh,igrid,hash_key)
      enddo
   enddo
 #endif
-#ifdef CR
+#ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
         mesh%crunew(ind,ivar,igrid)=0.0d0
@@ -399,7 +399,7 @@ subroutine pack_flush_cr_source_terms(mesh,igrid,msg_size,msg_array)
 
   do ivar=1,ncruvar
      do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
         msg%realdp_cr(ind,ivar)=mesh%crunew(ind,ivar,igrid)
 #endif
      end do
@@ -441,7 +441,7 @@ subroutine unpack_flush_cr_source_terms(mesh,igrid,msg_size,msg_array,hash_key)
 
   do ivar=1,ncruvar
      do ind=1,twotondim
-#ifdef CR
+#ifdef DO_CR
         mesh%crunew(ind,ivar,igrid)=mesh%crunew(ind,ivar,igrid)+msg%realdp_cr(ind,ivar)
 #endif
      end do
