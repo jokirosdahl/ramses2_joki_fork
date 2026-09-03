@@ -17,7 +17,7 @@ We describe the meaning and default values of the namelist variables in each of 
 
 [Initial conditions parameters](./init_params.md): Parameters used to setup the initial conditions.
 
-[Hydro and MHD solver parameters](./hydro_params.md): Parameters controlling the second-order Godunov solver (aka MUSCL-Hancock) for solving the Euler and ideal MHD equations.
+[Hydro and MHD solver parameters](./hydro_params.md): Parameters controlling the MUSCL-Hancock scheme for solving the Euler and ideal MHD equations.
 
 [Mesh refinement parameters](./refine_params.md): Parameters controlling the refinement strategy of the AMR grid.
 
