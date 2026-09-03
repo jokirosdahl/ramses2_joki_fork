@@ -39,5 +39,3 @@ if not args.no_display:
     plt.show()
 else:
     plt.close()
-
-

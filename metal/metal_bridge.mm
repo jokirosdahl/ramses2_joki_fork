@@ -3545,7 +3545,7 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
       }
-      
+
       /* Step 4: make father octs in MG grid — use head_mg (new octs position in s_grid_mg) */
       {
         NSUInteger tg  = 128;
@@ -3563,7 +3563,7 @@ static void build_mg_common(id<MTLBuffer> grid_src, int head_idx, int num_octs,
         [enc dispatchThreadgroups:{nblk,1,1} threadsPerThreadgroup:{tg,1,1}];
         [enc endEncoding]; [cmd commit]; [cmd waitUntilCompleted];
       }
-      
+
       /* Step 5: insert new MG octs into hash — use head_mg */
       {
         NSUInteger tg  = 128;
@@ -3717,7 +3717,7 @@ extern "C" void mtl_upload_cooling_table(
 
     upload_array(s_nH_tbl_d, nH_tbl, axis1_bytes, n1);
     upload_array(s_T2_tbl_d, T2_tbl, axis2_bytes, n2);
-    
+
     NSUInteger total_cells = (NSUInteger)n1 * n2;
     upload_array(s_cool_d, cool, table_bytes, total_cells);
     upload_array(s_heat_d, heat, table_bytes, total_cells);

@@ -72,26 +72,26 @@ end subroutine r_init_time
           & 1.d-6,dble(g%aexp_ini), &
           & g%aexp_frw,g%hexp_frw,g%tau_frw,g%t_frw,n_frw)
 
-     ! Compute initial conformal time                                    
-     ! Find neighboring expansion factors                                  
+     ! Compute initial conformal time
+     ! Find neighboring expansion factors
      i=1
      do while(g%aexp_frw(i)>g%aexp.and.i<n_frw)
         i=i+1
-     end do                                                                
-     ! Interploate time                                                    
-     if(r%nrestart==0)then                                                   
-        g%t=g%tau_frw(i)*(g%aexp-g%aexp_frw(i-1))/(g%aexp_frw(i)-g%aexp_frw(i-1))+ &   
-             & g%tau_frw(i-1)*(g%aexp-g%aexp_frw(i))/(g%aexp_frw(i-1)-g%aexp_frw(i)) 
-        g%aexp=g%aexp_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &     
-             & g%aexp_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))      
-        g%hexp=g%hexp_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &     
-             & g%hexp_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))      
+     end do
+     ! Interploate time
+     if(r%nrestart==0)then
+        g%t=g%tau_frw(i)*(g%aexp-g%aexp_frw(i-1))/(g%aexp_frw(i)-g%aexp_frw(i-1))+ &
+             & g%tau_frw(i-1)*(g%aexp-g%aexp_frw(i))/(g%aexp_frw(i-1)-g%aexp_frw(i))
+        g%aexp=g%aexp_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &
+             & g%aexp_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))
+        g%hexp=g%hexp_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &
+             & g%hexp_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))
      end if
-     g%texp=g%t_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &           
-          & g%t_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))            
+     g%texp=g%t_frw(i)*(g%t-g%tau_frw(i-1))/(g%tau_frw(i)-g%tau_frw(i-1))+ &
+          & g%t_frw(i-1)*(g%t-g%tau_frw(i))/(g%tau_frw(i-1)-g%tau_frw(i))
   else
      g%texp=g%t
-  end if                                                                   
+  end if
 
   ! Initialize cooling model
   if(r%cooling.and..not.r%cooling_ism.and..not.r%neq_chem.and..not.r%rtz_cooling)then
@@ -129,7 +129,7 @@ subroutine init_file(mdl,r,g,m)
   type(mesh_t)::m
   !------------------------------------------------------
   ! Read geometrical parameters in the initial condition files.
-  ! Initial conditions are supposed to be made by 
+  ! Initial conditions are supposed to be made by
   ! Bertschinger's grafic version 2.0 code.
   !------------------------------------------------------
   integer:: ilevel
@@ -223,7 +223,7 @@ subroutine init_cosmo(mdl,r,g)
   !------------------------------------------------------
   ! Read cosmological and geometrical parameters
   ! in the initial condition files.
-  ! Initial conditions are supposed to be made by 
+  ! Initial conditions are supposed to be made by
   ! Bertschinger's grafic version 2.0 code.
   !------------------------------------------------------
   integer:: ilevel,i
@@ -231,7 +231,7 @@ subroutine init_cosmo(mdl,r,g)
   character(LEN=80)::filename
   character(LEN=5)::nchar
   logical::ok
-  TYPE(gadgetheadertype) :: gadgetheader 
+  TYPE(gadgetheadertype) :: gadgetheader
 
   if(g%myid==1.and.r%verbose)write(*,*)'Entering init_cosmo'
 
@@ -286,7 +286,7 @@ subroutine init_cosmo(mdl,r,g)
            g%aexp=MIN(g%aexp,g%astart(ilevel))
            g%nlevelmax_part=g%nlevelmax_part+1
            ! Compute SPH equivalent mass (initial gas mass resolution)
-           r%mass_sph=g%omega_b/g%omega_m*0.5d0**(ndim*ilevel)           
+           r%mass_sph=g%omega_b/g%omega_m*0.5d0**(ndim*ilevel)
         endif
      end do
 
@@ -297,12 +297,12 @@ subroutine init_cosmo(mdl,r,g)
      else
         g%aexp_ini=g%aexp
      endif
-     
+
      ! Check compatibility with run parameters
      if(.not. r%multiple) then
         if(         g%n1(r%levelmin).ne.2**r%levelmin &
              & .or. g%n2(r%levelmin).ne.2**r%levelmin &
-             & .or. g%n3(r%levelmin).ne.2**r%levelmin) then 
+             & .or. g%n3(r%levelmin).ne.2**r%levelmin) then
            write(*,*)'coarser grid is not compatible with initial conditions file'
            write(*,*)'Found    n1=',g%n1(r%levelmin),&
                 &            ' n2=',g%n2(r%levelmin),&
@@ -472,27 +472,27 @@ subroutine friedman(mdl,O_mat_0,O_vac_0,O_k_0,alpha,axp_min, &
   tau = 0.0D0
   t = 0.0D0
   nstep = 0
-  
-  do while ( (axp_tau .ge. axp_min) .or. (axp_t .ge. axp_min) ) 
-     
+
+  do while ( (axp_tau .ge. axp_min) .or. (axp_t .ge. axp_min) )
+
      nstep = nstep + 1
      dtau = alpha * axp_tau / dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)
      axp_tau_pre = axp_tau - dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)*dtau/2.d0
      axp_tau = axp_tau - dadtau(axp_tau_pre,O_mat_0,O_vac_0,O_k_0)*dtau
      tau = tau - dtau
-     
+
      dt = alpha * axp_t / dadt(axp_t,O_mat_0,O_vac_0,O_k_0)
      axp_t_pre = axp_t - dadt(axp_t,O_mat_0,O_vac_0,O_k_0)*dt/2.d0
      axp_t = axp_t - dadt(axp_t_pre,O_mat_0,O_vac_0,O_k_0)*dt
      t = t - dt
-     
+
   end do
 
 !  write(*,666)-t
 !  666 format(' Age of the Universe (in unit of 1/H0)=',1pe10.3)
 
   nskip=nstep/ntable
-  
+
   axp_t = 1.d0
   t = 0.d0
   axp_tau = 1.d0
@@ -504,8 +504,8 @@ subroutine friedman(mdl,O_mat_0,O_vac_0,O_k_0,alpha,axp_min, &
   axp_out(nout)=axp_tau
   hexp_out(nout)=dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)/axp_tau
 
-  do while ( (axp_tau .ge. axp_min) .or. (axp_t .ge. axp_min) ) 
-     
+  do while ( (axp_tau .ge. axp_min) .or. (axp_t .ge. axp_min) )
+
      nstep = nstep + 1
      dtau = alpha * axp_tau / dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)
      axp_tau_pre = axp_tau - dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)*dtau/2.d0
@@ -516,7 +516,7 @@ subroutine friedman(mdl,O_mat_0,O_vac_0,O_k_0,alpha,axp_min, &
      axp_t_pre = axp_t - dadt(axp_t,O_mat_0,O_vac_0,O_k_0)*dt/2.d0
      axp_t = axp_t - dadt(axp_t_pre,O_mat_0,O_vac_0,O_k_0)*dt
      t = t - dt
-     
+
      if(mod(nstep,nskip)==0)then
         nout=nout+1
         t_out(nout)=t
@@ -533,7 +533,7 @@ subroutine friedman(mdl,O_mat_0,O_vac_0,O_k_0,alpha,axp_min, &
 
 end subroutine friedman
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-function dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0) 
+function dadtau(axp_tau,O_mat_0,O_vac_0,O_k_0)
   use amr_parameters
   real(kind=8)::dadtau,axp_tau,O_mat_0,O_vac_0,O_k_0
   dadtau = axp_tau*axp_tau*axp_tau *  &
@@ -560,10 +560,10 @@ function fy(a,omega_m,omega_l)
   !      Computes the integrand
   real(kind=8)::fy
   real(kind=8)::y,a,omega_m,omega_l
-  
+
   y=omega_m*(1.d0/a-1.d0) + omega_l*(a*a-1.d0) + 1.d0
   fy=1.d0/y**1.5d0
-  
+
   return
 end function fy
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -575,7 +575,7 @@ function d1a(mdl,a,omega_m,omega_l)
   !     universe. See Peebles LSSU sections 11 and 14.
   type(mdl_t)::mdl
   real(kind=8)::a,omega_m,omega_l,y12,y,eps
-  
+
   eps=1.0d-6
   if(a .le. 0.0d0)then
      write(*,*)'a=',a
@@ -588,7 +588,7 @@ function d1a(mdl,a,omega_m,omega_l)
   end if
   y12=y**0.5d0
   d1a=y12/a*rombint(eps,a,eps,omega_m,omega_l)
-  
+
   return
 end function d1a
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -597,7 +597,7 @@ function fpeebl(a,omega_m,omega_l)
   real(kind=8) :: fpeebl,a,omega_m,omega_l
   !     Computes the growth factor f=d\log D1/d\log a.
   real(kind=8) :: fact,y,eps
-  
+
   eps=1.0d-6
   y=omega_m*(1.d0/a-1.d0) + omega_l*(a*a-1.d0) + 1.d0
   fact=rombint(eps,a,eps,omega_m,omega_l)
@@ -609,10 +609,10 @@ function rombint(a,b,tol,omega_m,omega_l)
   implicit none
   real(kind=8)::rombint
   !
-  !     Rombint returns the integral from a to b of f(x)dx using Romberg 
-  !     integration. The method converges provided that f(x) is continuous 
-  !     in (a,b). The function f must be double precision and must be 
-  !     declared external in the calling routine.  
+  !     Rombint returns the integral from a to b of f(x)dx using Romberg
+  !     integration. The method converges provided that f(x) is continuous
+  !     in (a,b). The function f must be double precision and must be
+  !     declared external in the calling routine.
   !     tol indicates the desired relative accuracy in the integral.
   !
   integer::maxiter=16,maxj=5
@@ -620,7 +620,7 @@ function rombint(a,b,tol,omega_m,omega_l)
   real(kind=8)::a,b,tol,fourj,omega_m,omega_l
   real(kind=8)::h,error,gmax,g0,g1
   integer::nint,i,j,k,jmax
-  
+
   h=0.5d0*(b-a)
   gmax=h*(fy(a,omega_m,omega_l)+fy(b,omega_m,omega_l))
   g(1)=gmax
@@ -630,7 +630,7 @@ function rombint(a,b,tol,omega_m,omega_l)
 10 i=i+1
   if(.not.  (i>maxiter.or.(i>5.and.abs(error)<tol)))then
      !	Calculate next trapezoidal rule approximation to integral.
-     
+
      g0=0.0d0
      do k=1,nint
         g0=g0+fy(a+(k+k-1)*h,omega_m,omega_l)
@@ -640,7 +640,7 @@ function rombint(a,b,tol,omega_m,omega_l)
      nint=nint+nint
      jmax=min(i,maxj)
      fourj=1.0d0
-     
+
      do j=1,jmax
         ! Use Richardson extrapolation.
         fourj=4.0d0*fourj

@@ -65,7 +65,7 @@ recursive subroutine r_input_part_gadget(pst,dummy,input_size,output,output_size
   !--------------------------------------------------------------------
   ! This routine is the recursive slave procedure to read and dispatch
   ! particles from a Gadget file.
-  !--------------------------------------------------------------------  
+  !--------------------------------------------------------------------
   integer::rID
 
   if(pst%nLower>0)then
@@ -97,7 +97,7 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
   real(kind=8)::mstar,mgas,mhalo
   integer(kind=8)::npart_star,npart_gas,npart_halo
   !------------------------------------------------------------
-  ! Read particles positions and velocities from a Ramses 
+  ! Read particles positions and velocities from a Ramses
   ! restart file and allocate particle-based arrays.
   !------------------------------------------------------------
   integer::ipart,i,j,k,idim,nrest,id
@@ -106,13 +106,13 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
   integer::dummy_int,blck_size,jump_blck,blck_cnt,stat
   integer::head_blck,pos_blck,vel_blck,id_blck,mass_blck,u_blck,metal_blck,age_blck
   integer::head_size,pos_size,vel_size,id_size,mass_size,u_size,metal_size,age_size
-  type(gadgetheadertype)::header  
+  type(gadgetheadertype)::header
   character(LEN=flen)::filename
   character(LEN=4)::blck_name
   character(LEN=12)::type_str
   real(kind=4)::dummy_real,x(1:3),v(1:3),z,ipbar
   logical::file_exist,skip(6)
-  
+
   associate(r=>s%r,g=>s%g,m=>s%m,p=>s%p,gas=>s%gas,mdl=>s%mdl,star=>s%star)
 
   ! Reading header of the Gadget file
@@ -122,16 +122,16 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
      if(g%myid==1)write(*,*) TRIM(filename)," not found"
      stop
   endif
-  
+
   if((r%ic_format.ne.'Gadget1').and.(r%ic_format.ne.'Gadget2')) then
      if(g%myid==1)write(*,*) 'Specify a valid IC file format [ic_format=Gadget1/Gadget2]'
      stop
   endif
-  
+
   if(g%myid==1)write(*,'(A50)')"__________________________________________________"
   if(g%myid==1)write(*,'(A12,A)') " Opening -> ",filename
   OPEN(unit=1,file=filename,status='old',action='read',form='unformatted',access="stream")
-  
+
   ! Init block address
   head_blck  = -1
   pos_blck   = -1
@@ -141,7 +141,7 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
   mass_blck  = -1
   metal_blck = -1
   age_blck   = -1
-  
+
   ! Find all the data blocks in a Gadget1 file
   if(r%ic_format .eq. 'Gadget1') then
      ! Init block counter
@@ -196,7 +196,7 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
         blck_cnt = blck_cnt+1
      enddo
   endif
-  
+
   ! Find all the data blocks in a Gadget2 file
   if(r%ic_format .eq. 'Gadget2') then
      ! Init block counter
@@ -257,17 +257,17 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
         jump_blck = jump_blck+blck_size+sizeof(blck_name)+5*sizeof(dummy_int)
      enddo
   endif
-  
+
   if((head_blck.eq.-1).or.(pos_blck.eq.-1).or.(vel_blck.eq.-1)) then
      if(g%myid==1)write(*,*) 'Gadget file does not contain handful data'
      stop
   endif
-  
+
   if(head_size.ne.256) then
      if(g%myid==1)write(*,*) 'Gadget header is not 256 bytes'
      stop
   endif
-  
+
   ! Read Gadget file header
   ! Byte swapping doesn't appear to work if you just do READ(1)header
   READ(1,POS=head_blck)header%npart,header%mass,header%time,header%redshift, &
@@ -277,12 +277,12 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
        header%flag_stellarage,header%flag_metals,header%totalhighword, &
        header%flag_entropy_instead_u, header%flag_doubleprecision, &
        header%flag_ic_info, header%lpt_scalingfactor
-  
+
   npart = sum(header%npart) ! All particles in the file
-  ngas = header%npart(1) ! Type 0 particles are gas particles 
-  nhalo = header%npart(2) ! Type 1 particles are dark matter particles 
+  ngas = header%npart(1) ! Type 0 particles are gas particles
+  nhalo = header%npart(2) ! Type 1 particles are dark matter particles
   nstar = sum(header%npart(3:5)) ! Type 2, 3, 4 particles are star particles
-  
+
   if(g%myid==1)write(*,*)"Found ",npart," particles in total"
 
   ! Check if user asked to skip some particle types
@@ -305,14 +305,14 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
         endif
      endif
   end do
-  
+
   if((pos_size.ne.npart).or.(vel_size.ne.npart)) then
      if(g%myid==1)write(*,*) 'POS =',pos_size
      if(g%myid==1)write(*,*) 'VEL =',vel_size
      if(g%myid==1)write(*,*) 'Number of particles does not correspond to block sizes'
      stop
   endif
-  
+
   ! Read gas particles
   if(r%hydro.and.ngas>0.and..not.skip(1))then
      if(g%myid==1)write(*,'(A)') " Reading gas particles..."
@@ -498,7 +498,7 @@ subroutine input_part_gadget(s,mstar,mgas,mhalo,npart_star,npart_gas,npart_halo)
   if(r%hydro)npart_gas=gas%npart
   if(r%star)npart_star=star%npart
 
-  ! Put all particles inside levelmin 
+  ! Put all particles inside levelmin
   if(r%part)call init_levelmin(r,p)
   if(r%hydro)call init_levelmin(r,gas)
   if(r%star)call init_levelmin(r,star)
@@ -633,7 +633,7 @@ subroutine init_levelmin(r,p)
   p%headp=p%npart+1
   p%tailp=p%npart
   p%headp(r%levelmin)=1
-  p%tailp(r%levelmin)=p%npart  
+  p%tailp(r%levelmin)=p%npart
   if(ANY(.not.r%periodic(1:ndim)))then
      p%headp(r%levelmin-1)=1
      p%tailp(r%levelmin-1)=0

@@ -7,7 +7,7 @@ program test_cool
   ! Execute in the ramses/ folder using:
   ! bin/test_cooling
   ! Visualize using pyton following these steps:
-  ! import miniramses as ram
+  ! import ramses as ram
   ! import matplotlib.pyplot as plt
   ! ram.test_cool("onecell_cooling.bin")
   ! plt.savefig("onecell_cooling.png")
@@ -38,13 +38,13 @@ program test_cool
   real(kind=8) :: nHeCell, cooltime, dtcool, time0, time1, dlogTime
   integer :: i, j, k, l
   integer :: icount
-  
+
   g%myid = 1
 
   r%isHe = .true.
   r%isH2 = .false.
   r%neq_isTconst = .true.
-  
+
   ! Set species variable index
   iCount = 0
   ! HI fraction
@@ -158,5 +158,5 @@ program test_cool
   write(10)times
   write(10)cells
   close(10)
-  
+
 end program test_cool

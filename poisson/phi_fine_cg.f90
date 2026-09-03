@@ -24,7 +24,7 @@ subroutine m_phi_fine_cg(pst,ilevel,icount)
   type(pst_t)::pst
   integer::ilevel,icount
   !=========================================================
-  ! Iterative Poisson solver with Conjugate Gradient method 
+  ! Iterative Poisson solver with Conjugate Gradient method
   ! to solve A x = b
   ! r  : stored in f(1)
   ! p  : stored in f(2)
@@ -41,7 +41,7 @@ subroutine m_phi_fine_cg(pst,ilevel,icount)
   type(recurrence_t)::recurrence
 
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,mdl=>pst%s%mdl)
-    
+
   if(r%gravity_type>0)return
   if(m%noct_tot(ilevel)==0)return
   if(r%verbose)write(*,111)ilevel
@@ -137,7 +137,7 @@ subroutine m_phi_fine_cg(pst,ilevel,icount)
   end if
 
   end associate
-  
+
 end subroutine m_phi_fine_cg
 !###########################################################
 !###########################################################
@@ -270,7 +270,7 @@ subroutine cmp_residual_cg(s,ilevel,icount)
   type(msg_three_realdp)::dummy_three_realdp
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-    
+
   ! Set constants
   dx2=(r%boxlen/2**ilevel)**2
   fourpi=4.D0*ACOS(-1.0D0)
@@ -537,7 +537,7 @@ recursive subroutine r_make_initial_phi(pst,input,input_size)
 
   integer::ilevel,icount
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_MAKE_INITIAL_PHI,pst%iUpper+1,input_size,0,input)
      call r_make_initial_phi(pst%pLower,input,input_size)
@@ -798,7 +798,7 @@ recursive subroutine r_cmp_rhs_norm(pst,ilevel,input_size,rhs_norm,output_size)
   integer,VALUE::input_size
   integer::output_size
   ! ------------------------------------------------------------------------
-  ! Compute norm of residual 
+  ! Compute norm of residual
   ! ------------------------------------------------------------------------
   integer::ind,igrid,ilevel
   real(kind=8)::rhs_norm,next_rhs_norm
@@ -842,7 +842,7 @@ recursive subroutine r_cmp_r2_cg(pst,ilevel,input_size,r2,output_size)
   integer,VALUE::input_size
   integer::output_size
   ! ------------------------------------------------------------------------
-  ! Compute norm of residual 
+  ! Compute norm of residual
   ! ------------------------------------------------------------------------
   integer::ind,igrid,ilevel
   real(kind=8)::r2,next_r2
@@ -877,7 +877,7 @@ recursive subroutine r_cmp_pAp_cg(pst,ilevel,input_size,pAp,output_size)
   integer,VALUE::input_size
   integer::output_size
   ! ------------------------------------------------------------------------
-  ! Compute norm of residual 
+  ! Compute norm of residual
   ! ------------------------------------------------------------------------
   integer::igrid,ind,ilevel
   real(kind=8)::pAp,next_pAp

@@ -1,6 +1,6 @@
 module oct_commons
   use amr_parameters
-  
+
   ! Oct object
   type oct
      integer(kind=8),dimension(1:nhilbert)::hkey
@@ -11,4 +11,3 @@ module oct_commons
   end type oct
 
 end module oct_commons
-

@@ -12,7 +12,7 @@ subroutine m_cr_init_flow_fine(pst,ilevel)
   type(pst_t)::pst
   integer::ilevel
   !--------------------------------------------------------------------
-  ! This routine is the master procedure to input a given initial 
+  ! This routine is the master procedure to input a given initial
   ! condition for CR variables into the exisiting AMR structure from an
   ! analytical model given as an external routine.
   !--------------------------------------------------------------------
@@ -26,7 +26,7 @@ subroutine m_cr_init_flow_fine(pst,ilevel)
 111 format(' Entering init_cr_fine for level ',I2)
 
   ! Use internal-defined or user-defined functions.
-  ! We always call the condinit routine, even in cosmological simulations, 
+  ! We always call the condinit routine, even in cosmological simulations,
   ! just to initialisethe RT variables (to small values)
   if(s%r%verbose)write(*,*)'Initialising CR variables'
   call r_cr_input_condinit(pst,ilevel,1)

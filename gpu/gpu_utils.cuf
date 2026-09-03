@@ -94,4 +94,3 @@ contains
   end function oct2cell_idx
   ! ==========================================================================
 end module gpu_utils
-

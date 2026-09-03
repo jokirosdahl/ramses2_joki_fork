@@ -833,7 +833,7 @@ subroutine unpack_fetch_kick(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
-  
+
 #ifdef GRAV
   do ind=1,twotondim
      mesh%f(ind,1,igrid)=msg%realdp_phi(ind)
@@ -1579,23 +1579,23 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    integer :: ipart,idim,ind,icell,igrid,ii
    character(LEN=80) :: filename,fileloc
    character(LEN=5) :: nchar
- 
+
    associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
    if(p%static)return
    if (p%type/=TRAC_TYPE) return
- 
+
    dx_loc=r%boxlen/2**ilevel
 
    dt_level=g%dtnew(ilevel)
    use_sgs = r%sgs_turb .and. (r%iturb>0)
- 
+
    if(action_part==action_kick_only)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          p%levelp(ipart)=ilevel
       end do
       return
    endif
- 
+
    if(use_sgs .and. .not. tracer_rng_ready)then
       call RngStream_SetPackageSeed(r%seed)
       tracer_rng = RngStream_CreateStream('tracer_sgs')
@@ -1603,29 +1603,29 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       call RngStream_AdvanceState(tracer_rng,0_8,stream_skip)
       tracer_rng_ready = .true.
    end if
- 
+
    call open_cache(mdl, m, pack_size=storage_size(dummy_hydro_mflux)/32, &
         pack=pack_fetch_kick_trac, unpack=unpack_fetch_kick_trac)
- 
+
    do ipart=p%headp(ilevel),p%tailp(ilevel)
- 
+
       do idim=1,ndim
          x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
       end do
       call wrap_cell_coords(s,x,ilevel+1)
- 
+
       if (g%nstep>0) then
          v_pred(1:ndim)=p%vp(ipart,1:ndim)
       else
          call gather_cic_state(s,x,ilevel,dx_loc,.false.,u_eff,kappa_mid)
          v_pred(1:ndim)=u_eff(1:ndim)
       endif
- 
+
       do idim=1,ndim
          x_mid(idim)=x(idim)+0.5d0*dt_level*v_pred(idim)/dx_loc
       end do
       call wrap_cell_coords(s,x_mid,ilevel+1)
- 
+
       call cic_weights_and_derivs(x_mid, w1d, dw1d, il, ir, vol)
       do idim=1,ndim
          if(r%periodic(idim))then
@@ -1634,7 +1634,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          endif
       end do
       ckey = cic_index(il,ir)
- 
+
       momentum(1:ndim)=0.d0
       rho=0.d0
       kappa_mid=0.d0
@@ -1659,14 +1659,14 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       else
          u_mid(1:ndim)=0.d0
       end if
- 
+
       grad_at_part(1:ndim)=0.d0
       if(use_sgs)then
          call compute_gradient_cic_scalar(w1d, dw1d, kappa_cells, grad_at_part)
       end if
- 
+
       disp(1:ndim)=(u_mid(1:ndim) + grad_at_part(1:ndim)/dx_loc)*dt_level
- 
+
       if(use_sgs .and. kappa_mid>0.0d0)then
          if(r%tracer_kick_pdf=='gaussian')then
             call sample_tracer_gaussian(xi)
@@ -1678,7 +1678,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          noise_amp = sqrt(2.0d0*kappa_mid*dt_level)
          disp(1:ndim)=disp(1:ndim)+noise_amp*xi(1:ndim)
       end if
- 
+
       p%levelp(ipart)=ilevel
       p%vp(ipart,1:ndim)=u_mid(1:ndim)
       p%xp(ipart,1:ndim)=p%xp(ipart,1:ndim)+disp(1:ndim)
@@ -1697,11 +1697,11 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             endif
          end do
       endif
- 
+
    end do
- 
+
    call close_cache(mdl)
- 
+
    if(action_part==action_kick_drift)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          do idim=1,ndim
@@ -1712,10 +1712,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       end do
    end if
- 
+
    end associate
  end subroutine cic_trace_gas_part_sgs_turb
- 
+
  subroutine tsc_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    use amr_parameters, only: ndim, threetondim, dp
    use pm_parameters
@@ -1748,23 +1748,23 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    integer :: ipart,idim,ind,icell,igrid,ii
    character(LEN=80) :: filename,fileloc
    character(LEN=5) :: nchar
- 
+
    associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
    if(p%static)return
    if (p%type/=TRAC_TYPE) return
- 
+
    dx_loc=r%boxlen/2**ilevel
 
    dt_level=g%dtnew(ilevel)
    use_sgs = r%sgs_turb .and. (r%iturb>0)
- 
+
    if(action_part==action_kick_only)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          p%levelp(ipart)=ilevel
       end do
       return
    endif
- 
+
    if(use_sgs .and. .not. tracer_rng_ready)then
       call RngStream_SetPackageSeed(r%seed)
       tracer_rng = RngStream_CreateStream('tracer_sgs')
@@ -1772,29 +1772,29 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       call RngStream_AdvanceState(tracer_rng,0_8,stream_skip)
       tracer_rng_ready = .true.
    end if
- 
+
    call open_cache(mdl, m, pack_size=storage_size(dummy_hydro_mflux)/32, &
         pack=pack_fetch_kick_trac, unpack=unpack_fetch_kick_trac)
- 
+
    do ipart=p%headp(ilevel),p%tailp(ilevel)
- 
+
       do idim=1,ndim
          x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
       end do
       call wrap_cell_coords(s,x,ilevel+1)
- 
+
       if (g%nstep>0) then
          v_pred(1:ndim)=p%vp(ipart,1:ndim)
       else
          call gather_tsc_state(s,x,ilevel,dx_loc,.false.,u_eff,kappa_mid)
          v_pred(1:ndim)=u_eff(1:ndim)
       endif
- 
+
       do idim=1,ndim
          x_mid(idim)=x(idim)+0.5d0*dt_level*v_pred(idim)/dx_loc
       end do
       call wrap_cell_coords(s,x_mid,ilevel+1)
- 
+
       call tsc_weights_and_derivs(x_mid, w1d, dw1d, il, ic, ir, vol)
       do idim=1,ndim
          if(r%periodic(idim))then
@@ -1803,7 +1803,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          endif
       end do
       ckey = tsc_index(il,ic,ir)
- 
+
       momentum(1:ndim)=0.d0
       rho=0.d0
       kappa_mid=0.d0
@@ -1828,14 +1828,14 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       else
          u_mid(1:ndim)=0.d0
       end if
- 
+
       grad_at_part(1:ndim)=0.d0
       if(use_sgs)then
          call compute_gradient_tsc_scalar(w1d, dw1d, kappa_cells, grad_at_part)
       end if
- 
+
       disp(1:ndim)=(u_mid(1:ndim) + grad_at_part(1:ndim)/dx_loc)*dt_level
- 
+
       if(use_sgs .and. kappa_mid>0.0d0)then
          if(r%tracer_kick_pdf=='gaussian')then
             call sample_tracer_gaussian(xi)
@@ -1847,7 +1847,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          noise_amp = sqrt(2.0d0*kappa_mid*dt_level)
          disp(1:ndim)=disp(1:ndim)+noise_amp*xi(1:ndim)
       end if
- 
+
       p%levelp(ipart)=ilevel
       p%vp(ipart,1:ndim)=u_mid(1:ndim)
       p%xp(ipart,1:ndim)=p%xp(ipart,1:ndim)+disp(1:ndim)
@@ -1866,11 +1866,11 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             endif
          end do
       endif
- 
+
    end do
- 
+
    call close_cache(mdl)
- 
+
    if(action_part==action_kick_drift)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          do idim=1,ndim
@@ -1881,10 +1881,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       end do
    end if
- 
+
    end associate
  end subroutine tsc_trace_gas_part_sgs_turb
- 
+
  subroutine mc_trace_gas_part(s,p,ilevel,action_part)
    ! Classic Monte Carlo tracer (scheme 0)
    use amr_parameters, only: ndim, twotondim
@@ -1921,22 +1921,22 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    integer :: igrid,ii
    character(LEN=80) :: filename,fileloc
    character(LEN=5) :: nchar
- 
+
    associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
    if(p%static)return
    if (p%type/=TRAC_TYPE) return
- 
+
    dx_loc=r%boxlen/2**ilevel
 
    tol_corner=0.05d0
- 
+
    if(action_part==action_kick_only)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          p%levelp(ipart)=ilevel
       end do
       return
    endif
- 
+
    if(.not. tracer_rng_ready)then
       call RngStream_SetPackageSeed(r%seed)
       tracer_rng = RngStream_CreateStream('tracer_mc')
@@ -1944,22 +1944,22 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       call RngStream_AdvanceState(tracer_rng,0_8,stream_skip)
       tracer_rng_ready = .true.
    end if
- 
+
    call open_cache(mdl, m, pack_size=storage_size(dummy_hydro_mflux)/32, &
         pack=pack_fetch_kick_trac, unpack=unpack_fetch_kick_trac)
- 
+
    do ipart=p%headp(ilevel),p%tailp(ilevel)
       do idim=1,ndim
          x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
       end do
       call wrap_cell_coords(s,x,ilevel+1)
- 
+
       near_corner=.true.
       do idim=1,ndim
          dist_to_corner=abs(x(idim)-dble(nint(x(idim))))
          if(dist_to_corner>=tol_corner)near_corner=.false.
       end do
- 
+
       if(near_corner)then
          do idim=1,ndim
             corner_idx(idim)=nint(x(idim))
@@ -2021,7 +2021,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             near_corner=.false.
          end if
       end if
- 
+
       if(.not.near_corner)then
          do idim=1,ndim
             dist_to_face=abs(x(idim)-dble(nint(x(idim))))
@@ -2040,7 +2040,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             p%xp(ipart,idim)=x(idim)*dx_loc-m%skip(idim)
          end do
       end if
- 
+
       do idim=1,ndim
          icell_idx(idim)=int(x(idim))
          if(r%periodic(idim))then
@@ -2048,7 +2048,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             if(icell_idx(idim)>=m%box_ckey_max(idim,ilevel+1))icell_idx(idim)=m%box_ckey_min(idim,ilevel+1)
          endif
       enddo
- 
+
       hash_nbor(0)=ilevel+1
       hash_nbor(1:ndim)=icell_idx(1:ndim)
       call get_parent_cell(s,hash_nbor,igrid,icell,flush_cache=.false.,fetch_cache=.true.)
@@ -2059,7 +2059,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       denom=max(rho_cell,r%smallr)
       vel=0.d0
       vel(1:ndim)=m%uold(icell,2:ndim+1,igrid)/max(m%uold(icell,1,igrid),r%smallr)
- 
+
       prob_face=0.d0
       do idim=1,ndim
          prob_face(2*idim-1)=max(-m%mflux(icell,1+idim,igrid),0.d0)/denom
@@ -2072,20 +2072,20 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       vel=0.d0
       denom=1.d0
 #endif
- 
+
       out_sum=0.d0
       do iface=1,2*ndim
          if(prob_face(iface)>0.d0)out_sum=out_sum+prob_face(iface)
       end do
- 
+
       if(out_sum>1.d0)then
          scale=1.d0/out_sum
          prob_face=prob_face*scale
          out_sum=1.d0
       end if
- 
+
       stay_prob=max(0.d0,1.d0-out_sum)
- 
+
       selected=0
       u=RngStream_RandUni(tracer_rng)
       cum=0.d0
@@ -2096,10 +2096,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             exit
          endif
       end do
- 
+
       p%vp(ipart,1:ndim)=vel(1:ndim)
       p%levelp(ipart)=ilevel
- 
+
       if(selected>0)then
          idim=(selected+1)/2
          p%xp(ipart,idim)=p%xp(ipart,idim)+(-1)**selected*dx_loc
@@ -2120,9 +2120,9 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       endif
    end do
- 
+
    call close_cache(mdl)
- 
+
    if(action_part==action_kick_drift)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          do idim=1,ndim
@@ -2133,10 +2133,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       end do
    end if
- 
+
    end associate
  end subroutine mc_trace_gas_part
- 
+
  subroutine cic_trace_gas_part_ito_mc(s,p,ilevel,action_part)
    ! Ito MC flux-based tracer with CIC (scheme 4)
    use amr_parameters, only: ndim, twotondim
@@ -2169,23 +2169,23 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    integer :: ipart,idim,ind,icell,igrid,ii
    character(LEN=80) :: filename,fileloc
    character(LEN=5) :: nchar
- 
+
    associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
- 
+
    if(p%static)return
    if (p%type/=TRAC_TYPE) return
- 
+
    dx_loc=r%boxlen/2**ilevel
- 
+
    if(action_part==action_kick_only)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          p%levelp(ipart)=ilevel
       end do
       return
    endif
- 
+
    dt_level=g%dtnew(ilevel)
- 
+
    if(.not. tracer_rng_ready)then
       call RngStream_SetPackageSeed(r%seed)
       tracer_rng = RngStream_CreateStream('tracer_ito_mc')
@@ -2193,16 +2193,16 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       call RngStream_AdvanceState(tracer_rng,0_8,stream_skip)
       tracer_rng_ready = .true.
    end if
- 
+
    call open_cache(mdl, m, pack_size=storage_size(dummy_hydro_mflux)/32, &
         pack=pack_fetch_kick_trac, unpack=unpack_fetch_kick_trac)
- 
+
    do ipart=p%headp(ilevel),p%tailp(ilevel)
       do idim=1,ndim
          x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
       end do
       call wrap_cell_coords(s,x,ilevel+1)
- 
+
       call cic_weights_and_derivs(x, w1d, dw1d, il, ir, vol)
       do idim=1,ndim
          if(r%periodic(idim))then
@@ -2211,11 +2211,11 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          endif
       end do
       ckey = cic_index(il,ir)
- 
+
       u_cells=0.d0
       kappa_num_cells=0.d0
       skew_cells=0.d0
- 
+
       hash_nbor(0)=ilevel+1
       do ind=1,twotondim
          hash_nbor(1:ndim)=ckey(1:ndim,ind)
@@ -2240,7 +2240,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
 #endif
 #endif
       end do
- 
+
       u_eff=0.d0
       kappa_num=0.d0
       skewness_eff=0.d0
@@ -2251,7 +2251,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             skewness_eff(idim)=skewness_eff(idim)+skew_cells(idim,ind)*vol(ind)
          end do
       end do
- 
+
       if(trim(r%tracer_kick_pdf)=='gaussian')then
          call sample_tracer_gaussian(xi)
       elseif(trim(r%tracer_kick_pdf)=='piecewise_skew_uniform')then
@@ -2259,13 +2259,13 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       else
          call sample_tracer_uniform(xi)
       endif
- 
+
       do idim=1,ndim
          disp(idim)=u_eff(idim)*dt_level
          noise_amp = sqrt(max(0.d0,2.d0*kappa_num(idim)*dt_level))
          disp(idim)=disp(idim)+noise_amp*xi(idim)
       end do
- 
+
       p%levelp(ipart) = ilevel
       p%vp(ipart,1:ndim)=u_eff(1:ndim)
       p%xp(ipart,1:ndim)=p%xp(ipart,1:ndim)+disp(1:ndim)
@@ -2285,9 +2285,9 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       endif
    end do
- 
+
    call close_cache(mdl)
- 
+
    if(action_part==action_kick_drift)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          do idim=1,ndim
@@ -2298,10 +2298,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       end do
    end if
- 
+
    end associate
  end subroutine cic_trace_gas_part_ito_mc
- 
+
  subroutine tsc_trace_gas_part_ito_mc(s,p,ilevel,action_part)
    ! Ito MC flux-based tracer with TSC (scheme 5) - same logic as cic_trace_gas_part_ito_mc
    use amr_parameters, only: ndim, threetondim
@@ -2335,22 +2335,22 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    integer :: ipart,idim,ind,icell,igrid,ii
    character(LEN=80) :: filename,fileloc
    character(LEN=5) :: nchar
- 
+
    associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
    if(p%static)return
    if (p%type/=TRAC_TYPE) return
- 
+
    dx_loc=r%boxlen/2**ilevel
- 
+
    if(action_part==action_kick_only)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          p%levelp(ipart)=ilevel
       end do
       return
    endif
- 
+
    dt_level=g%dtnew(ilevel)
- 
+
    if(.not. tracer_rng_ready)then
       call RngStream_SetPackageSeed(r%seed)
       tracer_rng = RngStream_CreateStream('tracer_ito_mc')
@@ -2358,16 +2358,16 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       call RngStream_AdvanceState(tracer_rng,0_8,stream_skip)
       tracer_rng_ready = .true.
    end if
- 
+
    call open_cache(mdl, m, pack_size=storage_size(dummy_hydro_mflux)/32, &
         pack=pack_fetch_kick_trac, unpack=unpack_fetch_kick_trac)
- 
+
    do ipart=p%headp(ilevel),p%tailp(ilevel)
       do idim=1,ndim
          x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
       end do
       call wrap_cell_coords(s,x,ilevel+1)
- 
+
       call tsc_weights_and_derivs(x, w1d, dw1d, il, ic, ir, vol)
       do idim=1,ndim
          if(r%periodic(idim))then
@@ -2376,11 +2376,11 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          endif
       end do
       ckey = tsc_index(il,ic,ir)
- 
+
       u_cells=0.d0
       kappa_num_cells=0.d0
       skew_cells=0.d0
- 
+
       hash_nbor(0)=ilevel+1
       do ind=1,threetondim
          hash_nbor(1:ndim)=ckey(1:ndim,ind)
@@ -2405,7 +2405,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
 #endif
 #endif
       end do
- 
+
       u_eff=0.d0
       kappa_num=0.d0
       skewness_eff=0.d0
@@ -2416,7 +2416,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
             skewness_eff(idim)=skewness_eff(idim)+skew_cells(idim,ind)*vol(ind)
          end do
       end do
- 
+
       if(trim(r%tracer_kick_pdf)=='gaussian')then
          call sample_tracer_gaussian(xi)
       elseif(trim(r%tracer_kick_pdf)=='piecewise_skew_uniform')then
@@ -2424,13 +2424,13 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
       else
          call sample_tracer_uniform(xi)
       endif
- 
+
       do idim=1,ndim
          disp(idim)=u_eff(idim)*dt_level
          noise_amp = sqrt(max(0.d0,2.d0*kappa_num(idim)*dt_level))
          disp(idim)=disp(idim)+noise_amp*xi(idim)
       end do
- 
+
       p%levelp(ipart) = ilevel
       p%vp(ipart,1:ndim)=u_eff(1:ndim)
       p%xp(ipart,1:ndim)=p%xp(ipart,1:ndim)+disp(1:ndim)
@@ -2450,9 +2450,9 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       endif
    end do
- 
+
    call close_cache(mdl)
- 
+
    if(action_part==action_kick_drift)then
       do ipart=p%headp(ilevel),p%tailp(ilevel)
          do idim=1,ndim
@@ -2463,10 +2463,10 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
          end do
       end do
    end if
- 
+
    end associate
  end subroutine tsc_trace_gas_part_ito_mc
- 
+
  !#########################################################################
  ! Stub routines for Ito MC dust (simplified versions)
  !#########################################################################
@@ -2481,7 +2481,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    ! For now, fall back to regular CIC dust
    call cic_kick_drift_dust(s,p,ilevel,action_part)
  end subroutine cic_kick_drift_dust_ito_mc
- 
+
  subroutine tsc_kick_drift_dust_ito_mc(s,p,ilevel,action_part)
    use ramses_commons, only: ramses_t
    use pm_commons, only: part_t
@@ -2493,7 +2493,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    ! For now, fall back to regular TSC dust
    call tsc_kick_drift_dust(s,p,ilevel,action_part)
  end subroutine tsc_kick_drift_dust_ito_mc
- 
+
  !#########################################################################
  ! Stub routines for guiding center dust (not implemented)
  !#########################################################################
@@ -2508,7 +2508,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    write(*,*)'ERROR: cic_kick_drift_dust_guiding_center not implemented'
    stop
  end subroutine cic_kick_drift_dust_guiding_center
- 
+
  subroutine tsc_kick_drift_dust_guiding_center(s,p,ilevel,action_part)
    use ramses_commons, only: ramses_t
    use pm_commons, only: part_t
@@ -2520,7 +2520,7 @@ subroutine cic_trace_gas_part_sgs_turb(s,p,ilevel,action_part)
    write(*,*)'ERROR: tsc_kick_drift_dust_guiding_center not implemented'
    stop
  end subroutine tsc_kick_drift_dust_guiding_center
-  
+
 !#########################################################################
 !#########################################################################
 !#########################################################################
@@ -2817,7 +2817,7 @@ subroutine tsc_kick_drift_dust(s,p,ilevel,action_part)
            call get_parent_cell(s,hash_nbor,igrid,icell2,flush_cache=.false.,fetch_cache=.true.)
 #ifdef HYDRO
            if(igrid>0)then
-#ifdef GRAV   
+#ifdef GRAV
               ff(1:ndim)=ff(1:ndim)+m%f(icell2,1:ndim,igrid)*vol2(ind)
 #endif
               rho_gas = rho_gas + m%uold(icell2,1,igrid)*vol2(ind)
@@ -2859,7 +2859,7 @@ subroutine tsc_kick_drift_dust(s,p,ilevel,action_part)
         call compute_drag_step(wdrift, c_sound, 0.5*g%dtnew(ilevel), nu_stop, coeff, r%analytic_dust_force)
         ! Gather ff, and apply to either side of the Lorentz force as a half-step
         wdrift(1:ndim)=wdrift(1:ndim)+ff(1:ndim)*0.5d0*g%dtnew(ilevel) ! External force half-step (includes gravity)
-#ifdef MHD 
+#ifdef MHD
         call compute_lorentz_step(wdrift, bb(1:3), g%dtnew(ilevel), p%charge(ipart), r%analytic_dust_force) !Somehow introducing nonphysical oscillations.
 #endif
         wdrift(1:ndim)=wdrift(1:ndim)+ff(1:ndim)*0.5d0*g%dtnew(ilevel) ! Second external force half-step
@@ -3138,37 +3138,37 @@ end subroutine compute_drag_step
 
 function exact_drag(dt, nu, eta, w0) result(drag_value)
   ! Computes drag coefficient based on the analytic solution for Epstein-Baines drag:
-  ! drag(dt) = sqrt(((sinh(nu*dt) + sqrt(1 + eta*w0^2)*cosh(nu*dt)) / 
+  ! drag(dt) = sqrt(((sinh(nu*dt) + sqrt(1 + eta*w0^2)*cosh(nu*dt)) /
   !                  (cosh(nu*dt) + sqrt(1 + nu*w0^2)*sinh(nu*dt)))^2 - 1)
   implicit none
   real(kind=8), intent(in) :: dt, nu, eta, w0
   real(kind=8) :: drag_value
-  
+
   real(kind=8) :: sinh_term, cosh_term, sqrt_term, numerator, denominator, ratio
-  
+
   ! Compute hyperbolic functions
   sinh_term = sinh(nu * dt)
   cosh_term = cosh(nu * dt)
-  
+
   ! Compute sqrt(1 + eta*w0^2) - note: using eta as in the original formula
   sqrt_term = sqrt(1.0d0 + eta * w0**2)
-  
+
   ! Compute numerator: sinh(nu*dt) + sqrt(1 + eta*w0^2)*cosh(nu*dt)
   numerator = sinh_term + sqrt_term * cosh_term
-  
+
   ! Compute denominator: cosh(nu*t) + sqrt(1 + eta*w0^2)*sinh(nu*t)
   denominator = cosh_term + sqrt(1.0d0 + eta * w0**2) * sinh_term
-  
+
   ! Avoid division by zero
   if (abs(denominator) < 1.0d-15) then
      drag_value = 0.0d0
      return
   end if
-  
+
   ! Compute ratio and final result
   ratio = numerator / denominator
   drag_value = sqrt(max(0.0d0, ratio**2 - 1.0d0))/sqrt(eta)
-  
+
 end function exact_drag
 
 !#########################################################################
@@ -3180,18 +3180,18 @@ function fully_implicit_drag(dt, nu, eta, w0) result(drag_value)
   implicit none
   real(kind=8), intent(in) :: dt, nu, eta, w0
   real(kind=8) :: drag_value, nu_stop
-  
+
   real(kind=8) :: sqrt_term, ratio
-  
-  
+
+
   ! Compute sqrt(1 + eta*w0^2) w0^2 is actually w0^2/c_sound^2
   sqrt_term = sqrt(1.0d0 + eta * w0**2)
   nu_stop = nu * sqrt_term
 
-  drag_value = w0/(1+nu_stop*dt+0.5d0*nu*dt**2) 
+  drag_value = w0/(1+nu_stop*dt+0.5d0*nu*dt**2)
   ! Not a typo. Comes from a series expansion of the analytic solution in dt
 
-  
+
 end function fully_implicit_drag
 
 !#########################################################################
@@ -3209,29 +3209,29 @@ subroutine compute_lorentz(driftvel, bfield, dt, charge_parameter)
   real(kind=8) :: v1_new, v2_new, v3_new
   real(kind=8), dimension(1:3,1:3) :: matrix
 
-#if NDIM==3  
+#if NDIM==3
   dteff = -1.0d0 * dt * charge_parameter ! Accidentally flipped sign in the original code.
   bsquared = dot_product(bfield(1:ndim), bfield(1:ndim))
 
   det = 1 + 0.25d0 * bsquared * dteff**2
-  
+
   ! Matrix components from Mathematica
   ! Inverse[(e - 0.5*dteff*m)].(e+0.5*dteff*m).v^n = v^(n+1)
   ! Row 1
   matrix(1,1) = 1.0d0 + 0.25d0 * (bfield(1)**2 - bfield(2)**2 - bfield(3)**2) * dteff**2
   matrix(1,2) = 0.5d0 * dteff * (2.0d0 * bfield(3) + bfield(1) * bfield(2) * dteff)
   matrix(1,3) = 0.5d0 * dteff * (-2.0d0 * bfield(2) + bfield(1) * bfield(3) * dteff)
-  
+
   ! Row 2
   matrix(2,1) = 0.5d0 * dteff * (-2.0d0 * bfield(3) + bfield(1) * bfield(2) * dteff)
   matrix(2,2) = 1.0d0 - 0.25d0 * (bfield(1)**2 - bfield(2)**2 + bfield(3)**2) * dteff**2
   matrix(2,3) = 0.5d0 * dteff * (2.0d0 * bfield(1) + bfield(2) * bfield(3) * dteff)
-  
+
   ! Row 3
   matrix(3,1) = 0.5d0 * dteff * (2.0d0 * bfield(2) + bfield(1) * bfield(3) * dteff)
   matrix(3,2) = 0.5d0 * dteff * (-2.0d0 * bfield(1) + bfield(2) * bfield(3) * dteff)
   matrix(3,3) = 1.0d0 - 0.25d0 * (bfield(1)**2 + bfield(2)**2 - bfield(3)**2) * dteff**2
-  
+
   ! Apply matrix/det to driftvel (hard-coded for efficiency)
   if (ndim == 3) then
      v1_new = (matrix(1,1)*driftvel(1) + matrix(1,2)*driftvel(2) + matrix(1,3)*driftvel(3)) / det
@@ -3455,7 +3455,7 @@ end subroutine compute_gradient_cic_scalar
 subroutine compute_gradient_cic(w1d, dw1d, field, grad_out)
   !--------------------------------------------------------------
   ! Compute gradient of a vector field using CIC (2x2x2) weights.
-  ! grad_i = d(field_i)/dx_i. 
+  ! grad_i = d(field_i)/dx_i.
   !--------------------------------------------------------------
   use amr_parameters, only: ndim, twotondim
   implicit none

@@ -26,7 +26,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
         msg%int4(ind)=0
      endif
   end do
-  
+
 #ifdef HYDRO
   do ivar=1,nvar
      do ind=1,twotondim
@@ -34,7 +34,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef MHD
   do ivar=1,6
      do ind=1,twotondim
@@ -62,7 +62,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef DO_CR
   do ivar=1,ncruvar
      do ind=1,twotondim
@@ -70,7 +70,7 @@ subroutine pack_fetch_refine(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-  
+
   msg_array=transfer(msg,msg_array)
 
 end subroutine pack_fetch_refine
@@ -105,7 +105,7 @@ subroutine unpack_fetch_refine(mesh,igrid,msg_size,msg_array,hash_key)
         mesh%grid(igrid)%refined(ind)=.false.
      endif
   end do
-  
+
 #ifdef HYDRO
   do ivar=1,nvar
      do ind=1,twotondim
@@ -172,7 +172,7 @@ subroutine pack_fetch_flag(mesh,igrid,msg_size,msg_array)
   end do
 
   msg_array=transfer(msg,msg_array)
-  
+
 end subroutine pack_fetch_flag
 !###############################################################
 !###############################################################
@@ -198,7 +198,7 @@ subroutine unpack_fetch_flag(mesh,igrid,msg_size,msg_array,hash_key)
   do ind=1,twotondim
      mesh%flag1(ind,igrid)=msg%int4(ind)
   end do
-  
+
 end subroutine unpack_fetch_flag
 !################################################################
 !################################################################
@@ -221,7 +221,7 @@ subroutine pack_fetch_flag2(mesh,igrid,msg_size,msg_array)
   end do
 
   msg_array=transfer(msg,msg_array)
-  
+
 end subroutine pack_fetch_flag2
 !###############################################################
 !###############################################################
@@ -247,7 +247,7 @@ subroutine unpack_fetch_flag2(mesh,igrid,msg_size,msg_array,hash_key)
   do ind=1,twotondim
      mesh%flag2(ind,igrid)=msg%int4(ind)
   end do
-  
+
 end subroutine unpack_fetch_flag2
 !###############################################################
 !###############################################################

@@ -15,14 +15,14 @@ subroutine m_turb_hydro(pst,ilevel,dteff)
   ! Add gravity source terms to uold with time step dteff.
   !--------------------------------------------------------------
   integer,dimension(1:3)::input_array,dummy
-  
+
   if(pst%s%m%noct_tot(ilevel)==0)return
   if(pst%s%r%verbose)write(*,'("   Entering turb_hydro for level",i2," and time step dt=",1PE12.5)')ilevel,dteff
 
   input_array(1)=ilevel
   input_array(2:3)=transfer(dteff,input_array)
   call r_turb_hydro(pst,input_array,3,dummy,0)
-  
+
 end subroutine m_turb_hydro
 !################################################################
 !################################################################
@@ -45,7 +45,7 @@ recursive subroutine r_turb_hydro(pst,input_array,input_size,output_array,output
   integer::ilevel
   real(kind=8)::dteff
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_TURB_HYDRO,pst%iUpper+1,input_size,output_size,input_array)
      call r_turb_hydro(pst%pLower,input_array,input_size,input_array,output_size)

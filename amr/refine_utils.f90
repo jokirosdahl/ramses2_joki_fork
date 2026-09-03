@@ -157,9 +157,9 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   !---------------------------------------------------------
   ! This routine refines cells at level ilevel if cells
   ! are flagged for refinement and are not already refined.
-  ! This routine destroys refinements for cells that are 
+  ! This routine destroys refinements for cells that are
   ! not flagged for refinement and are already refined.
-  ! For single time-stepping, numerical rules are 
+  ! For single time-stepping, numerical rules are
   ! automatically satisfied. For adaptive time-stepping,
   ! numerical rules are checked before refining any cell.
   !---------------------------------------------------------
@@ -206,7 +206,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   !---------------------------------------------------
   ! Step 1: if a cell is flagged for refinement and
   ! if it is not already refined, create its son grid.
-  !---------------------------------------------------        
+  !---------------------------------------------------
   g%ncreate=0
   m%ifree=m%noct_used+1
   do ilev=ilevel,r%nlevelmax-1
@@ -320,7 +320,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   nkill=g%nkill
 
   !-----------------------------------------------------
-  ! Step 3: sort new octs and empty slots according to 
+  ! Step 3: sort new octs and empty slots according to
   ! their level (using counting sort algorithm).
   !-----------------------------------------------------
   allocate(noct_level(r%levelmin:r%nlevelmax))
@@ -362,7 +362,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   end do
 
   !-----------------------------------------------------
-  ! Step 4: sort octs level by level according to their 
+  ! Step 4: sort octs level by level according to their
   ! Hilbert key using LSD Radix Sort algorithm.
   !-----------------------------------------------------
   ! Loop over levels
@@ -405,7 +405,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
            ! Store permutations in swap table
            do inew=head_level(ilev),head_level(ilev)+noct_level(ilev)-1
               swap_table(inew)=swap_tmp(inew)
-           end do           
+           end do
         end do
 
         ! Deallocate tmp swap array
@@ -419,7 +419,7 @@ subroutine refine_fine(s,ilevel,ncreate,nkill)
   ! New data at position inew COMES FROM
   ! Old data at position iold.
   !-----------------------------------------------------
-  ! Perform the swap  
+  ! Perform the swap
   do j=head_level(ilevel+1),m%ifree-1
      if(j.NE.swap_table(j))then
         hash_key(0)=m%grid(j)%lev
@@ -577,7 +577,7 @@ subroutine pack_flush_refine(mesh,igrid,msg_size,msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef MHD
   do ivar=1,6
      do ind=1,twotondim
@@ -644,7 +644,7 @@ subroutine unpack_flush_refine(mesh,igrid,msg_size,msg_array,hash_key)
   do ind=1,twotondim
      mesh%grid(igrid)%refined(ind)=.false.
   end do
-  
+
 #ifdef HYDRO
   do ivar=1,nvar
      do ind=1,twotondim
@@ -652,7 +652,7 @@ subroutine unpack_flush_refine(mesh,igrid,msg_size,msg_array,hash_key)
      end do
   end do
 #endif
-  
+
 #ifdef MHD
   do ivar=1,6
      do ind=1,twotondim
@@ -704,7 +704,7 @@ subroutine init_flush_derefine(mesh,igrid,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   mesh%grid(igrid)%refined(1:twotondim)=.true.
-  
+
 end subroutine init_flush_derefine
 !###############################################################
 !###############################################################
@@ -722,7 +722,7 @@ subroutine pack_flush_derefine(mesh,igrid,msg_size,msg_array)
   integer::ind
   type(msg_int4)::msg
 
-  do ind=1,twotondim     
+  do ind=1,twotondim
      if(mesh%grid(igrid)%refined(ind))then
         msg%int4(ind)=1
      else
@@ -1026,7 +1026,7 @@ subroutine make_new_oct(s,iparent,icell,ilevel)
   !================================
   ! Inject parent gravity variables
   !================================
-#ifdef GRAV  
+#ifdef GRAV
   do ind=1,twotondim
      m%f(ind,1:ndim,ichild)=m%f(icell,1:ndim,iparent)
      m%phi(ind,ichild)=m%phi(icell,iparent)

@@ -243,9 +243,9 @@ contains
     full_hash = hash_func(key)
     ibucket = IAND(full_hash, htable%bitmask) + 1
 
-    if (htable%data(ibucket)%next_ibucket < 0) then          
+    if (htable%data(ibucket)%next_ibucket < 0) then
 
-       ! Bucket is empty, simply insert value       
+       ! Bucket is empty, simply insert value
        htable%data(ibucket)%next_ibucket = 0
        htable%data(ibucket)%val = val
        htable%data(ibucket)%key(0:ndim) = key(0:ndim)
@@ -445,7 +445,7 @@ contains
     do i = 1, n
        ibucket(i) = IAND(full_hash(i), htable%bitmask) + 1
     end do
-    
+
     do idim = 0, ndim
        do i = 1, n
           bucket_keys(i, idim) = htable%data(ibucket(i))%key(idim)
@@ -529,7 +529,7 @@ contains
     type(hash_table),                    intent(inout) :: htable
     integer(kind=8) , dimension(0:ndim), intent(in)    :: key
 
-    ! Remove the hash table entry for a given key 
+    ! Remove the hash table entry for a given key
 
     integer(kind=8) :: ibucket, previous_ibucket=0, full_hash
 
@@ -537,7 +537,7 @@ contains
     ibucket = IAND(full_hash, htable%bitmask) + 1
 
     ! No collision case
-    if (htable%data(ibucket)%next_ibucket == 0) then     
+    if (htable%data(ibucket)%next_ibucket == 0) then
        htable%data(ibucket)%next_ibucket = -1
        htable%data(ibucket)%key(0:ndim) = 0
        htable%nfree = htable%nfree + 1
@@ -547,8 +547,8 @@ contains
           previous_ibucket=ibucket
           ibucket=htable%data(ibucket)%next_ibucket
        end do
-       if (ibucket <= htable%size) then           
-          ! It's the first element we need to erase: Move first element from chaning 
+       if (ibucket <= htable%size) then
+          ! It's the first element we need to erase: Move first element from chaning
           ! space into bucket and do as if the value to remove had been in the chaning space
           htable%data(ibucket)%val = htable%data(htable%data(ibucket)%next_ibucket)%val
           htable%data(ibucket)%key = htable%data(htable%data(ibucket)%next_ibucket)%key
@@ -601,7 +601,7 @@ contains
     end if
   end subroutine hash_free_simple
   ! =============================================================================
-  
+
   ! =============================================================================
   pure function same_keys(key1, key2)
     logical :: same_keys
@@ -634,7 +634,7 @@ contains
     write(*,*)"Perfect collision fraction (assuming perfect randomness): "&
          ,(htable%total_size - htable%nfree - htable%nfree_chain - &
          htable%size * (1.d0 - ((htable%size - 1.d0)/(htable%size)) &
-         **(htable%total_size - htable%nfree - htable%nfree_chain))) & 
+         **(htable%total_size - htable%nfree - htable%nfree_chain))) &
          *1./(htable%total_size - htable%nfree - htable%nfree_chain + tiny(0.D0))
     write(*,*)"Fraction of collision space used: "&
          ,(htable%total_size - htable%size - htable%nfree_chain)&

@@ -116,7 +116,7 @@ FUNCTION beta_H2_umist(T, nH, ne, nH2) result(rate)
 
   rate = 0.d0
 
-  !H2 + H2 --> H2 + H + H 
+  !H2 + H2 --> H2 + H + H
   T_loc = max(min(T,41000.d0),2803.d0)
   rate = rate + (1.00d-8 * ((T_loc/300d0)**0.0d0) * exp(-84100.d0/T_loc) * nH2)
 
@@ -156,7 +156,7 @@ END FUNCTION beta_H2_krome
 FUNCTION beta_H2(T, nH, xHI, xH2, xHe, ne, nHI, nH2, nHeI) result(rate)
   ! Returns the collisional dissociation rates of H2 for four different
   ! reactions [cm3s-1] from Glover & Abel (2008)
-  ! http://mnras.oxfordjournals.org/content/388/4/1627.full.pdf 
+  ! http://mnras.oxfordjournals.org/content/388/4/1627.full.pdf
   implicit none
 
   real(KIND=8), intent(in):: T, nH, xHI, xH2, xHe

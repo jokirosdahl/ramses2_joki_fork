@@ -14,7 +14,7 @@ attributes(device) subroutine warp_scan(scan, lane)
   do
      if (offset .ge. warpsize) exit
      num = __shfl_up(scan, offset)
-     if (offset < lane) scan = scan + num 
+     if (offset < lane) scan = scan + num
      offset = offset * 2
   end do
 
@@ -151,7 +151,7 @@ attributes(device) subroutine warp_scan_dp(scan, lane)
   do
      if (offset .ge. warpsize) exit
      num = __shfl_up(scan, offset)
-     if (offset < lane) scan = scan + num 
+     if (offset < lane) scan = scan + num
      offset = offset * 2
   end do
 

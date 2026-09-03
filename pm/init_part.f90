@@ -301,7 +301,7 @@ subroutine init_dust(r,g,p)
   allocate(p%levelp(r%ndustmax))
   allocate(p%idp   (r%ndustmax))
   allocate(p%size  (r%ndustmax))
-  allocate(p%charge(r%ndustmax)) 
+  allocate(p%charge(r%ndustmax))
   p%nvaralloc=2*ndim+5
 
   allocate(p%sortp (r%ndustmax))

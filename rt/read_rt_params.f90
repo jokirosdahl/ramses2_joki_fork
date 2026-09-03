@@ -66,7 +66,7 @@ subroutine m_read_rt_params(pst)
   real(kind=8),dimension(1:MAXREGION)   ::rt_src_length_y=1.E10
   real(kind=8),dimension(1:MAXREGION)   ::rt_src_length_z=1.E10
   real(kind=8),dimension(1:MAXREGION)   ::rt_exp_source=2.0
-  integer, dimension(1:MAXREGION)   ::rt_src_group=1  
+  integer, dimension(1:MAXREGION)   ::rt_src_group=1
   !integer, dimension(1:MAXREGION)   ::rt_src_trace_group=1
   real(kind=8),dimension(1:MAXREGION)   ::rt_n_source=0.                      ! Photon density
   real(kind=8),dimension(1:MAXREGION)   ::rt_u_source=0.                      !    Photon flux
@@ -223,9 +223,9 @@ subroutine m_read_rt_params(pst)
 115 continue
   close(1)
 
-  !--------------------------------------------------  
+  !--------------------------------------------------
   ! Reduced light speed. First check if only one light speed fraction set
-  ! and if so, set that same light speed fraction at all levels. If more 
+  ! and if so, set that same light speed fraction at all levels. If more
   ! than one fraction is set, we are using a variable speed of light.
   !--------------------------------------------------
   if(rt_c_fraction(1).ne.rt_c_fraction(2) .and. rt_c_fraction(2).eq.1.0  &

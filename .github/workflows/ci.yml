@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+jobs:
+  hydro2d:
+    name: Build hydro2d
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build hydro2d
+        run: >
+          docker run --rm
+          -v ${{ github.workspace }}:/workspace
+          -w /workspace/bin
+          cphyc/openmpi-iap
+          make NDIM=2 MPI=1 HYDRO=1
+
+  cosmo3d:
+    name: Build cosmo3d
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build cosmo3d
+        run: >
+          docker run --rm
+          -v ${{ github.workspace }}:/workspace
+          -w /workspace/bin
+          cphyc/openmpi-iap
+          make NDIM=3 MPI=1 UNITS=COSMO HYDRO=1 GRAV=1 NVAR=7

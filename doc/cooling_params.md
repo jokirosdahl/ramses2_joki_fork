@@ -1,4 +1,4 @@
-The namelist block `&COOLING_PARAMS` is used to specify parameters controlling gas cooling. 
+The namelist block `&COOLING_PARAMS` is used to specify parameters controlling gas cooling.
 
 | Variable name | Fortran type | Default value  | Description      |
 |:------------------- |:-------|:----- |:------------------------- |
@@ -26,9 +26,3 @@ The namelist block `&COOLING_PARAMS` is used to specify parameters controlling g
 | `upload_equilibrium_x` | `logical`  |`.true.`| Set photoionisation equilibrium ionisation fractions in the parent cell when de-refining. This is to avoid unnatural emission rates which can occur when the children ionization fractions are averaged (relevant mostly for mock observations) |
 | `isHe`              | `logical`  |`.false.`| Turn on or off non-equilibrium chemistry for Helium. |
 | `isH2`              | `logical`  |`.false.`| Turn on or off non-equilibrium chemistry for H2 molecule. |
-
-
-
-
-
-

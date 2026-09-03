@@ -47,10 +47,10 @@ subroutine m_init_refine_restart(pst)
   write(*,'(" Restart snapshot has levelmax=",I4)')nlevelmax_file
 
   ! Broadcast parameters to all CPUs.
-  call m_broadcast_params(pst)  
+  call m_broadcast_params(pst)
 
   ! Broadcast global variables to all CPUs.
-  call m_broadcast_global(pst)  
+  call m_broadcast_global(pst)
 
   if(r%verbose)write(*,*)'Broadcast completed'
 
@@ -299,7 +299,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
   do icpu=2,ncpu_file
      noct_cum(icpu)=noct_cum(icpu-1)+noct_file(icpu)
   end do
-     
+
   !------------------------------------------
   ! New cumulative numbers of octs per cpu
   !------------------------------------------
@@ -352,7 +352,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
         iend=MIN(nright,noct_file(icpu))
      endif
      call title(icpu,ncharcpu)
-     
+
      ! Prepare reading the AMR file
      file_amr='backup_'//TRIM(nchar)//'/amr.'//TRIM(ncharcpu)
      open(unit=10,file=file_amr,access="stream",action="read",form='unformatted')
@@ -482,12 +482,12 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
               m%flag1(ind,igrid)=0
            endif
         end do
-        
+
         ! Insert in hash table
         hash_key(0)=ilevel
         hash_key(1:ndim)=ckey
         call hash_setp(m%grid_dict,hash_key,igrid)
-        
+
         ! Compute Hilbert keys of new octs
         ix(1:ndim)=ckey(1:ndim)
         hk(1:nhilbert)=hilbert_key(ix,ilevel-1)
@@ -505,7 +505,7 @@ subroutine init_refine_restart(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,n
         close(13)
      endif
   end do
-  
+
   !-----------
   ! Super-octs
   !-----------

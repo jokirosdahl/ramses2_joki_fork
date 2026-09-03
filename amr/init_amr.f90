@@ -22,7 +22,7 @@ recursive subroutine r_set_add(pst,iUpper,input_size)
   iLower = mdl_self(mdl)-1
   n = iUpper - iLower
   iMiddle = (iUpper + iLower) / 2
- 
+
   if(n>1)then
      pst%iUpper = iMiddle
      pst%nLower = iMiddle - iLower
@@ -33,7 +33,7 @@ recursive subroutine r_set_add(pst,iUpper,input_size)
      call r_set_add(pst%pLower,iMiddle,input_size)
      call mdl_get_reply(mdl,rID,0)
   end if
- 
+
   end associate
 
 end subroutine r_set_add
@@ -470,7 +470,7 @@ subroutine init_params(mdl,r,g)
   character(len=80)::file_params
   integer::ncpu_file,levelmin_file,nlevelmax_file
   logical::file_exist
-  
+
   ! Initial time step for each level
   g%dtold=0.0D0
   g%dtnew=0.0D0

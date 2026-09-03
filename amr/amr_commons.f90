@@ -335,7 +335,7 @@ module amr_commons
      integer::iIons, ixHI, ixHII, ixHeII, ixHeIII     !       Indexes of ionization fractions
 #ifdef DO_RTZ
      integer::element_first_idx(1:27)       !  Start idx of elements in uold
-     integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold 
+     integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold
      real(kind=8),dimension(1:27,1:27)::ionEvs        !                   Ionization energies
 #else
      real(kind=8),dimension(nIon)::ionEvs             !                   Ionization energies
@@ -425,7 +425,7 @@ module amr_commons
      logical::sink_refine=.false.
      logical::sink_dump=.false.
      logical::static_sink=.false.
-     logical::fix_sink_mass=.false. 
+     logical::fix_sink_mass=.false.
      logical::drag_sink=.false.
 
      ! Black hole parameters
@@ -448,7 +448,7 @@ module amr_commons
      ! AGN Feedback parameters
      logical::agn = .false. ! Whether to activate AGN feedback around black hole/sink particles
      integer::agn_feedback_radius = 4 ! Radius (in dx_min) of feedback region (should be geq sink_b_spline_order/2)
-     integer::agn_weighting_scheme = 1 ! Which AGN weighting scheme (psy_function) to use 
+     integer::agn_weighting_scheme = 1 ! Which AGN weighting scheme (psy_function) to use
      real(kind=8)::epsilon_rad = 0.1d0 ! Radiative efficiency
      real(kind=8)::epsilon_radio = 1.0d0 ! Efficiency of momentum feedback for jet
      real(kind=8)::epsilon_quasar = 0.15d0 ! Efficiency of thermal feedback for quasar
@@ -531,7 +531,7 @@ module amr_commons
      real(kind=8),dimension(1:MAXREGION)   ::rt_src_length_y=1.E10
      real(kind=8),dimension(1:MAXREGION)   ::rt_src_length_z=1.E10
      real(kind=8),dimension(1:MAXREGION)   ::rt_exp_source=2.0
-     integer, dimension(1:MAXREGION)   ::rt_src_group=1  
+     integer, dimension(1:MAXREGION)   ::rt_src_group=1
      integer, dimension(1:MAXREGION)   ::rt_src_trace_group=1
      real(kind=8),dimension(1:MAXREGION)   ::rt_n_source=0.                     ! Photon density
      real(kind=8),dimension(1:MAXREGION)   ::rt_u_source=0.                     ! Photon flux
@@ -545,7 +545,7 @@ module amr_commons
      real(kind=8),dimension(1:MAXBOUND,1:nrtgrp)::rt_w_bound=0.0d0
 
      ! RT groups parameters-------------------------------------------------------------------
-     integer::sedprops_update=-1           ! Update sedprops from stellar populations        
+     integer::sedprops_update=-1           ! Update sedprops from stellar populations
      ! negative: never update, 0:update on init, pos x: update every x coarse steps
      ! logical::SED_isEgy=.false. ! Integrate energy out of SEDs rather than photon count
      ! Group props: avg and energy weigthed photoionization c-section (cm2), avg. energy (ev)
@@ -561,7 +561,7 @@ module amr_commons
      real(kind=8),dimension(nrtgrp)::group_L1=0                         ! Wavelength upper limits
      real(kind=8),dimension(nrtgrp)::kappaAbs=0                         ! Dust absorption opacity
      real(kind=8),dimension(nrtgrp)::kappaSc=0                          ! Dust scattering opacity
-     real(kind=8),dimension(nrtgrp)::isLW=0d0                          ! Use to find the LW group 
+     real(kind=8),dimension(nrtgrp)::isLW=0d0                          ! Use to find the LW group
      real(kind=8),dimension(nrtgrp)::ssh2=1d0                      ! Self-shielding factor for H2
      ! HK note --> OTSA required for RTZ
      integer,dimension(nIon)::spec2group=0                 ! Ion -> group # in recombinations
@@ -704,7 +704,7 @@ module amr_commons
      ! Initial conditions parameters from grafic
      integer::nlevelmax_part
      real(kind=8)::aexp_ini=10.
-     real(kind=8)::T2_start          ! Starting gas temperature     
+     real(kind=8)::T2_start          ! Starting gas temperature
      real(kind=8),dimension(1:MAXLEVEL)::dfact=1.0d0,astart
      real(kind=8),dimension(1:MAXLEVEL)::vfact=1.0d0
      real(kind=8),dimension(1:MAXLEVEL)::xoff1,xoff2,xoff3,dxini
@@ -875,4 +875,3 @@ contains
   end subroutine set_hydro_parameters
 
 end module amr_commons
-

@@ -157,7 +157,7 @@ contains
        key = offset + ix8 + iy8*nx + iz8*nx*nx
        igrid = hash_get(hash_key_d, hash_val_d, hash_size_d, key)
        vol_cell = vol_loc * 8.0d0
-       
+
        if (igrid > 0 .and. igrid <= ngridmax) then
           do idim = 1, ndim
              xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
@@ -441,7 +441,7 @@ contains
     key = offset + ix8 + iy8*nx + iz8*nx*nx
     igrid = hash_get(hash_key_d, hash_val_d, hash_size_d, key)
     cell_level = ilevel
-    
+
     if (igrid > 0 .and. igrid <= ngridmax) then
        do idim = 1, 3
           xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
@@ -465,7 +465,7 @@ contains
        key = offset + ix8 + iy8*nx + iz8*nx*nx
        igrid = hash_get(hash_key_d, hash_val_d, hash_size_d, key)
        cell_level = ilevel - 1
-       
+
        if (igrid > 0 .and. igrid <= ngridmax) then
           do idim = 1, 3
              xs = star_xp(ipart + (idim-1)*leading) + d_skip(idim)
@@ -511,7 +511,7 @@ contains
     e = uold(icell, 5, igrid)
     ekk = 0.5_dp * d * (u**2 + v**2 + w**2)
     eth = e - ekk
-    
+
     z = 0.0_dp
     if (metal) then
        z = uold(icell, imetal, igrid) / d

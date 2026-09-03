@@ -60,7 +60,7 @@ module hydro_device
 #endif
 #if NVAR>5+NENER
      real(kind=dp), dimension(0:2*nsubgrid-1, 0:2*nsubgrid, 0:2*nsubgrid-1, 1:nscalar) :: scalar
-#endif 
+#endif
   end type subgrid_2x3x2cell_primitive
   type, public :: subgrid_2x2x3cell_primitive
      real(kind=dp), dimension(0:2*nsubgrid-1, 0:2*nsubgrid-1, 0:2*nsubgrid) :: density
@@ -1600,7 +1600,7 @@ contains
        cell%pressure   = local_subgrid%pressure  (i, j, k)
 #ifdef MHD
        ! Pre-predictor cell scalars for trace.
-       
+
        r = local_subgrid%density   (i,j,k)
        u = local_subgrid%velocity_x(i,j,k)
        v = local_subgrid%velocity_y(i,j,k)
@@ -1619,7 +1619,7 @@ contains
             & slopes_x, slopes_y, slopes_z)
 #ifdef MHD
        ! Unpack transverse-B slopes for trace.
-       
+
        drx = slopes_x%density;    dry = slopes_y%density;    drz = slopes_z%density
        dux = slopes_x%velocity_x; duy = slopes_y%velocity_x; duz = slopes_z%velocity_x
        dvx = slopes_x%velocity_y; dvy = slopes_y%velocity_y; dvz = slopes_z%velocity_y
@@ -1957,14 +1957,14 @@ contains
     end do
 
     call syncthreads()
-   
+
   end subroutine trace_3d
   ! =========================================================================
 
   ! =========================================================================
   !> @brief
-  !> Compute the HLL flux for a specific field. Note that this only computes 
-  !> the HLL flux itself from intermediate values. The full HLL Riemann Solver 
+  !> Compute the HLL flux for a specific field. Note that this only computes
+  !> the HLL flux itself from intermediate values. The full HLL Riemann Solver
   !> is in the `hll_fluxes` function which calls this function.
   !>
   !> @param[in] speed_l : The sound speed from the left interface
@@ -1991,7 +1991,7 @@ contains
   !> @param[in] gamma : The adiabatic index
   !>
   !> @return
-  !> flux : The conserved_t of the HLL fluxes 
+  !> flux : The conserved_t of the HLL fluxes
   attributes(device) function hll_fluxes(left_state_p, right_state_p, gamma, smallr, smallc2, llf) result(flux)
     type(primitive_t), intent(inout) :: left_state_p, right_state_p
     real(kind=dp), value :: gamma, smallr, smallc2
@@ -2573,10 +2573,10 @@ contains
        j = j + 2*(j_subgrid_idx - 1)
        k = k + 2*(k_subgrid_idx - 1)
 
-       ! Gather the fluxes, computing the update term as we go. Note that the flux 
-       ! variables names are the primitive names but the actual variables are the 
-       ! conserved variables, this is because we're reuseing the interface state 
-       ! array to store this fluxes. 
+       ! Gather the fluxes, computing the update term as we go. Note that the flux
+       ! variables names are the primitive names but the actual variables are the
+       ! conserved variables, this is because we're reuseing the interface state
+       ! array to store this fluxes.
 
        ! X component
        update_term%density    = (fluxes_x%density   (i, j, k) - fluxes_x%density   (i+1, j, k)) * dtdx
@@ -2838,7 +2838,7 @@ contains
 #endif
           end do
        end do
-    
+
        ! Update left coarse Y cell if necessary
        ind_nbor = 1 + i_subgrid_idx + nsubgridp2 * j_subgrid_idx + nsubgridp2sq * k_subgrid_idx
        source_idx = nbor(ind_nbor, subgrid_idx)
@@ -2954,7 +2954,7 @@ contains
 #endif
           end do
        end do
-    
+
        ! Update left coarse Z cell if necessary
        ind_nbor = 1 + i_subgrid_idx + nsubgridp2 * j_subgrid_idx + nsubgridp2sq * k_subgrid_idx
        source_idx = nbor(ind_nbor, subgrid_idx)

@@ -46,7 +46,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      A(i)=0.0
   end do
 #endif
-  
+
 #if INIT==LOOP
   R0 = 0.3
   A0 = 1d-3

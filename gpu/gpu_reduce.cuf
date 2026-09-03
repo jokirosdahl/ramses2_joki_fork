@@ -55,7 +55,7 @@ attributes(device) function block_reduce_int_sum(num)
   ! wait for all partial reads
   call syncthreads()
 
-  ! final reduce within first warp 
+  ! final reduce within first warp
   if (wid.eq.1) call warp_reduce_int_sum(num)
 
   block_reduce_int_sum = num
@@ -119,7 +119,7 @@ attributes(device) function block_reduce_sum(mass)
   ! wait for all partial reads
   call syncthreads()
 
-  ! final reduce within first warp 
+  ! final reduce within first warp
   if (wid.eq.1) call warp_reduce_sum(mass)
 
   block_reduce_sum = mass
@@ -184,7 +184,7 @@ attributes(device) function block_reduce_min(dt)
   ! wait for all partial reads
   call syncthreads()
 
-  ! final reduce within first warp 
+  ! final reduce within first warp
   if (wid.eq.1) call warp_reduce_min(dt)
   block_reduce_min = dt
 
@@ -315,4 +315,3 @@ attributes(device) function block_reduce_max(dt)
 
 end function block_reduce_max
 ! =========================================================================
-

@@ -3,7 +3,7 @@ Compile the code with:
 
 make NDIM=3 MPI=1 GRAV=1 HYDRO=1 NPSCAL=1 PATCH=../patch/init/tde
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 poisson=.true.
 ncontrol=1
@@ -13,7 +13,7 @@ nsuperoct=0
 verbose=.false.
 /
 
-&AMR_PARAMS 
+&AMR_PARAMS
 levelmin=5
 levelmax=20
 ngridmax=1000000

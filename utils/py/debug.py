@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import argparse
-import miniramses as ram
+import ramses as ram
 
 parser = argparse.ArgumentParser()
 parser.add_argument("nout", help="enter output number")
@@ -75,7 +75,3 @@ print("max uy=",np.max(np.abs(uy)))
 print("max uz=",np.max(np.abs(uz)))
 print("max cs=",np.max(np.abs(cs)))
 print("min dt=",np.min(np.abs(dt)))
-
-
-
-

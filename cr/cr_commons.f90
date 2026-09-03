@@ -32,7 +32,7 @@ module cr_commons
   end type cr_workspace_t
 
 contains
-  
+
   subroutine init_cr_kernel(h,nn)
     use amr_parameters, only: ndim
     use hydro_parameters, only: nvar
@@ -50,18 +50,18 @@ contains
     h%io1=0; h%io2=nn/2+1
     h%jo1=(1-ndim/2); h%jo2=(1-ndim/2)+(nn/2+1)*(ndim/2)
     h%ko1=(1-ndim/3); h%ko2=(1-ndim/3)+(nn/2+1)*(ndim/3)
-    
+
     allocate(h%uloc (h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:nvar))
     allocate(h%okloc(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2))
     allocate(h%childloc(h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2))
     allocate(h%gridloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2))
     allocate(h%cellloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2))
-    allocate(h%nborloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2,1:twondim)) 
+    allocate(h%nborloc (h%io1:h%io2,h%jo1:h%jo2,h%ko1:h%ko2,1:twondim))
 #ifdef MHD
     allocate(h%bloc(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:6))
 #endif
 #ifdef DO_CR
-    allocate(h%cruloc (h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ncruvar)) 
+    allocate(h%cruloc (h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ncruvar))
     allocate(h%crflux(h%if1:h%if2,h%jf1:h%jf2,h%kf1:h%kf2,1:ncrvar,1:ndim))
     allocate(h%cFlx(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ndim+1,1:ndim))
     allocate(h%lmax(h%iu1:h%iu2,h%ju1:h%ju2,h%ku1:h%ku2,1:ndim))

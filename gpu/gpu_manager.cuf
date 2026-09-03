@@ -19,7 +19,7 @@ recursive subroutine r_set_grid_device(pst)
 
   integer::rID
   integer::head_idx, num_octs, num_subgrids, num_threads, num_blocks, ind
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_SET_GRID_DEVICE,pst%iUpper+1)
      call r_set_grid_device(pst%pLower)
