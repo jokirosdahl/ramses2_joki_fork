@@ -72,6 +72,4 @@ err_grad_p=0.05
 err_grad_prad=0.05
 interpol_var=0
 interpol_type=1
-
 /
-
