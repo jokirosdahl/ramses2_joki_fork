@@ -1,7 +1,7 @@
 
 ## Documentation ##
 
-This directory contains the basic documentation for mini-ramses.
+This directory contains the basic documentation for RAMSES II.
 
 We describe the meaning and default values of the namelist variables in each of the following namelist blocks:
 
@@ -33,8 +33,16 @@ We describe the meaning and default values of the namelist variables in each of 
 
 [Radiation groups parameters](./rt_groups.md): Parameters controlling the radiation energy groups for the M1 solver.
 
+[Cosmic ray parameters](./cr_params.md): Parameters controlling the cosmic ray two-moment (M1) solver.
+
+[Cosmic ray groups parameters](./cr_groups.md): Parameters controlling the per-group properties for cosmic ray multigroup transport.
+
 [Star formation parameters](./star_params.md): Parameters controlling the subgrid star formation model used in the code.
 
 [Clump finder parameters](./clump_params.md): Parameters controlling the clump finder.
 
 [Sink particle parameters](./sink_params.md): Parameters controlling sink particle formation, accretion and AGN feedback.
+
+[Lightcone parameters](./lightcone_params.md): Parameters controlling the light cone output in cosmological simulations.
+
+[Movie parameters](./movie_params.md): Parameters controlling the generation of movie frames during simulation runs.
