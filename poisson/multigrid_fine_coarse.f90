@@ -48,7 +48,7 @@ recursive subroutine r_restrict_mask(pst,input,input_size,masked,output_size)
 
   logical::allmasked
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_RESTRICT_MASK,pst%iUpper+1,input_size,output_size,input)
      call r_restrict_mask(pst%pLower,input,input_size,masked,output_size)
@@ -274,7 +274,7 @@ subroutine cmp_residual_mg(s,m,ilevel)
   integer, intent(in) :: ilevel
 
   ! Computes the residual for MG levels, and stores it into grid(igrid)%f(ind,1)
-    
+
   integer, dimension(1:3,1:2,1:8) :: iii, jjj
   real(kind=8),dimension(1:twotondim,0:twondim)::phi_nbor,dis_nbor
   integer,dimension(1:3,1:6),save::shift=reshape(&
@@ -780,7 +780,7 @@ subroutine restrict_residual(s,m,ifinelevel)
   do ichild=m%head(ifinelevel),m%tail(ifinelevel)
 
      ! Loop over cells
-     do ind=1,twotondim        
+     do ind=1,twotondim
 
         ! Is fine cell masked?
         if(m%f(ind,3,ichild)<=0d0)cycle
@@ -995,7 +995,7 @@ subroutine interpolate_and_correct(s,m,ifinelevel)
   aa = 1.0D0/4.0D0**ndim
   bb = 3.0D0*aa
   cc = 9.0D0*aa
-  dd = 27.D0*aa 
+  dd = 27.D0*aa
   bbb(:)  =(/aa ,bb ,bb ,cc ,bb ,cc ,cc ,dd/)
 
   ccc(:,1)=(/1 ,2 ,4 ,5 ,10,11,13,14/)
@@ -1297,7 +1297,7 @@ subroutine set_scan_flag(s,m,ilevel)
 
          ! If cell is even partially outside, then scan needed
         else
-           m%flag2(ind,igrid)=1           
+           m%flag2(ind,igrid)=1
         endif
 
      end do
@@ -1365,7 +1365,7 @@ end subroutine unpack_fetch_scan
 ! ########################################################################
 
 ! ------------------------------------------------------------------------
-! Compute norm of residual 
+! Compute norm of residual
 ! ------------------------------------------------------------------------
 
 recursive subroutine r_cmp_residual_norm2(pst,ilevel,input_size,norm2,output_size)

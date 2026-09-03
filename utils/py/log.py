@@ -110,7 +110,7 @@ if args.sym:
     plt.plot(x, dt, "o")
 else:
     plt.plot(x, dt)
-    
+
 if args.log:
     plt.yscale("log")
 plt.xlabel(xlabel)
@@ -119,5 +119,3 @@ plt.ylabel('time step')
 if args.out:
     plt.savefig(args.out)
 plt.show()
-
-

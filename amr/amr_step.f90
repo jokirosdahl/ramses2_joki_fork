@@ -71,7 +71,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
 
   if(m%noct_tot(ilevel)==0)return
   if(r%verbose)write(*,'(" Entering amr_step",i1," for level",i2)')icount,ilevel
-  g%isubcycle(ilevel)=icount ! only in master 
+  g%isubcycle(ilevel)=icount ! only in master
 
   !------------------------------
   ! Make new refinements and load
@@ -162,7 +162,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
   ! Write movie frame to disk
   !--------------------------
   if(r%movie) then
-     if(r%imov.le.r%imovout)then 
+     if(r%imov.le.r%imovout)then
         if((r%aendmov>0.and.g%aexp>=(r%aendmov-r%astartmov)*dble(r%imov)/dble(r%imovout)+r%astartmov) &
              & .or.(r%tendmov>0.and.g%t>=(r%tendmov-r%tstartmov)*dble(r%imov)/dble(r%imovout)+r%tstartmov))then
            call m_output_frame(pst)
@@ -292,7 +292,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
         else
            call m_amr_step(pst,ilevel+1,1,done)
         endif
-     else 
+     else
         ! Otherwise, modify finer level time-step
         g%dtold(ilevel+1)=g%dtnew(ilevel)/dble(r%nsubcycle(ilevel))
         g%dtnew(ilevel+1)=g%dtnew(ilevel)/dble(r%nsubcycle(ilevel))
@@ -338,7 +338,7 @@ recursive subroutine m_amr_step(pst,ilevel,icount,done)
      end if
      if(ok_fbk)then
         call m_timer('star - feedback','start')
-        call m_mechanical_feedback(pst,ilevel,mass_fbk)           
+        call m_mechanical_feedback(pst,ilevel,mass_fbk)
         if(mass_fbk>0)then
            g%mass_star_tot=g%mass_star_tot-mass_fbk
         endif

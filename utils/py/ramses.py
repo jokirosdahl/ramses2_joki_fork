@@ -160,7 +160,7 @@ def rd_map(filename):
         A map (class Map) object.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         map = ram.rd_map("dens.map")
         plt.imshow(map.data,origin="lower")
 
@@ -206,7 +206,7 @@ def rd_histo(filename):
         A histogram (class Histo) object.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         h = ram.rd_histo("histo.dat")
         plt.imshow(h.data,origin="lower")
 
@@ -285,7 +285,7 @@ def rd_part(nout,**kwargs):
         The number of fields depends on the particle type defined by prefix.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         p = ram.rd_part(12,center=[0.5,0.5,0.5],radius=0.1)
         print(np.max(p.pos[0]))
 
@@ -1121,7 +1121,7 @@ def rotate_view(c,**kwargs):
         x, y, z: the 3-coordinates of the input cells after the rotation.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         c = ram.rd_cell(12,center=[0.5,0.5,0.5],radius=0.1)
         x, y, z = ram.rotate_view(c,center=[0.5,0.5,0.5],velocity=[0,0,0])
 
@@ -1215,7 +1215,7 @@ def rd_cell(nout,**kwargs):
             c.level: refinement levels of cells.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         c = ram.rd_cell(12,center=[0.5,0.5,0.5],radius=0.1)
         print(np.max(c.dx))
 
@@ -1373,7 +1373,7 @@ def rd_log(filename,**kwargs):
             c.C: magnetic field z-component.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         r = ram.rd_log("run.log")
         plt.plot(r["x"],r["d"]))
 
@@ -1702,7 +1702,7 @@ def visu(x,y,dx,v,**kwargs):
     Example:
 
         Example for a 2D or 3D RAMSES dataset using variable c from the object Cell.
-        import miniramses as ram
+        import ramses as ram
         c=ram.rd_cell(2)
         ram.visu(c.x[0],c.x[1],c.dx,c.u[0],sort=c.u[0],log=1,vmin=-3,vmax=1)
 
@@ -1803,7 +1803,7 @@ def mk_movie(**kwargs):
 
     Exemple:
 
-        import miniramses as ram
+        import ramses as ram
         info = ram.mk_movie(start=100,stop=2000,path="../movie1",prefix="dens_",fill=5,suffix=".map",cmap="Reds",
                 cbar="YES", cbunit="log Density [H/cc]", tunit="Gyr",
                 fname="img", mvname="movie", vmin=-1, vmax=6)
@@ -2068,7 +2068,7 @@ def rd_grafic(filein):
         A grafic (class GraficFile) object.
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         g = ram.rd_grafic("ic_deltab")
         plt.imshow(g.data[:,:,0],origin="lower")
 
@@ -2119,7 +2119,7 @@ def wr_grafic(dat,header1,header2,fileout):
         Nothing
 
     Example:
-        import miniramses as ram
+        import ramses as ram
         dat = np.zeros((512,512,512),dtype="f4")
         dx = 1./512.
         header1 = np.array([512,512,512],dtype="i4")
@@ -2134,5 +2134,3 @@ def wr_grafic(dat,header1,header2,fileout):
         for k in range(n3):
             plane = dat[:, :, k]
             f.write_record(plane.T)
-
-

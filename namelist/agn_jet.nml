@@ -98,4 +98,3 @@ momentum_boost=10
 &REFINE_PARAMS
 sink_refine=.true.
 /
-

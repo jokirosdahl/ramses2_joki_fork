@@ -14,7 +14,7 @@ recursive subroutine r_input_hydro_gadget(pst,ilevel,input_size)
 
   integer::ilevel
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_INPUT_HYDRO_GADGET,pst%iUpper+1,input_size,0,ilevel)
      call r_input_hydro_gadget(pst%pLower,ilevel,input_size)
@@ -22,7 +22,7 @@ recursive subroutine r_input_hydro_gadget(pst,ilevel,input_size)
   else
      call input_hydro_gadget(pst%s,ilevel)
   endif
-  
+
 end subroutine r_input_hydro_gadget
 !#########################################################################
 !#########################################################################
@@ -88,7 +88,7 @@ subroutine input_hydro_gadget(s,ilevel)
      do idim=1,ndim
         x(idim)=(p%xp(ipart,idim)+m%skip(idim))/dx_loc
      end do
-     
+
      ! CIC at level ilevel (dd: right cloud boundary; dg: left cloud boundary)
      do idim=1,ndim
         dd(idim)=x(idim)+0.5D0
@@ -97,7 +97,7 @@ subroutine input_hydro_gadget(s,ilevel)
         dg(idim)=1.0D0-dd(idim)
         ig(idim)=id(idim)-1
      end do
-     
+
      ! Periodic boundary conditions
      do idim=1,ndim
         if(r%periodic(idim))then

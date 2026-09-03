@@ -17,7 +17,7 @@ subroutine hydro_flag(s,ilevel)
   integer::ilevel
   ! -------------------------------------------------------------------
   ! This routine flag for refinement cells that satisfies
-  ! some user-defined physical criteria at the level ilevel. 
+  ! some user-defined physical criteria at the level ilevel.
   ! -------------------------------------------------------------------
   integer,dimension(1:3,1:8),save::iii=reshape(&
        & (/0,0,0,1,0,0,0,1,0,1,1,0,0,0,1,1,0,1,0,1,1,1,1,1/),(/3,8/))
@@ -44,7 +44,7 @@ subroutine hydro_flag(s,ilevel)
        & r%err_grad_B==-1.0.and.&
        & r%err_grad_C==-1.0.and.&
        & r%err_grad_B2==-1.0.and.&
-#endif       
+#endif
        & r%err_grad_p==-1.0.and.&
        & r%err_grad_u==-1.0.and.&
 #if NENER>0

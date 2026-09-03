@@ -9,7 +9,7 @@ subroutine m_rt_step(pst,ilevel)
   use cooling_fine_module, only: r_cooling_fine
   use rt_godunov_fine_module, only: r_rt_godunov_fine,r_set_rtunew,r_set_rtuold
   use rt_upload_module, only: m_rt_upload_fine
-  use rt_input_condinit_module, only: r_rt_input_source_regions  
+  use rt_input_condinit_module, only: r_rt_input_source_regions
   use cooling_fine_module, only: r_cooling_fine
   use rt_star_feedback, only: r_star_RT_feedback
   type(pst_t)::pst

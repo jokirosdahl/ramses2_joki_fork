@@ -685,7 +685,7 @@ contains
 
              ! If close to boundary, use zero Dirichlet boundary conditions.
              if (dis_nbr <= 0.0) then
-                nb_sum = nb_sum + phi_c * dis_nbr / dis_c 
+                nb_sum = nb_sum + phi_c * dis_nbr / dis_c
              else
                 nb_sum = nb_sum	+ phi_nbr
              endif
@@ -1304,4 +1304,3 @@ contains
   ! =========================================================================
 
 end module mg_device
-

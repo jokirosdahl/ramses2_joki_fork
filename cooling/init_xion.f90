@@ -182,10 +182,10 @@ subroutine init_xion(r,g,m,tables,ilevel)
         do i=1,nleaf ! loop over cells
           counter = 1
           do iE=1,n_elements ! loop over elements
-             if (elements(iE)%atomic_number.gt.0) then 
+             if (elements(iE)%atomic_number.gt.0) then
                 do iI=1,elements(iE)%n_ions + elements(iE)%n_mol ! loop over ions + molecules
                    x = 0.d0
-                   if (iI.eq.1) then 
+                   if (iI.eq.1) then
                       x = 1.d0
                    end if
                    m%uold(ind,r%iIons-1+counter,ind_leaf(i)) = x*m%uold(ind,1,ind_leaf(i))

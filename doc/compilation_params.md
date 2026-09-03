@@ -4,18 +4,21 @@ You can compile the code by setting these parameters to your preffered value usi
 
 | Variable, name, syntax, default value | Type | Description |
 | -------- | ---- | ----------------- |
-| `COMPILER=GNU`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| `GNU`&nbsp;,&nbsp;`INTEL`, or&nbsp;`NVHPC` | This sets the Fortran compiler you would like to use. The `GNU` option uses `gfortran` from the Gnu Compiler Collection, `INTEL` uses `ifort` from Intel, Inc. and `NVHPC` uses the `nvfortran` compiler from the NVIDIA HPC SDK. |
+| `COMPILER=GNU`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| `GNU`&nbsp;,&nbsp;`INTEL`,&nbsp;`NVHPC`&nbsp;or&nbsp;`METAL` | This sets the Fortran compiler you would like to use. The `GNU` option uses `gfortran` from the Gnu Compiler Collection, `INTEL` uses `ifort` from Intel, Inc., `NVHPC` uses the `nvfortran` compiler from the NVIDIA HPC SDK, and `METAL` uses `gfortran` with Apple Metal GPU kernels on macOS. |
 | `NDIM = 3`       | `1`, `2` or `3`  | This sets the dimensionality of the simulation. |
 | `HYDRO = 1`      | `0` or `1`  | This turns on or off the hydro solver. |
 | `MHD = 0`        | `0` or `1`  | This turns on or off the MHD solver. |
 | `GRAV = 0`       | `0` or `1`  | This turns on or off the self-gravity solver. |
-| `RT = 0`         | `0` or `1`  | This turns on or off the radiative transfer solver. |
+| `DO_RT = 0`      | `0` or `1`  | This turns on or off the radiative transfer solver. |
+| `DO_CR = 0`      | `0` or `1`  | This turns on or off the cosmic ray solver. Requires `MHD=1`. |
+| `DO_RTZ = 0`     | `0` or `1`  | This turns on or off the radiative transfer solver with complex chemistry. |
 | `MPI = 0`        | `0` or `1`  | This turns on or off parallel computing using the Message Passing Interface (MPI) library. MPI must be properly installed on your machine. In particular, you have to check that the MPI library was configured for your Fortran compiler. |
 | `NPSCAL = 0`     | `integer`  | Number of passive scalars advected by the hydro solver. |
 | `NENER = 0`      | `integer`  | Number of non-thermal energies used in the hydro solver. |
 | `NMETAL = 0`     | `integer`  | Number of metal species advected by the hydro solver. |
 | `NION = 0`       | `integer`  | Number of atomic ionized species advected by the hydro solver. |
 | `NRTGRP = 0`     | `integer`  | Number of radiative transfer groups transported by the RT solver. |
+| `NCRGRP = 1`     | `integer`  | Number of cosmic ray energy groups transported by the CR solver. |
 | `INIT = `        | `string`  | This sets the adopted initial condition for your simulation. This parameter can be an empty string (default) wich uses the default initial condition generator in the code, as explained in the corresponding namelist block documentation. Possible values are `COEUR`, `INSTA`, `DOUBLEMACH`, `OT`, `PONO` and more. These initial conditions are set in the file `hydro/condinit.f90`. You can add your own here and share them with the community later via a pull request. |
 | `UNITS = `       | `string`  | This sets the adopted unit system to convert variables from code units to cgs units. This parameter can be an empty string (default) wich uses the default unit system that can be set via the namelist, as explained in the corresponding namelist block documentation. You can also use predefined unit systems. Possible values are `COEUR`, `COSMO`, `MERGER` and more. These different unit systems are set in the file `amr/units.f90`. You can add your own here and share them with the community later via a pull request. |
 | `MPIF90 = mpif90` | `string`  | This sets the name of the MPI Fortran compiler on your system. |
@@ -24,8 +27,3 @@ You can compile the code by setting these parameters to your preffered value usi
 | `NVECTOR = 32`   | `integer`  | This sets the size of the vector sweeps used in many subroutines of the code. This is used for optimization purposes. This is highly problem and architecture dependant. |
 | `NPRE = 8`       | `4` or `8`  | This sets the number of bytes used to code floating point numbers. `4` means single precision (not recommanded) `8` means double precision. |
 | `DEBUG = 0`      | `0` or `1`  | This turns on or off the debug mode. |
-
-
-
-
-

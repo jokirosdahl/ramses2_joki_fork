@@ -169,7 +169,7 @@ subroutine star_formation(r,g,m,s,ilevel,mstar_loc)
         endif
      end do
   end do
-  
+
   !---------------------------------------------------------
   ! Compute number of star formation sites across all CPUs.
   !---------------------------------------------------------

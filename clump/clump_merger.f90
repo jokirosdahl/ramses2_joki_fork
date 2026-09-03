@@ -33,7 +33,7 @@ subroutine get_peak(s,global_peak_id,local_peak_id,flush_cache,fetch_cache,lock)
   integer::send_request_id_clump,response_id_clump
   integer(kind=8)::gpid
   integer::lpid
-  
+
   associate(g=>s%g,c=>s%c,m=>s%m,mdl=>s%mdl)
 
 #ifndef WITHOUTMPI
@@ -286,7 +286,7 @@ subroutine allocate_peak_patch_arrays(s)
   implicit none
   type(ramses_t)::s
   !----------------------------------------------------
-  ! This routine allocate all arrays that are needed at 
+  ! This routine allocate all arrays that are needed at
   ! different steps of the clump finder.
   !----------------------------------------------------
 
@@ -431,7 +431,7 @@ subroutine deallocate_peak_patch_arrays(s)
   implicit none
   type(ramses_t)::s
   !----------------------------------------------------
-  ! This routine deallocates all arrays that habe been 
+  ! This routine deallocates all arrays that habe been
   ! previously allocated by the clump finder.
   !----------------------------------------------------
   associate(r=>s%r,g=>s%g,m=>s%m,c=>s%c)

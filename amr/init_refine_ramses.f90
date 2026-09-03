@@ -46,10 +46,10 @@ subroutine m_init_refine_ramses(pst)
   write(*,'(" Output folder has levelmax=",I4)')nlevelmax_file
 
   ! Broadcast parameters to all CPUs.
-  call m_broadcast_params(pst)  
+  call m_broadcast_params(pst)
 
   ! Broadcast global variables to all CPUs.
-  call m_broadcast_global(pst)  
+  call m_broadcast_global(pst)
 
   if(r%verbose)write(*,*)'Broadcast completed'
 
@@ -419,12 +419,12 @@ subroutine init_refine_ramses(s,ilevel,ncpu_file,levelmin_file,nlevelmax_file,no
               m%flag1(ind,igrid)=0
            endif
         end do
-        
+
         ! Insert in hash table
         hash_key(0)=ilevel
         hash_key(1:ndim)=ckey
         call hash_setp(m%grid_dict,hash_key,igrid)
-        
+
         ! Compute Hilbert keys of new octs
         ix(1:ndim)=ckey(1:ndim)
         hk(1:nhilbert)=hilbert_key(ix,ilevel-1)

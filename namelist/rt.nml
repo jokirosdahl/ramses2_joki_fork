@@ -2,7 +2,7 @@ This namelist contains input parameters a 2D Rayleigh-Taylor test.
 Compile the code with:
 make NDIM=2 MPI=1 INIT=INSTA HYDRO=1
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 nrestart=0
 ncontrol=1
@@ -54,10 +54,7 @@ slope_type=2
 constant_gravity=1.0,0.0,0.0
 /
 
-&REFINE_PARAMS 
+&REFINE_PARAMS
 err_grad_d=0.01
 interpol_type=2
 /
-
-
-

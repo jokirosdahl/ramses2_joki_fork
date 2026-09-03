@@ -145,7 +145,7 @@ subroutine m_rho_fine(pst,ilevel,rtype)
      call r_broadcast_multipole(pst,multipole_tot,storage_size(multipole_tot)/32)
 
      if(r%verbose)write(*,*)'rho_average=',g%rho_tot
-  endif  
+  endif
 #endif
 
   end associate
@@ -497,7 +497,7 @@ subroutine reset_rho(r,g,m,ilevel)
   integer::ilevel
   !-------------------------------------------------------------------
   ! This routine compute array rho (source term for Poisson equation)
-  ! by first reseting array rho to zero, then 
+  ! by first reseting array rho to zero, then
   ! by depositing the gas multipole mass in each cells using CIC.
   ! For pure particle runs, the gas mass deposition is not done
   ! and the routine only set rho to zero.
@@ -577,7 +577,7 @@ subroutine cic_multipole(s,ilevel)
   type(msg_twin_realdp)::dummy_twin_realdp
 
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-    
+
   ! Mesh spacing in that level
   dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
@@ -594,7 +594,7 @@ subroutine cic_multipole(s,ilevel)
      ! Loop over cells
      do ind=1,twotondim
 
-#ifdef HYDRO        
+#ifdef HYDRO
         ! Compute pseudo particle mass
         mmm=m%unew(ind,1,ioct)
 
@@ -662,7 +662,7 @@ subroutine cic_multipole(s,ilevel)
 #endif
            end if
         end do
-#endif     
+#endif
      end do
      ! End loop over cells
 
@@ -851,7 +851,7 @@ subroutine cic_part(s,p,ilevel,rtype)
         dl(idim)=1.0D0-dr(idim)
         il(idim)=ir(idim)-1
      end do
-     
+
      ! Periodic boundary conditions
      do idim=1,ndim
         if(r%periodic(idim))then
@@ -1239,7 +1239,7 @@ subroutine unpack_flush_rho(mesh,igrid,msg_size,msg_array,hash_key)
   mesh%grid(igrid)%lev=hash_key(0)
   mesh%grid(igrid)%ckey(1:ndim)=hash_key(1:ndim)
   msg=transfer(msg_array,msg)
-  
+
 #ifdef GRAV
   do ind=1,twotondim
      mesh%rho(ind,igrid)=mesh%rho(ind,igrid)+msg%realdp_phi(ind)
@@ -1556,7 +1556,7 @@ subroutine pack_fetch_split(mesh,igrid,msg_size,msg_array)
      endif
   enddo
   msg_array=transfer(msg,msg_array)
-  
+
 end subroutine pack_fetch_split
 !##############################################################################
 !##############################################################################
@@ -2110,16 +2110,16 @@ recursive subroutine sort_hilbert(r,g,m,p,head_part, tail_part, ix_coarse, cstat
   ! This subroutine sort particles along the Hilbert key at the resolution
   ! set by final_level. It should be called first with ilevel=levelmin.
 
-  ! Iputs: 
+  ! Iputs:
   ! - Head_part and tail_part are head and tail of particle distribution to work on.
   ! - Array sortp must be initialized with sortp(i)=i between head_part and tail_part.
   ! - Cartesian key of coarse cell in which these particles are contained.
   ! - State of the coarse cell for Hilbert ordering
   ! - Current and final level
 
-  ! Example: 
+  ! Example:
   ! ix=(/0,0,0/)
-  ! call sort_hilbert(1, npart, ix, 0, 1, nlevelmax) 
+  ! call sort_hilbert(1, npart, ix, 0, 1, nlevelmax)
   ! will sort all particles according to their Hilbert key at levelmax.
   ! On output, array sortp is modified.
 

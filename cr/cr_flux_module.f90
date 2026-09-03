@@ -19,11 +19,11 @@ MODULE cr_flux_module
 CONTAINS
 !************************************************************************
 SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
-  
-  ! Compute central fluxes for a CR group, for each cell in a vector 
-  ! of grids. 
-  ! The flux tensor is a three by four tensor (2*3 and 1*2 in 1D and 2D, 
-  ! respectively) where the first row is CR flux (x,y,z) and 
+
+  ! Compute central fluxes for a CR group, for each cell in a vector
+  ! of grids.
+  ! The flux tensor is a three by four tensor (2*3 and 1*2 in 1D and 2D,
+  ! respectively) where the first row is CR flux (x,y,z) and
   ! the other three rows compose the Eddington tensor (see Yiang&Peng 2017)
   !------------------------------------------------------------------------
   type(run_t) :: r
@@ -93,7 +93,7 @@ SUBROUTINE cmp_cr_flux_tensors(r, kcr, iGrp, cr_c)
   enddo
   enddo
   end associate
-  
+
 end subroutine cmp_cr_flux_tensors
 
 !************************************************************************
@@ -123,7 +123,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   gmone_div_twodx=(r%gamma_rad(r%iEcr-r%inener+igrp)-1.0)/(2d0*dx)
   iEgrp = r%iEcr+(iGrp-1)
 
-  ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
+  ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by
   ! default. All dimension indices go from 0 to N+1.
   ! We only need to calculate wavespeeds for those cells which have faces to
   ! the NXNXN center cells, so by skipping the 'corners' we are reduced
@@ -150,14 +150,14 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 
      bxby = sqrt(bcell(1)**2+bcell(2)**2)
      if(norm.gt.1e-10) then
-        sint = bxby/norm     
+        sint = bxby/norm
         cost = bcell(3)/norm
      else
         sint = 1d0
         cost = 0d0
      endif
      if(bxby.gt.1e-10) then
-        sinp = bcell(2)/bxby     
+        sinp = bcell(2)/bxby
         cosp = bcell(1)/bxby
      else
         sinp = 0d0
@@ -171,7 +171,7 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
 
      ! Calculate grad Pcr
      gradpcr(1) = (kcr%uloc(i+1,j  ,k  ,iEgrp) - kcr%uloc(i-1,j  ,k  ,iEgrp)) * gmone_div_twodx
-#if NDIM>1 
+#if NDIM>1
      gradpcr(2) = (kcr%uloc(i  ,j+1,k  ,iEgrp) - kcr%uloc(i  ,j-1,k  ,iEgrp)) * gmone_div_twodx
 #endif
 #if NDIM>2
@@ -218,12 +218,12 @@ SUBROUTINE cmp_cr_wavespeeds(r, kcr, iGrp, cr_c, dx, dt)
   end do
   end do
   end associate
-  
+
 END SUBROUTINE cmp_cr_wavespeeds
 
 !************************************************************************
 FUNCTION cmp_cr_lmax(r, dx, dcoeff, gamma_cr, cr_c, dt)
-  
+
 ! Compute maximum local wavespeed
 !------------------------------------------------------------------------
   type(run_t) :: r
@@ -246,7 +246,7 @@ END FUNCTION cmp_cr_lmax
 
 !************************************************************************
 FUNCTION cmp_cr_face(fdn, fup, udn, uup, lminus, lplus)
-  
+
 ! Compute HLLE intercell fluxes for all (four) CR variables.
 ! fdn    => flux function in the cell downwards from the border
 ! fup    => flux function in the cell upwards from the border
@@ -304,7 +304,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
   associate(if1=>kcr%if1, if2=>kcr%if2, jf1=>kcr%jf1                    &
            ,jf2=>kcr%jf2, kf1=>kcr%kf1, kf2=>kcr%kf2, crin=>kcr%cruloc  &
            ,cFlx=>kcr%cFlx, uin=>kcr%uloc, lmax=>kcr%lmax, iEcr=>r%iEcr)
-  
+
   do iGrp = 1, ncrgrp
 
   ! Compute flux tensors for all the cells with correction
@@ -358,7 +358,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
      u2 = u2+slopeL*0.5d0*dx
-     u3 = u3-slopeM*0.5d0*dx            
+     u3 = u3-slopeM*0.5d0*dx
 
      meandiffv = 0.5*( lmax(i-1,j,k,1) + lmax(i,j,k,1) )
      a2 = min(-meandiffv, -lmax(i-1,j,k,1))
@@ -419,7 +419,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
      u2 = u2+slopeL*0.5d0*dx
-     u3 = u3-slopeM*0.5d0*dx            
+     u3 = u3-slopeM*0.5d0*dx
 
      meandiffv = 0.5*( lmax(i,j-1,k,2) + lmax(i,j,k,2) )
      a2 = min(-meandiffv, -lmax(i,j-1,k,2))
@@ -479,7 +479,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
      slopeL=0.
      where(prod.gt.0.) slopeL=2.*prod/(slopeLL+slopeLM)
      u2 = u2+slopeL*0.5d0*dx
-     u3 = u3-slopeM*0.5d0*dx            
+     u3 = u3-slopeM*0.5d0*dx
 
      meandiffv = 0.5*( lmax(i,j,k-1,3) + lmax(i,j,k,3) )
      a2 = min(-meandiffv, -lmax(i,j,k-1,3))
@@ -498,7 +498,7 @@ SUBROUTINE cr_unsplit(r,kcr,cr_c,dx,dt)
 #endif
 
   end do ! end loop over CR groups
-  
+
   END ASSOCIATE
 
 END SUBROUTINE cr_unsplit
@@ -507,7 +507,7 @@ END SUBROUTINE cr_unsplit
 SUBROUTINE rotatevec(sint, cost, sinp, cosp, v1, v2, v3)
   !  Rotate vector v by t=theta and p=phi
   !  i.e. rotate to the local coordinate system from theta, phi.
-  !  Hence the x-component of the result is the component of v parallel 
+  !  Hence the x-component of the result is the component of v parallel
   !  with the theta,phi vector.
   !------------------------------------------------------------------------
     implicit none
@@ -518,13 +518,13 @@ SUBROUTINE rotatevec(sint, cost, sinp, cosp, v1, v2, v3)
     ! First apply R1, then apply R2
     newv1 =  cosp * v1 + sinp * v2
     v2 = -sinp * v1 + cosp * v2
-  
+
     ! Now apply R2
     v1 =  sint * newv1 + cost * v3
     newv3 = -cost * newv1 + sint * v3
     v3 = newv3
 END SUBROUTINE rotatevec
-  
+
 !************************************************************************
 SUBROUTINE invrotatevec(sint, cost, sinp, cosp, v1, v2, v3)
   !  Inverse-rotate vector v by t=theta and p=phi,
@@ -539,7 +539,7 @@ SUBROUTINE invrotatevec(sint, cost, sinp, cosp, v1, v2, v3)
     ! First apply R2^-1, then apply R1^-1
     newv1 = sint * v1 - cost * v3
     v3 = cost * v1 + sint * v3
-  
+
     ! now apply R1^-1
     v1 = cosp * newv1 - sinp * v2
     newv2 = sinp * newv1 + cosp * v2

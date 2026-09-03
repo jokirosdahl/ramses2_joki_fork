@@ -16,37 +16,37 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module rng
   implicit none
-  
+
   private
   public :: norm,m1,m2,a12,a13n,a21,a23n,two17,two53,fact &
        ,InvA1, InvA2, A1p0, A2p0, A1p76, A2p76, A1p127, A2p127 &
        ,RngStream, state, rng_off
 
-  !  Dimension del estado   
+  !  Dimension del estado
   integer, parameter :: ns = 6
-  !  parametros   
+  !  parametros
   real (KIND=8), parameter :: norm = 2.328306549295727688d-10
   real (KIND=8), parameter :: m1 = 4294967087.0d0
   real (KIND=8), parameter :: m2 = 4294944443.0d0
   real (KIND=8), parameter :: a12 = 1403580.0d0
   real (KIND=8), parameter :: a13n = 810728.0d0
   real (KIND=8), parameter :: a21 = 527612.0d0
-  real (KIND=8), parameter :: a23n = 1370589.0d0         
+  real (KIND=8), parameter :: a23n = 1370589.0d0
   real (KIND=8), parameter :: two17 = 131072.0d0
   real (KIND=8), parameter :: two53 = 9007199254740992.0d0
   real (KIND=8), parameter :: fact = 5.9604644775390625d-8    ! 2^{-24}
   integer(KIND=8), parameter, dimension(ns) :: default_seed &
        =(/ 12345,12345,12345,12345,12345,12345/)
   logical                  :: rng_off = .TRUE.
-  
+
   !Transition matrices of two MRG components, elevadas a -1, 1, 2^76 y 2^127
-  
+
   !Nota: column-major order
   real (KIND=8), dimension(3, 3) :: InvA1, InvA2, A1p0, A2p0, &
-       A1p76, A2p76, A1p127, A2p127  
-  
+       A1p76, A2p76, A1p127, A2p127
+
   integer (KIND=8), dimension(ns) :: state = default_seed
-  
+
   type :: RngStream
      real (KIND=8), dimension(6)    :: Cg, Bg, Ig
      integer (KIND=4)               :: length
@@ -58,7 +58,7 @@ end module rng
 
 subroutine RngInit()
   use rng
-  
+
   InvA1 = reshape( &
        (/184888585.0d0,1.0d0,0.0d0, &
        0.0d0,0.0d0,1.0d0, &
@@ -74,7 +74,7 @@ subroutine RngInit()
   A2p0 = reshape( &
        (/0.0d0,0.0d0,-1370589.0d0, &
        1.0d0,0.0d0,0.0d0, &
-       0.0d0,1.0d0,527612.0d0/), shape(InvA1))   
+       0.0d0,1.0d0,527612.0d0/), shape(InvA1))
   A1p76 = reshape( &
        (/82758667.0d0, 3672831523.0d0,3672091415.0d0, &
        1871391091.0d0,69195019.0d0,3528743235.0d0, &
@@ -90,8 +90,8 @@ subroutine RngInit()
   A2p127 = reshape( &
        (/ 1464411153.0d0,   32183930.0d0, 2824425944.0d0, &
        277697599.0d0, 1464411153.0d0,   32183930.0d0, &
-       1610723613.0d0, 1022607788.0d0, 2093834863.0d0/), shape(InvA1))   
-  
+       1610723613.0d0, 1022607788.0d0, 2093834863.0d0/), shape(InvA1))
+
   return
 end subroutine RngInit
 
@@ -100,10 +100,10 @@ function MultModM(a, s, c, m) result(v)
   use rng
   implicit none
   real(KIND=8)    :: a, s, c, m
-  real(KIND=8)    :: ap, sp, cp   
+  real(KIND=8)    :: ap, sp, cp
   real(KIND=8)    :: v
   integer(KIND=8) :: a1
-  
+
   ap=a
   v = ap*s+c
   if(v.ge.two53.or.v.le.-two53) then
@@ -117,69 +117,69 @@ function MultModM(a, s, c, m) result(v)
   a1 = int(v/m,KIND=8);
   v = v - dble(a1)*m
   if(v.lt.0.0d0) v = v + m
-  
+
   return
 end function MultModM
 
-subroutine MatVecModM (a, s, v, m) 
+subroutine MatVecModM (a, s, v, m)
   ! Calcula v= mod(A*s ,m). Asume -m < s(i) < m. Va incluso si v=s
   implicit none
   real(KIND=8)  :: a(3,3), s(3), m, x(3)
   real(KIND=8)  :: v(3)
   real(KIND=8)  :: MultModM
   integer       :: i
-  
+
   do i=1,3
      x(i) = MultModM(a(i,1),s(1),0.0d0,m)
      x(i) = MultModM(a(i,2),s(2),x(i),m)
-     x(i) = MultModM(a(i,3),s(3),x(i),m)  
+     x(i) = MultModM(a(i,3),s(3),x(i),m)
   enddo
-  
+
   v(1:3)=x(1:3)
-  
+
   return
 end subroutine MatVecModM
 
-subroutine MatMatModM (a, b, c, m) 
+subroutine MatMatModM (a, b, c, m)
   ! Returns C = A*B % m. Work even if A = C or B = C or A = B = C.
   implicit none
   real(KIND=8)     :: a(3,3), b(3,3), c(3,3),m
   integer          :: i, j
   real(KIND=8)     :: v(3),v1(3),w(3,3)
-  
+
   w=0.0d0
-  
+
   do i=1,3
      do j=1,3
         v(j)=b(j,i)
      enddo
      v1=v
-     
+
      call MatVecModM(a, v1, v, m)
      do j=1,3
         w(j,i)=v(j)
      enddo
   enddo
   c(:,:)=w(:,:)
-  
+
   return
 end subroutine MatMatModM
 
 subroutine MatTwoPowModM (a, b, m, e)
-  !   Compute matrix B = (A^(2^e) % m);  works even if A = B 
+  !   Compute matrix B = (A^(2^e) % m);  works even if A = B
   implicit none
   real(KIND=8)     :: a(3,3), b(3,3), b1(3,3), m
   integer(KIND=8)  :: e
   integer(KIND=8)  :: i
-  
+
   b(:,:)=a(:,:)
   b1=a
   do i=1,e
      call MatMatModM(b1, b1, b, m)
      b1=b
   enddo
-  
-  
+
+
   return
 end subroutine MatTwoPowModM
 
@@ -189,11 +189,11 @@ subroutine MatPowModM (a, b, m, n)
   real(KIND=8)    :: a(3,3),b(3,3),b1(3,3),m,w(3,3),w1(3,3)
   integer(KIND=8) :: n,n2
   integer         :: j
-  
+
   n2 = n
   w(:,:) = a(:,:)
   b(:,:) = 0.0d0
-  
+
   do j=1,3
      b(j,j) = 1.0d0
   enddo
@@ -209,45 +209,45 @@ subroutine MatPowModM (a, b, m, n)
      w1=w
      n2=n2/2
   enddo
-  
+
   return
 end subroutine MatPowModM
 
 double precision function  U01 (g)
-  use rng 
+  use rng
   implicit none
   integer(KIND=8) :: k
   real(KIND=8)    :: p1,p2,u
   type(RngStream) :: g
-  ! Componente 1  
+  ! Componente 1
   p1 = a12 * g%Cg(2) - a13n * g%Cg(1)
   k = p1/m1
-  
+
   p1 = p1 - k*m1
   if(p1.lt.0.0d0) p1 = p1+m1
-  
+
   g%Cg(1) = g%Cg(2)
   g%Cg(2) = g%Cg(3)
   g%Cg(3) = p1
-  
+
   ! Componente 2
   p2 = a21 * g%Cg(6) - a23n * g%Cg(4)
   k = p2/m2
   p2 = p2-k*m2
   if(p2.lt.0.0d0) p2 = p2+m2
-  
+
   g%Cg(4) = g%Cg(5)
   g%Cg(5) = g%Cg(6)
   g%Cg(6) = p2
-  
+
   ! Combinacion
-  
+
   if(p1.gt.p2) then
      u = (p1-p2)*norm
   else
      u = (p1-p2+m1)*norm
   endif
-  
+
   if(g%Anti) then
      U01 = 1 - u
   else
@@ -263,17 +263,17 @@ double precision function  U01d (g)
   real (KIND=8)   :: U01
   type(RngStream) :: g
   external  U01
-  
+
   u = U01(g)
   if(g%Anti) then
      ! Antithetic case
-     u = u + (U01(g)-1.0d0)*fact  
+     u = u + (U01(g)-1.0d0)*fact
      if(u.lt.0.0d0) u = u+1.0d0
   else
      u = u + U01(g)*fact
      if(u.gt.1.0d0) u = u-1.0d0
   endif
-  
+
   U01d = u
   return
 end function U01d
@@ -282,15 +282,15 @@ subroutine CheckSeed(seed,ierror)
   use rng
   integer (KIND=4)      :: i,ierror
   integer (KIND=8)      :: seed(6)
-  
-  
+
+
   ierror=0
   do i=1,3
      if(seed(i).gt.int(m1,KIND=8)) then
         write(*,'(A,/,A,I1,A,/,A,/)')  &
              '***************************************************' &
              ,'ERROR: Seed[',i,']>=m1, Seed is not set.' &
-             ,'***************************************************' 
+             ,'***************************************************'
         ierror=1
      endif
   enddo
@@ -299,24 +299,24 @@ subroutine CheckSeed(seed,ierror)
         write(*,'(A,/,A,I1,A,/,A,/)')  &
              '***************************************************' &
              ,'ERROR: Seed[',i,']>=m2, Seed is not set.' &
-             ,'***************************************************' 
-        ierror=1     
+             ,'***************************************************'
+        ierror=1
      endif
   enddo
-  
+
   if(seed(1).eq.0.and.seed(2).eq.0.and.seed(3).eq.0) then
      write(*,'(A,/,A,/,A,/)')  &
           '***************************************************' &
           ,'ERROR: First 3 seed are 0' &
-          ,'***************************************************' 
+          ,'***************************************************'
   endif
-  
+
   if(seed(4).eq.0.and.seed(5).eq.0.and.seed(6).eq.0) then
      write(*,'(A,/,A,/,A,/)')  &
           '***************************************************' &
           ,'ERROR: First 3 seed are 0' &
-          ,'***************************************************' 
-     ierror=1     
+          ,'***************************************************'
+     ierror=1
   endif
   return
 end subroutine CheckSeed
@@ -330,7 +330,7 @@ function RngStream_CreateStream (cname)  result(g)
   character (LEN=*)     :: cname
   character (LEN=256)   :: cnameb
   type(RngStream) :: g
-  
+
   if(rng_off) then
      call RngInit()
      rng_off=.FALSE.
@@ -344,10 +344,10 @@ function RngStream_CreateStream (cname)  result(g)
   endif
   !  g%Anti = .FALSE.
   !  g%IncPrec = .FALSE.
-  
+
   g%Bg(:)=state(:)
   g%Cg(:)=state(:)
-  g%Ig(:)=state(:)    
+  g%Ig(:)=state(:)
   seed(1:3)=dble(state(1:3))
   call MatVecModM(A1p127,seed, seed, m1)
   state(1:3)=int(seed(1:3)+1d-14,KIND=8)
@@ -362,30 +362,30 @@ end function RngStream_CreateStream
 subroutine RngStream_ResetStartStream (g)
   use rng
   type(RngStream) :: g
-  
+
   g%Cg(:)=g%Ig(:)
-  g%Bg(:)=g%Ig(:)   
-  
+  g%Bg(:)=g%Ig(:)
+
   return
 end subroutine RngStream_ResetStartStream
 
 subroutine RngStream_ResetNextSubstream (g)
   use rng
   type(RngStream) :: g
-  
+
   call MatVecModM(A1p76, g%Bg(1:3), g%Bg(1:3), m1)
-  call MatVecModM(A2p76, g%Bg(4:6), g%Bg(4:6), m2)   
+  call MatVecModM(A2p76, g%Bg(4:6), g%Bg(4:6), m2)
   g%Cg(:)=g%Bg(:)
-  
+
   return
 end subroutine RngStream_ResetNextSubstream
 
 subroutine RngStream_ResetStartSubstream (g)
   use rng
   type(RngStream) :: g
-  
+
   g%Cg(:)=g%Bg(:)
-  
+
   return
 end subroutine RngStream_ResetStartSubstream
 
@@ -395,7 +395,7 @@ subroutine RngStream_SetPackageSeed (seed)
   integer(KIND=4)      :: ierror
   call CheckSeed(seed,ierror)
   if(ierror.eq.1) stop 'ERROR'
-  
+
   state(:)=seed(:)
   return
 end subroutine RngStream_SetPackageSeed
@@ -407,11 +407,11 @@ subroutine RngStream_SetSeed (g,seed,ierror)
   type(RngStream)      :: g
   call CheckSeed(seed,ierror)
   if(ierror.eq.1) stop 'ERROR'
-  
-  g%Cg(:)=seed(:)   
+
+  g%Cg(:)=seed(:)
   g%Bg(:)=seed(:)
-  g%Ig(:)=seed(:)      
-  
+  g%Ig(:)=seed(:)
+
   return
 end subroutine RngStream_SetSeed
 
@@ -421,36 +421,36 @@ subroutine RngStream_AdvanceState(g,e,c)
   real (KIND=8),dimension(3,3) :: b1, c1, b2, c2, ctemp
   real (KIND=8)                :: temp(3)
   type(RngStream)              :: g
-    
+
   if(e.gt.0) then
      call MatTwoPowModM (A1p0, b1, m1, e)
-     call MatTwoPowModM (A2p0, b2, m2, e)    
+     call MatTwoPowModM (A2p0, b2, m2, e)
   else if(e.lt.0) then
      call MatTwoPowModM (InvA1, b1, m1, -e)
-     call MatTwoPowModM (InvA2, b2, m2, -e)    
+     call MatTwoPowModM (InvA2, b2, m2, -e)
   endif
 
   if(c.gt.0) then
      call MatPowModM (A1p0, c1, m1, c)
-     call MatPowModM (A2p0, c2, m2, c)    
-  else 
+     call MatPowModM (A2p0, c2, m2, c)
+  else
      call MatPowModM (InvA1, c1, m1, -c)
-     call MatPowModM (InvA2, c2, m2, -c)    
+     call MatPowModM (InvA2, c2, m2, -c)
   endif
 
-  
+
   if(e.ne.0) then
      ctemp=c1
      call MatMatModM (b1, ctemp, c1, m1)
-     ctemp=c2    
-     call MatMatModM (b2, ctemp, c2, m2)    
+     ctemp=c2
+     call MatMatModM (b2, ctemp, c2, m2)
   endif
-  
+
   temp=g%Cg(1:3)
   call MatVecModM (c1, g%Cg(1:3), temp,m1)
   g%Cg(1:3)=temp
   temp=g%Cg(4:6)
-  call MatVecModM (c2, g%Cg(4:6), temp,m2)   
+  call MatVecModM (c2, g%Cg(4:6), temp,m2)
   g%Cg(4:6)=temp
   !stop
   return
@@ -461,7 +461,7 @@ subroutine RngStream_GetState (g, seed)
   use rng
   type(RngStream) :: g
   integer(KIND=8) :: seed(6)
-  
+
   seed(:) = g%Cg(:)
   return
 end subroutine RngStream_GetState
@@ -470,40 +470,40 @@ end subroutine RngStream_GetState
 subroutine RngStream_WriteState (g)
   use rng
   type(RngStream) :: g
-  
+
   if(g%length.eq.0) return
-  
+
   write(*,'(A,A,A)') 'The current state of the Rngstream ', &
        g%cname, ': '
-  
+
   write(*,'(A,6(I20,X),A)') 'Cg = { ', g%Cg(1:6),'}'
-  
+
 end subroutine RngStream_WriteState
 
 
 subroutine RngStream_WriteStateFull (g)
   use rng
   type(RngStream) :: g
-  
+
   if(g%length.eq.0) return
-  
+
   write(*,'(A,A,A)') 'The Rngstream ', &
        g%cname, ': '
-  
+
   write(*,'(A,L1)') ' Anti = ',g%Anti
   write(*,'(A,L1)') ' IncPrec = ',g%IncPrec
-  
+
   write(*,'(A,6(I20,X),A)') 'Ig = { ', g%Ig(1:6),'}'
-  write(*,'(A,6(I20,X),A)') 'Bg = { ', g%Bg(1:6),'}'      
+  write(*,'(A,6(I20,X),A)') 'Bg = { ', g%Bg(1:6),'}'
   write(*,'(A,6(I20,X),A)') 'Cg = { ', g%Cg(1:6),'}'
-  
+
 end subroutine RngStream_WriteStateFull
 
 subroutine RngStream_IncreasedPrecis (g, incp)
   use rng
   type(RngStream) :: g
   logical         :: incp
-  
+
   g%IncPrec = incp
   return
 end subroutine RngStream_IncreasedPrecis
@@ -512,7 +512,7 @@ subroutine RngStream_SetAntithetic (g, a)
   use rng
   type(RngStream) :: g
   logical         :: a
-  
+
   g%Anti = a
   return
 end subroutine RngStream_SetAntithetic
@@ -521,14 +521,14 @@ function RngStream_RandUni (g) result(r)
   use rng
   type(RngStream) :: g
   real (KIND=8)   :: U01d,U01,r
-  
+
   if(g%IncPrec) then
      r=U01d(g)
   else
      r=U01(g)
   endif
-  
-  return 
+
+  return
 end function RngStream_RandUni
 
 function RngStream_RandInt (g,i,j) result(l)
@@ -536,35 +536,35 @@ function RngStream_RandInt (g,i,j) result(l)
   type(RngStream) :: g
   integer(KIND=4) :: i,j,l
   real (KIND=8)   :: RngStream_RandUni
-  
+
   l= i+ int((dble(j)-dble(i)+1.0d0)*RngStream_RandUni(g))
-  return 
+  return
 end function RngStream_RandInt
 
 SUBROUTINE gaussdev(p, normal_dev)
-  
+
   ! ALGORITHM AS241  APPL. STATIST. (1988) VOL. 37, NO. 3
-  
+
   ! Produces the normal deviate Z corresponding to a given lower
   ! tail area of P; Z is accurate to about 1 part in 10**16.
-  
+
   ! The hash sums below are the sums of the mantissas of the
   ! coefficients.   They are included for use in checking
   ! transcription.
 
   ! This ELF90-compatible version by Alan Miller - 20 August 1996
   ! N.B. The original algorithm is as a function; this is a subroutine
-  
+
   REAL (kind=8), INTENT(IN)   :: p
   REAL (kind=8), INTENT(OUT)  :: normal_dev
-  
+
   ! Local variables
-  
+
   REAL (kind=8) :: zero = 0.d0, one = 1.d0, half = 0.5d0, split1 = 0.425d0,  &
        split2 = 5.d0, const1 = 0.180625d0, const2 = 1.6d0, q, r
-  
+
   ! Coefficients for P close to 0.5
-  
+
   REAL (kind=8) :: a0 = 3.3871328727963666080D0, &
        a1 = 1.3314166789178437745D+2, &
        a2 = 1.9715909503065514427D+3, &
@@ -581,9 +581,9 @@ SUBROUTINE gaussdev(p, normal_dev)
        b6 = 2.8729085735721942674D+4, &
        b7 = 5.2264952788528545610D+3
   ! HASH SUM AB    55.8831928806149014439
-  
+
   ! Coefficients for P not close to 0, 0.5 or 1.
-  
+
   REAL (kind=8) :: c0 = 1.42343711074968357734D0, &
        c1 = 4.63033784615654529590D0, &
        c2 = 5.76949722146069140550D0, &
@@ -600,9 +600,9 @@ SUBROUTINE gaussdev(p, normal_dev)
        d6 = 5.47593808499534494600D-4, &
        d7 = 1.05075007164441684324D-9
   ! HASH SUM CD    49.33206503301610289036
-  
+
   ! Coefficients for P near 0 or 1.
-  
+
   REAL (kind=8) :: e0 = 6.65790464350110377720D0, &
        e1 = 5.46378491116411436990D0, &
        e2 = 1.78482653991729133580D0, &
@@ -619,7 +619,7 @@ SUBROUTINE gaussdev(p, normal_dev)
        f6 = 1.42151175831644588870D-7, &
        f7 = 2.04426310338993978564D-15
   ! HASH SUM EF    47.52583317549289671629
-  
+
   q = p - half
   IF (ABS(q) <= split1) THEN
      r = const1 - q * q
@@ -653,12 +653,12 @@ SUBROUTINE gaussdev(p, normal_dev)
 END SUBROUTINE gaussdev
 
 subroutine poissdev(RandNum, AverNum, PoissNum)
-  
-  ! This is the original Knuth's algorithm for a Poisson law.  
+
+  ! This is the original Knuth's algorithm for a Poisson law.
   ! Choosing a large value for NPoissonLimit is more accurate but slower.
   ! For large N we fall back to the Gaussian deviate using the same
   ! input probability and the inverse CDF method.
-  
+
   implicit none
   real(kind=8) :: RandNum
   real(kind=8) :: AverNum
@@ -667,7 +667,7 @@ subroutine poissdev(RandNum, AverNum, PoissNum)
   integer,parameter :: NPoissonLimit = 10
   real(kind=8) :: Norm, Repar, Proba
   real(kind=8) :: GaussNum
-  
+
   if(AverNum <= DBLE(NPoissonLimit)) then
      Norm=exp(-AverNum)
      Repar=1.0d0
@@ -684,6 +684,6 @@ subroutine poissdev(RandNum, AverNum, PoissNum)
      if(GaussNum<=0.0d0)GaussNum=0.0d0
      PoissNum=nint(GaussNum)
   endif
-  
+
   return
 end subroutine poissdev

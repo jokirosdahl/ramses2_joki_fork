@@ -91,7 +91,7 @@ recursive subroutine r_init_flag(pst,ilevel,input_size,noct,output_size)
   integer::next_noct
   integer::nflag
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_INIT_FLAG,pst%iUpper+1,input_size,output_size,ilevel)
      call r_init_flag(pst%pLower,ilevel,input_size,noct,output_size)
@@ -179,7 +179,7 @@ subroutine init_flag(s,ilevel,nflag)
   nflag=g%nflag
 
   end associate
-  
+
 end subroutine init_flag
 !################################################################
 !################################################################
@@ -406,7 +406,7 @@ subroutine user_flag(s,ilevel,nflag)
   integer::ilevel,nflag
   ! -------------------------------------------------------------------
   ! This routine flag for refinement cells that satisfies
-  ! some user-defined physical criteria at the level ilevel. 
+  ! some user-defined physical criteria at the level ilevel.
   ! -------------------------------------------------------------------
   integer::level_lock
 
@@ -418,7 +418,7 @@ subroutine user_flag(s,ilevel,nflag)
 
   ! Refinement rules for the radiative transfer solver
   if(s%r%rt)call rt_flag(s,ilevel)
-  
+
   ! Refinement rules around sink particles
   if(s%r%sink.and.s%r%sink_refine)call sink_flag(s,s%sink,ilevel)
 
@@ -480,9 +480,9 @@ subroutine ensure_ref_rules(s,ilevel)
   type(ramses_t)::s
   integer::ilevel
   !-----------------------------------------------------------------
-  ! This routine determines if all grids at level ilevel are 
-  ! surrounded by 26 neighboring grids, in order to enforce the 
-  ! strict refinement rule. 
+  ! This routine determines if all grids at level ilevel are
+  ! surrounded by 26 neighboring grids, in order to enforce the
+  ! strict refinement rule.
   ! Used in case of adaptive time steps only.
   !-----------------------------------------------------------------
   integer::idim,ind,igrid,igrid_nbor

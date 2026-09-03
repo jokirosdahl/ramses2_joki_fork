@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import yt
 import numpy as np
-import miniramses as ram
+import ramses as ram
 import argparse
 import os
 from scipy.io import FortranFile
@@ -20,7 +20,7 @@ from scipy.spatial import KDTree
 #================================
 # read old ramses parameter files
 #================================
-def rd_params(nout,**kwargs):    
+def rd_params(nout,**kwargs):
     path = kwargs.get("path","./")
     car1 = str(nout).zfill(5)
     filename = path+"/output_"+car1+"/amr_"+car1+".out00001"
@@ -76,7 +76,7 @@ def wr_header(fileloc,npart,nfile,star):
 #================================
 # write new ramses parameter file
 #================================
-def wr_params(params1,params2,nout,**kwargs):    
+def wr_params(params1,params2,nout,**kwargs):
     path = kwargs.get("path","./")
     car1 = str(nout).zfill(5)
     filename = path+"/output_"+car1+"/params.bin"
@@ -344,10 +344,10 @@ with open(file_amr, "wb") as f_amr, open(file_hydro, "wb") as f_hydro:
                 x_fine = x_fine[ind_fine]
                 y_fine = y_fine[ind_fine]
                 z_fine = z_fine[ind_fine]
-                
+
                 # compute refinement map
                 xyz_fine = np.stack([x_fine, y_fine, z_fine], axis=-1)
-                xyz_coarse = np.stack([x, y, z], axis=-1)        
+                xyz_coarse = np.stack([x, y, z], axis=-1)
                 tree_fine = KDTree(xyz_fine)
                 distance, iii = tree_fine.query(xyz_coarse, p=np.inf, distance_upper_bound=dxmin[ilevel]/2, workers=-1)
                 refined = np.isfinite(distance)
@@ -440,4 +440,3 @@ with open(file_amr, "wb") as f_amr, open(file_hydro, "wb") as f_hydro:
                 out_array[8*8+iind::8*nvar] = out_1[ind]
         f_hydro.seek(0,2)
         out_array.tofile(f_hydro)
-

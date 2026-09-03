@@ -8,6 +8,3 @@ The namelist block `&STAR_PARAMS` is used to specify parameters controlling the 
 | `m_star`            | `real`      | 1          | Star particle mass in units of `mass_sph`. |
 | `eps_star`          | `real`      | 0.01       | Star formation efficiency in units of the local gas freefall time. |
 | `seed`              | `int array` | (123,456,789,1,1,1) | Random number generator seed. |
-
-
-

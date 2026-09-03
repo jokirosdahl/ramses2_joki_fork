@@ -104,7 +104,7 @@ attributes(device) subroutine hash_set(hash_key, hash_val, hash_size, key, val)
         hash_val(ibucket) = val
         return
      endif
-     ibucket = MOD(ibucket, hash_size) + 1 
+     ibucket = MOD(ibucket, hash_size) + 1
   end do
 
 end subroutine hash_set

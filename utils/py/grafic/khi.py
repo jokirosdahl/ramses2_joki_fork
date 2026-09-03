@@ -15,7 +15,7 @@ Usage examples:
         --outdir /Users/moseley/ramses-development/mini-ramses-main/ics/ic_khi/ic_khi_6_2d
 
 Important details:
-  - Output files: ic_d, ic_u, ic_v, ic_w, ic_p 
+  - Output files: ic_d, ic_u, ic_v, ic_w, ic_p
   - Header encodes [n1, n2, n3, dx, ...] with dx = size / n1. For 2D, n3 = 1
     and data are still written as a sequence of z-slices.
   - Pressure and other fields must be written as full 3D arrays to ensure each
@@ -133,7 +133,7 @@ def generate_kh_fields(
     gauss = np.exp(-((yn - 0.25) ** 2) / (2.0 * sig * sig)) + np.exp(
         -((yn - 0.75) ** 2) / (2.0 * sig * sig)
     )  # shape (n,)
-    sinus = np.sin(wavenumber * 2.0 * np.pi * X, dtype=np.float32)  # shape (n,)  
+    sinus = np.sin(wavenumber * 2.0 * np.pi * X, dtype=np.float32)  # shape (n,)
 
     # Allocate 3D fields
     d = np.empty((n1, n2, n3), dtype=np.float32)
@@ -178,7 +178,7 @@ def main():
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed (not critical; for reproducibility)")
     parser.add_argument("--pressure_inner", type=float, default=1.0, help="Inner slab pressure")
-    
+
     args = parser.parse_args()
 
     lvl = int(args.lvl)
@@ -221,5 +221,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

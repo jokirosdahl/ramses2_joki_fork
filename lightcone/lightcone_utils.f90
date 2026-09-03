@@ -1,7 +1,7 @@
 module lightcone_utils
   use amr_commons, only: run_t, global_t
 
-  implicit none    
+  implicit none
 contains
 
   function cone_to_box_coordinates(rotation_matrix, observer, x_cone) result(x_box)
@@ -55,7 +55,7 @@ contains
     corners(1, 1:4) = x1/sqrt(1.0d0 + tan(y_angle)**2 + tan(z_angle)**2)
 
     corners(2, 1) = -corners(1, 1) * tan(y_angle)
-    corners(2, 2) =  corners(1, 1) * tan(y_angle) 
+    corners(2, 2) =  corners(1, 1) * tan(y_angle)
     corners(2, 3) = -corners(1, 1) * tan(y_angle)
     corners(2, 4) =  corners(1, 1) * tan(y_angle)
 
@@ -69,7 +69,7 @@ contains
 
     corners(2, 5) = -x2 * tan(y_angle)
     corners(2, 6) =  x2 * tan(y_angle)
-    corners(2, 7) = -x2 * tan(y_angle) 
+    corners(2, 7) = -x2 * tan(y_angle)
     corners(2, 8) =  x2 * tan(y_angle)
 
     corners(3, 5) = -x2 * tan(z_angle)
@@ -88,7 +88,7 @@ contains
     r = sqrt(position(1)**2 + position(2)**2 + position(3)**2)
 
     is_in_lightcone_sector = (r >= r1 .and. r <= r2) .and. &
-         (is_in_2d_sector(position(1), position(2), opening_angle_y) .and. & 
+         (is_in_2d_sector(position(1), position(2), opening_angle_y) .and. &
          is_in_2d_sector(position(1), position(3), opening_angle_z))
   end function is_in_lightcone_sector
 
@@ -193,7 +193,7 @@ contains
   function integrate_f(a, b, eps, ans, del, omega0, OmegaL, OmegaR)
     integer :: integrate_f ! This is not the value of the integral, which is in ans
     real(kind=8) :: a, b, eps, ans, del
-    real(kind=8) :: Omega0, OmegaL, OmegaR  
+    real(kind=8) :: Omega0, OmegaL, OmegaR
     real(kind=8) :: t(0:24, 0:24)
     real(kind=8) :: c, d, e, s, y, x, p
     integer :: n, m, i, j, k
@@ -207,12 +207,12 @@ contains
     t(1, 2) = 2.d0 * d * f(c, Omega0, OmegaL, OmegaR)
     t(2, 1) = 0.75d0 * t(1, 2)
 
-    do while (n < 24) 
+    do while (n < 24)
        n = n + 1
        m = m * 2
        e = e * .5d0
        s = 0.d0
-       do j = 2, m, 2 
+       do j = 2, m, 2
           y = dble(j-1) * e
           x = 0.5d0 * y * (3.d0 - y**2)
           s = s + (1.d0 - y**2) * (f(c-d*x, omega0, omegaL, OmegaR) &
@@ -221,12 +221,12 @@ contains
        t(n,1) = 1.5d0*s*d*e + 0.5d0*t(n-1,1)
 
        p = 1.d0
-       do k = 1, n-1 
+       do k = 1, n-1
           p = p * 4.d0
           i = n + 1 - k
           t(i-1, k+1) = t(i, k) + (t(i, k) - t(i-1, k))/(p-1.d0)
        enddo
-     
+
        ans = t(1,n)
        del = abs(t(1,n)-t(2,n-1))
        if (n >= 9) then
@@ -243,4 +243,3 @@ contains
   end function integrate_f
   !=======================================================================
 end module lightcone_utils
-
