@@ -4,7 +4,7 @@ You can compile the code by setting these parameters to your preffered value usi
 
 | Variable, name, syntax, default value | Type | Description |
 | -------- | ---- | ----------------- |
-| `COMPILER=GNU`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| `GNU`&nbsp;,&nbsp;`INTEL`, or&nbsp;`NVHPC` | This sets the Fortran compiler you would like to use. The `GNU` option uses `gfortran` from the Gnu Compiler Collection, `INTEL` uses `ifort` from Intel, Inc. and `NVHPC` uses the `nvfortran` compiler from the NVIDIA HPC SDK. |
+| `COMPILER=GNU`&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| `GNU`&nbsp;,&nbsp;`INTEL`,&nbsp;`NVHPC`&nbsp;or&nbsp;`METAL` | This sets the Fortran compiler you would like to use. The `GNU` option uses `gfortran` from the Gnu Compiler Collection, `INTEL` uses `ifort` from Intel, Inc., `NVHPC` uses the `nvfortran` compiler from the NVIDIA HPC SDK, and `METAL` uses `gfortran` with Apple Metal GPU kernels on macOS. |
 | `NDIM = 3`       | `1`, `2` or `3`  | This sets the dimensionality of the simulation. |
 | `HYDRO = 1`      | `0` or `1`  | This turns on or off the hydro solver. |
 | `MHD = 0`        | `0` or `1`  | This turns on or off the MHD solver. |
