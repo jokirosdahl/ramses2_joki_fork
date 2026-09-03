@@ -10,7 +10,7 @@ static_gas=.true.
 cr=.true.
 /
 
-&AMR_PARAMS 
+&AMR_PARAMS
 levelmin=7
 levelmax=7
 ngridmax=100000

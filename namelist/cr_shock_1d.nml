@@ -9,7 +9,7 @@ nsubcycle=10*2
 cr=.true.
 /
 
-&AMR_PARAMS 
+&AMR_PARAMS
 levelmin=9
 levelmax=9
 ngridmax=10000
@@ -63,7 +63,6 @@ u_region=0.0,0.0
 p_region=1.0,1.0
 prad_region=1.0,0.333333333333333
 A_ave=1d-13
-
 cr_nregion=2
 cr_region_type(1)='square'
 cr_region_type(2)='square'
