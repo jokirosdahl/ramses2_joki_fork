@@ -1,19 +1,19 @@
 
-[1]: https://bitbucket.org/rteyssie/ramses/
-[2]: https://bitbucket.org/rteyssie/mini-ramses/
+[1]: https://github.com/ramses-organisation/ramses
+[2]: https://github.com/ramses-organisation/ramses2
 
-## mini-ramses ##
+## RAMSES II ##
 
-The mini-ramses repository is a fork of the [main RAMSES repository][1]. It was created as a stripped-down version of the main code base created in order to facilitate the development of major updates of RAMSES' core routines. This stripped-down version is still available in the `master` branch.
+The ramses2 repository contains a major evolution of the original [RAMSES code][1] called [RAMSES II][2]. The main new features are perfect level-by-level load-balancing of grid cells and particles. Linked lists and octrees are not used anymore. They have been replaced by flat arrays and hash tables. The code works on Nvidia GPU using Nvidia Fortran. The CPU only code handles MPI communication using a low memory-footprint software cache.
 
-A rapidly-evolving development of mini-ramses based on a completely changed data-structure is contained in the `develop` branch. This branch is work in progress, use it only if you know what you're doing ;)
+The main development branch is the `develop` branch (set as default). This branch is still work in progress and the code is rapidly evolving.
 
 You can download the code by cloning the git repository using 
 ```
-$ git clone https://bitbucket.org/rteyssie/mini-ramses.git
+$ git clone git@github.com:ramses-organisation/ramses2.git
 ```
 
-If you want to contribute to mini-ramses, you can either ask me (romain.teyssier@gmail.com) for your personal new branch in this repository which I will give you write access to, or you can fork this repository. To bring changes back into the `develop` branch of mini-ramses, simply issue a pull request.
+If you want to contribute to ramses2, you can either ask me (romain.teyssier@gmail.com) for your personal new branch in this repository which I will give you write access to, or you can fork this repository. To bring changes back into the `develop` branch of ramses2, simply issue a pull request.
 
 To compile and execute the standard test cases, please follow these steps.
 
