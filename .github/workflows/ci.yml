@@ -11,7 +11,7 @@ jobs:
     name: Build hydro2d
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build hydro2d
         run: >
           docker run --rm
@@ -24,7 +24,7 @@ jobs:
     name: Build cosmo3d
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build cosmo3d
         run: >
           docker run --rm
