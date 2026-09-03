@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import yt
 import numpy as np
-import miniramses as ram
+import ramses as ram
 import argparse
 import os
 from scipy.io import FortranFile

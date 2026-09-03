@@ -7,7 +7,7 @@ program test_cool
   ! Execute in the ramses/ folder using:
   ! bin/test_cooling
   ! Visualize using pyton following these steps:
-  ! import miniramses as ram
+  ! import ramses as ram
   ! import matplotlib.pyplot as plt
   ! ram.test_cool("onecell_cooling.bin")
   ! plt.savefig("onecell_cooling.png")

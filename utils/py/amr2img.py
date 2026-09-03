@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
-import miniramses as ram
+import ramses as ram
 
 # Check if we should use non-interactive backend
 import sys

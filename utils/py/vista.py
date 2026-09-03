@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import pyvista as pv
-import miniramses as ram
+import ramses as ram
 import numpy as np
 import argparse
 

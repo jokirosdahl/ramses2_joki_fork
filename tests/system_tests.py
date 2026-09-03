@@ -1,7 +1,7 @@
 import pathlib
 import subprocess
 import pytest
-import miniramses as ram
+import ramses as ram
 import numpy as np
 
 
