@@ -16,7 +16,7 @@ module amr_parameters
   integer,parameter::MAXLEVEL=65
   integer,parameter::MAXREGION=100
   integer,parameter::MAXBOUND=100
-  
+
   ! Define integer types (for particle IDs only)
   integer,parameter::i4b=4
 #ifndef LONGINT
@@ -25,7 +25,7 @@ module amr_parameters
   integer,parameter::i8b=8  ! longint particle IDs are long int
 #endif
   integer,parameter::flen=80
-  
+
   ! Number of dimensions
 #ifndef NDIM
   integer,parameter::ndim=1
@@ -66,4 +66,3 @@ module amr_parameters
   CHARACTER(LEN=300)::namelist_file
 
 end module amr_parameters
-

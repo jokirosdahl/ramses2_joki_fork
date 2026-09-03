@@ -24,8 +24,3 @@ You can compile the code by setting these parameters to your preffered value usi
 | `NVECTOR = 32`   | `integer`  | This sets the size of the vector sweeps used in many subroutines of the code. This is used for optimization purposes. This is highly problem and architecture dependant. |
 | `NPRE = 8`       | `4` or `8`  | This sets the number of bytes used to code floating point numbers. `4` means single precision (not recommanded) `8` means double precision. |
 | `DEBUG = 0`      | `0` or `1`  | This turns on or off the debug mode. |
-
-
-
-
-

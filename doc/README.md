@@ -7,7 +7,7 @@ We describe the meaning and default values of the namelist variables in each of 
 
 [Compilation parameters](./compilation_params.md): parameters used to compile the code using the `make` command.
 
-[Global run parameters](./run_params.md): Main global parameters of the code controlling its execution. 
+[Global run parameters](./run_params.md): Main global parameters of the code controlling its execution.
 
 [Output parameters](./output_params.md): Parameters controlling the output strategy.
 
@@ -19,7 +19,7 @@ We describe the meaning and default values of the namelist variables in each of 
 
 [Hydro and MHD solver parameters](./hydro_params.md): Parameters controlling the second-order Godunov solver (aka MUSCL-Hancock) for solving the Euler and ideal MHD equations.
 
-[Mesh refinement parameters](./refine_params.md): Parameters controlling the refinement strategy of the AMR grid. 
+[Mesh refinement parameters](./refine_params.md): Parameters controlling the refinement strategy of the AMR grid.
 
 [Unit system parameters](./units_params.md): Parameters controlling the conversion between code units and cgs units.
 
@@ -38,11 +38,3 @@ We describe the meaning and default values of the namelist variables in each of 
 [Clump finder parameters](./clump_params.md): Parameters controlling the clump finder.
 
 [Sink particle parameters](./sink_params.md): Parameters controlling sink particle formation, accretion and AGN feedback.
-
-
-
-
-
-
-
-

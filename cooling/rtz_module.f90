@@ -25,7 +25,7 @@ SUBROUTINE initialize_elements()
    ! Initializes the atomic data we need for the RTZ module
    implicit none
    integer::i
-   
+
    ! Initialize everything to zero
    do i=1,n_elements
       elements(i)%atomic_number = -1
@@ -73,7 +73,7 @@ SUBROUTINE initialize_elements()
    elements(6)%depletion = 0.5
    elements(6)%element_name = "CARBON"
 #endif
-    
+
 #if N_NITROGEN_IONS > 0
    ! Element 7: Nitrogen
    elements(7)%atomic_number = 7
@@ -83,7 +83,7 @@ SUBROUTINE initialize_elements()
    elements(7)%n_ions = N_NITROGEN_IONS
    elements(7)%depletion = 0.6
    elements(7)%element_name = "NITROGEN"
-#endif 
+#endif
 
 #if N_OXYGEN_IONS > 0
    ! Element 8: Oxygen
@@ -112,7 +112,7 @@ SUBROUTINE initialize_elements()
    elements(12)%atomic_number = 12
    elements(12)%atomic_mass = 24.305
    elements(12)%z_solar = 3.98E-05
-   elements(12)%G0_photo_rate = 6.59E-11 
+   elements(12)%G0_photo_rate = 6.59E-11
    elements(12)%n_ions = N_MAGNESIUM_IONS
    elements(12)%depletion = 0.16
    elements(12)%element_name = "MAGNESIUM"

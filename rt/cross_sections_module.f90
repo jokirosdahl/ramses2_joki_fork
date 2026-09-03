@@ -35,7 +35,7 @@ SUBROUTINE initialize_cross_sections()
   verner_cross_sections%y_w = 0.d0
   verner_cross_sections%y_0 = 0.d0
   verner_cross_sections%y_1 = 0.d0
-  
+
   ! Hydrogen
   verner_cross_sections%E_th(1,1:1) = (/ 1.360d1 /)
   verner_cross_sections%E_max(1,1:1) = (/ 5.000d4 /)

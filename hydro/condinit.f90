@@ -89,7 +89,7 @@ subroutine condinit(r,g,x,q,dx,nn)
   ! Call built-in initial condition generator
   call region_condinit(r,g,x,q,dx,nn)
 #endif
-  
+
   ! Add here, if you wish, some user-defined initial conditions
   ! ........
 

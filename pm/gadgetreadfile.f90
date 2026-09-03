@@ -8,7 +8,7 @@ MODULE gadgetreadfilemod
 !
 !
 !
-! Data type corresponding to gadget file header 
+! Data type corresponding to gadget file header
   TYPE gadgetheadertype
      INTEGER*4, DIMENSION(6) :: npart
      REAL*8, DIMENSION(6) :: mass
@@ -74,7 +74,7 @@ CONTAINS
           RETURN
        end if
     end if
-       
+
     OPEN(unit=1,file=filename,status='old',action='read',form='unformatted')
     ! Byte swapping doesn't work if you just do READ(1)header
     READ(1)header%npart,header%mass,header%time,header%redshift, &
@@ -208,4 +208,3 @@ CONTAINS
     CLOSE(1)
     END SUBROUTINE gadgetwritefile
 END MODULE gadgetreadfilemod
-

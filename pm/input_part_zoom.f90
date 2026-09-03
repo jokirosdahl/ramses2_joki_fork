@@ -20,7 +20,7 @@ subroutine m_input_part_zoom(pst)
   !--------------------------------------------------------------------
   integer::dummy
   type(out_part_zoom_t)::output
-  
+
   if(pst%s%r%verbose)write(*,*)'Entering input_part_zoom'
   if(TRIM(pst%s%r%filetype).NE.'grafic_zoom')return
   if(pst%s%r%nrestart>0)return
@@ -97,15 +97,15 @@ subroutine input_part_zoom(r,g,p,m)
   logical::ok,error,keep_part,read_pos=.false.,read_mass=.false.
 
 #if NDIM>2
-  
+
   p%npart=0
   do ilevel=r%levelmin,g%nlevelmax_part
 
      if(m%noct(ilevel)==0)cycle
-        
+
      ! Mesh size at level ilevel in normalised units
      dx=0.5D0**ilevel
-     
+
      !-------------------------------------------------------------------------
      ! First step: compute level boundaries in terms of initial condition array
      ! and initialize particle position and mass in leaf cells only.
@@ -189,10 +189,10 @@ subroutine input_part_zoom(r,g,p,m)
         init_array_m=0
      endif
      allocate(init_plane(1:g%n1(ilevel),1:g%n2(ilevel)))
-     
+
      ! Loop over dimensions
      do idim=1,ndim
-        
+
         ! Read dark matter initial displacement field
         if(idim==1)filename=TRIM(r%initfile(ilevel))//'/ic_velcx'
         if(idim==2)filename=TRIM(r%initfile(ilevel))//'/ic_velcy'
@@ -210,7 +210,7 @@ subroutine input_part_zoom(r,g,p,m)
            init_array(i1_min:i1_max,i2_min:i2_max,i3) = init_plane(i1_min:i1_max,i2_min:i2_max)
         end do
         close(10)
-                
+
         ! Reading dark matter initial position field
         if(idim==1)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscx'
         if(idim==2)filename_x=TRIM(r%initfile(ilevel))//'/ic_poscy'
@@ -232,7 +232,7 @@ subroutine input_part_zoom(r,g,p,m)
         else
            if(g%myid==1)write(*,*)'Missing '//TRIM(filename_x)
         end if
-        
+
         ! Rescale initial displacement field to code units
         init_array=g%dfact(ilevel)*dx/g%dxini(ilevel)*init_array/g%vfact(ilevel)
         if(read_pos)then
@@ -354,7 +354,7 @@ subroutine input_part_zoom(r,g,p,m)
   endif
 
 #endif
-  
+
 end subroutine input_part_zoom
 !#########################################################################
 !#########################################################################

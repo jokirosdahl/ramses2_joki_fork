@@ -169,4 +169,3 @@ if not no_display:
     plt.show()
 else:
     plt.close()
-

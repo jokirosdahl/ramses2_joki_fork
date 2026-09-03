@@ -125,7 +125,7 @@ subroutine star_rt_feedback(s, p, ilevel)
 
         ! Account for larger volume in coarser cell
         scale_inp_cell=scale_inp/2**ndim/dt_Gyr_parent
-        
+
         ! Get parent cell at level ilevel-1 using cache
         hash_cell(0)=ilevel
         hash_cell(1:ndim)=ckey(1:ndim)

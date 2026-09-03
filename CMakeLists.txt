@@ -276,7 +276,7 @@ endif()
 target_compile_definitions(${EXEC} PRIVATE ${defines})
 target_compile_options(${EXEC} PRIVATE
     $<$<COMPILE_LANGUAGE:Fortran>:${fort_flags}>)
-set_target_properties(${EXEC} PROPERTIES 
+set_target_properties(${EXEC} PROPERTIES
     Fortran_PREPROCESS ON
     Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
 )
@@ -750,18 +750,18 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
         if(NOT EXISTS "${_full}")
             continue()
         endif()
-        
+
         set(_deps "")
         file(STRINGS "${_full}" _use_runner REGEX "[Uu][Ss][Ee][ \t]+gpu_runner([ \t,;]|$)")
         if(_use_runner)
             list(APPEND _deps "${_gpu_obj_dir}/gpu_runner.cuf.o")
         endif()
-        
+
         file(STRINGS "${_full}" _use_part REGEX "[Uu][Ss][Ee][ \t]+part_device([ \t,;]|$)")
         if(_use_part)
             list(APPEND _deps "${_gpu_obj_dir}/gpu_part.cuf.o")
         endif()
-        
+
         file(STRINGS "${_full}" _use_utils REGEX "[Uu][Ss][Ee][ \t]+gpu_utils([ \t,;]|$)")
         if(_use_utils)
             list(APPEND _deps "${_gpu_obj_dir}/gpu_utils.cuf.o")

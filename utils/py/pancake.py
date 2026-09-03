@@ -47,8 +47,3 @@ xp = xp + disp - 0.5
 
 data = np.column_stack((xp, vp, mp))
 np.savetxt( "ic_part", data, fmt="%.10f", delimiter="  " )
-
-
-
-
-

@@ -23,8 +23,8 @@ subroutine interpol_phi(m,igrid_nbor,ind_nbor,ccc,bbb,tfrac,phi_int)
   ! Routine for interpolation at level-boundaries. Interpolation is used for
   ! - boundary conditions for solving poisson equation at fine level
   ! - computing force (gradient_phi) at fine level for cells close to boundary
-  ! Interpolation is performed in space (using CIC) and - if adaptive 
-  ! timestepping is on - also in time (using linear extrapolation 
+  ! Interpolation is performed in space (using CIC) and - if adaptive
+  ! timestepping is on - also in time (using linear extrapolation
   ! of the change in phi during the last coarse step onto the first fine step)
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   integer::ind,ind_average,ind_father
@@ -45,7 +45,7 @@ subroutine interpol_phi(m,igrid_nbor,ind_nbor,ccc,bbb,tfrac,phi_int)
         coeff=bbb(ind_average)
         igrid_nbr=igrid_nbor(ind_father)
         ind_nbr=ind_nbor(ind_father)
-        if (igrid_nbr==0) then 
+        if (igrid_nbr==0) then
            write(*,*)'no all neighbors present in interpol_phi...'
            write(*,*)igrid_nbor
            stop
@@ -109,7 +109,7 @@ subroutine save_phi_old(m,ilevel)
   do igrid=m%head(ilevel),m%tail(ilevel)
      ! Loop over cells
      do ind=1,twotondim
-        ! Save phi      
+        ! Save phi
         m%phi_old(ind,igrid)=m%phi(ind,igrid)
      end do
   end do

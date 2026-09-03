@@ -123,7 +123,7 @@ subroutine adaptive_loop(pst)
      return
   endif
 
-  write(*,*)'Starting time integration' 
+  write(*,*)'Starting time integration'
 
   done = .false.
   do while(.not.done) ! Main time loop

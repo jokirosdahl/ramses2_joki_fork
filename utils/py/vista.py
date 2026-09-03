@@ -114,9 +114,8 @@ if log0:
     grid.cell_data["values"] = np.log10(data.flatten(order="F")+min_val)
 else:
     grid.cell_data["values"] = data.flatten(order="F")
-    
+
 pl = pv.Plotter(window_size=[1600, 1600])
 pl.add_volume(grid, scalars="values", cmap=col, opacity="sigmoid")
 pl.add_bounding_box()
 pl.show()
-

@@ -2286,4 +2286,3 @@ end subroutine gather_twondim_parent_stencil
   ! =========================================================================
 
 end module refine_device
-

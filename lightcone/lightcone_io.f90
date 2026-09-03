@@ -65,7 +65,7 @@ contains
           write(unit=ilun, pos=offset+1) buffer%xp(1:buffer%ncurrent, idim) ! pos is 1-based
 #endif
        end do
-      
+
        ! Write velocities (properties 5, 6, 7)
        do idim = 1, 3
           offset = calculate_write_offset(nbefore, ntotal, idim+4, nthbuffer, buffer%nstride)
@@ -107,7 +107,7 @@ contains
           write(unit=ilun, pos=offset+1) buffer%xc(1:buffer%ncurrent, idim) ! pos is 1-based
 #endif
        end do
-      
+
        ! Write rho (property 4)
        offset = calculate_write_offset(nbefore, ntotal, 4, nthbuffer, buffer%nstride)
 #ifndef WITHOUTMPI
@@ -181,7 +181,7 @@ contains
     ! ntotal is the total number of particles across all processes
     ! nthproperty is the property number (idp=1, x=2, y=3, z=4, vx=5, vy=6, vz=7, mass=8)
     ! nthbuffer is the buffer number (i.e if current process has already written 2 buffers, nthbuffer=3)
-    
+
     integer, intent(in) :: nbefore, ntotal, nthproperty, nthbuffer, nstride
     integer, parameter :: bpp = 4 ! bytes per property
 

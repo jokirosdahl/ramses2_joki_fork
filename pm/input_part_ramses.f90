@@ -27,7 +27,7 @@ subroutine m_input_part_ramses(pst)
   character(LEN=80)::file_head,file_part
   integer,allocatable,dimension(:)::npart_file
   type(out_input_star_t)::output
-  
+
   if(pst%s%r%verbose)write(*,*)'Entering input_part_ramses'
 
   if(pst%s%r%part)then
@@ -201,7 +201,7 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
   integer::ncpu_file
   integer,dimension(1:ncpu_file)::npart_file
   !------------------------------------------------------------
-  ! Read particles positions and velocities from a Ramses 
+  ! Read particles positions and velocities from a Ramses
   ! output file and allocate particle-based arrays.
   !------------------------------------------------------------
   integer::ipart,ipart_old
@@ -217,7 +217,7 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
   character(LEN=5)::ncharcpu
   character(LEN=10)::prefix
   character(LEN=80)::file_part
-  
+
   !-------------------------------------
   ! Compute local particle number
   !-------------------------------------
@@ -227,7 +227,7 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
   end do
   npart_tot=ncum_file(ncpu_file)
   p%npart_tot=npart_tot
-  
+
   p%npart=npart_tot/g%ncpu
   nleft=(g%myid-1)*p%npart
   nright=g%myid*p%npart
@@ -240,7 +240,7 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
      nleft=nleft+nrest
      nright=nright+nrest
   endif
-  
+
   ! Compute interval of file to open for current process
   ileft=0
   iright=-1
@@ -259,12 +259,12 @@ subroutine input_part_ramses(r,g,p,ncpu_file,npart_file,mpart_loc)
         endif
      end do
   endif
-  
+
   ! Determine prefix based on particle type
   if(p%type==PART_TYPE)prefix='part'
   if(p%type==STAR_TYPE)prefix='star'
   if(p%type==SINK_TYPE)prefix='sink'
-  
+
   ! Loop over relevant files
   ipart=0
   ipart_old=0

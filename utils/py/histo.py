@@ -94,4 +94,3 @@ if args.out:
     plt.savefig(args.out)
 
 plt.show()
-

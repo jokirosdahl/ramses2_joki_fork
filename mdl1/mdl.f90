@@ -112,7 +112,7 @@ contains
     call MPI_ABORT(MPI_COMM_WORLD,info)
 #else
     stop
-#endif  
+#endif
   end subroutine mdl_abort
   !##############################################################
   !##############################################################
@@ -176,7 +176,7 @@ contains
 
     ! Wait for ISEND completion to free memory in corresponding MPI buffer
     call MPI_WAIT(launch_id,launch_status,info)
-#endif  
+#endif
     mdl_send_request_array = target_cpu
   end function mdl_send_request_array
   !##############################################################
@@ -252,7 +252,7 @@ contains
     integer::output_size
     integer,dimension(1:output_size)::output_array
 
-#ifndef WITHOUTMPI  
+#ifndef WITHOUTMPI
     include 'mpif.h'
     integer::info
     integer::output_tag=203,output_id
@@ -268,7 +268,7 @@ contains
 
     ! Wait for ISEND completion to free memory in corresponding MPI buffer
     call MPI_WAIT(output_id,output_status,info)
-#endif  
+#endif
   end subroutine mdl_get_reply_array
   !##############################################################
   !##############################################################
@@ -283,7 +283,7 @@ contains
     type(*),optional,target::output
     integer,dimension(:),pointer::buffer
 
-#ifndef WITHOUTMPI  
+#ifndef WITHOUTMPI
     include 'mpif.h'
     integer::info
     integer::output_tag=203,output_id
@@ -300,7 +300,7 @@ contains
 
     ! Wait for ISEND completion to free memory in corresponding MPI buffer
     call MPI_WAIT(output_id,output_status,info)
-#endif  
+#endif
   end subroutine mdl_get_reply_scalar
   !##############################################################
   !##############################################################

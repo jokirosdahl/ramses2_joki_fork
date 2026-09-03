@@ -75,7 +75,3 @@ print("max uy=",np.max(np.abs(uy)))
 print("max uz=",np.max(np.abs(uz)))
 print("max cs=",np.max(np.abs(cs)))
 print("min dt=",np.min(np.abs(dt)))
-
-
-
-

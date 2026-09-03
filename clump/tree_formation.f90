@@ -216,7 +216,7 @@ subroutine m_formation_site(pst)
   logical::keep_alive
   !----------------------------------------------------------------------
   ! This is the master routine for the RAMSES tree formation sites finder
-  !----------------------------------------------------------------------  
+  !----------------------------------------------------------------------
 
 #if NDIM==3 && defined(GRAV)
   !--------------------------------------------------------------
@@ -251,7 +251,7 @@ recursive subroutine r_tree_clump(pst)
   else
      call tree_clump(pst%s)
   endif
-  
+
 end subroutine r_tree_clump
 !###########################################################
 !###########################################################
@@ -263,7 +263,7 @@ subroutine tree_clump(s)
   use clump_merger_module
   implicit none
   type(ramses_t)::s
-  
+
 #if NDIM==3 && defined(GRAV)
 
   !-----------------------------------------------

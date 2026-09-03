@@ -103,7 +103,7 @@ contains
   !==============================================================================
   ! Sink ID deposition
   !==============================================================================
-  subroutine sink_id_deposition(s,p,ilevel) 
+  subroutine sink_id_deposition(s,p,ilevel)
     use amr_parameters, only: ndim, twotondim, threetondim
     use ramses_commons, only: ramses_t
     use pm_commons, only: part_t
@@ -118,7 +118,7 @@ contains
     real(kind=8)::dx_loc
     integer(kind=8),dimension(0:ndim)::hash_nbor
     integer::ipart,icelln,igridn,j
-    
+
     real(kind=8),dimension(1:ndim,1:threetondim)::xBHnei
     integer,dimension(1:ndim,1:threetondim)::ckeynei
     real(kind=8),dimension(1:threetondim)::vol

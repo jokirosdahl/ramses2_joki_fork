@@ -133,7 +133,7 @@ contains
     write(*,*) "Testing conversion of comoving distance to code units"
     l = 1.0d0
     code_l = comoving2code(pst%s%g, l) ! This tells us how many code units per Mpc, the inverse of which is how many Mpc per code unit
-    write(*,*) "    Box comoving size is ", 1.0d0 / code_l, " Mpc" 
+    write(*,*) "    Box comoving size is ", 1.0d0 / code_l, " Mpc"
     write(*,*) ""
   end subroutine test_comoving2code
 

@@ -10,4 +10,3 @@ for an,el in zip(atomic_number,elements):
         cooling_table[i-1,:] = np.log10(dat[:,2])
 
     np.savetxt(f"./{el.upper()}/all_cool.dat",cooling_table)
-

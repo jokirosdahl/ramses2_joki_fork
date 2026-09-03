@@ -25,7 +25,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
   integer::i
   real(dp)::xx,yy,zz,rc,rr,xc,yc,zc,eps,c,dnfw
   real(dp)::v200,r200,rs,hsmall
-  
+
   ! Halo parameters from namelist
   hsmall = 0.7d0
   eps = halo_eps ! small like 10 pc
@@ -37,7 +37,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
   c = concentration ! concentration
   rs = r200/c
   eps = eps/rs
-  
+
   do i = 1,nn ! we are now workin in [kpc], see units
 
      xx = x(i,1)-xc
@@ -45,20 +45,20 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      zz = x(i,3)-zc
      rc = sqrt(xx**2+yy**2) ! kpc
      rr = sqrt(xx**2+yy**2+zz**2)/rs ! units of rs
-     
+
      rr = max(rr,eps)
      rc = max(rc,eps*rs)
 
      dnfw = 1./rr/(1.+rr)**2
 
      select case (mag_type)
-        
+
      case (0) ! constant done elsewhere
         A(i)=0
 
      case (1) ! toroidal
         if(idim==1)A(i)=0
-        if(idim==2)A(i)=0        
+        if(idim==2)A(i)=0
         if(idim==3)A(i)=B_s*rc*dnfw**two3rd
 
      case (2) ! dipole
@@ -70,10 +70,9 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
         if(idim==1)A(i)=-B_s*zz*dnfw**two3rd*yy/rc
         if(idim==2)A(i)=+B_s*zz*dnfw**two3rd*xx/rc
         if(idim==3)A(i)=0
-        
+
      end select
 
   enddo
-  
-end subroutine vecpotentialinit
 
+end subroutine vecpotentialinit

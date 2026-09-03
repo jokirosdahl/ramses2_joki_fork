@@ -15,7 +15,7 @@ recursive subroutine r_output_rt(pst,input_array,input_size,output_array,output_
   integer::output_size
   integer,dimension(1:input_size)::input_array
   integer,dimension(1:output_size)::output_array
-  
+
   character(LEN=flen)::filename
   integer::rID
   if(pst%nLower>0)then
@@ -140,7 +140,7 @@ subroutine file_descriptor_rt(r,filename,write_bkp_file)
   character(LEN=flen)::filename
   logical::write_bkp_file
   character(len=1), dimension(1:3), parameter :: dim_keys = ["x", "y", "z"]
-  
+
   character(LEN=flen)::fileloc
   integer::igrp,idim,ilun
 

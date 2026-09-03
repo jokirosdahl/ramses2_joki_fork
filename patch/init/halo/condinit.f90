@@ -25,7 +25,7 @@ subroutine read_halo_params(g)
 #endif
   type(global_t)::g
   !--------------------------------------------------
-  ! Local variables  
+  ! Local variables
   !--------------------------------------------------
   logical::nml_ok=.true.
   character(LEN=80)::infile
@@ -51,7 +51,7 @@ subroutine read_halo_params(g)
   if(mag_topology=='toroidal')mag_type=1
   if(mag_topology=='dipole')mag_type=2
   if(mag_topology=='quadrupole')mag_type=3
-  
+
   if(.not. nml_ok)then
      if(g%myid==1)write(*,*)'Too many errors in the namelist'
      if(g%myid==1)write(*,*)'Aborting...'
@@ -91,7 +91,7 @@ subroutine condinit(r,g,x,q,dx,nn)
   real(dp)::scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2,rhos,rhocrit
   real(dp)::j_max
   logical, save:: init_nml=.false.
-  
+
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ! Read user-defined halo parameters from the namelist
@@ -127,14 +127,14 @@ subroutine condinit(r,g,x,q,dx,nn)
   tol = 1.0d-6
   rmax = 2.*r200/rs ! in units of rs
   rhos = rhocrit*200./3.0*c*c*c/(log(1d0+c)-c/(1d0+c))
-  
+
   do i = 1,nn ! we are now workin in [kpc], see units
      xx = x(i,1)-xc
      yy = x(i,2)-yc
      zz = x(i,3)-zc
      rc = sqrt(xx**2+yy**2) ! kpc
      rr = sqrt(xx**2+yy**2+zz**2)/rs ! units of rs
-     
+
      rr = max(rr,eps)
      rc = max(rc,eps*rs)
 
@@ -173,7 +173,7 @@ contains
     real(dp)::fffy
     real(dp),intent(in)::rint
     real(dp)::rrr,Mrr,rhorr
- 
+
     rrr = exp(rint)
     rrr = max(rrr,eps)
 
@@ -190,10 +190,10 @@ contains
     implicit none
     real(dp)::romberg
     !
-    !     Romberg returns the integral from a to b of f(x)dx using Romberg 
-    !     integration. The method converges provided that f(x) is continuous 
-    !     in (a,b). The function f must be double precision and must be 
-    !     declared external in the calling routine.  
+    !     Romberg returns the integral from a to b of f(x)dx using Romberg
+    !     integration. The method converges provided that f(x) is continuous
+    !     in (a,b). The function f must be double precision and must be
+    !     declared external in the calling routine.
     !     tol indicates the desired relative accuracy in the integral.
     !
     integer::maxiter=16,maxj=5
@@ -210,7 +210,7 @@ contains
     i=0
 10  i=i+1
     if(.not.  (i>maxiter.or.(i>5.and.abs(error)<tol)))then
-       ! Calculate next trapezoidal rule approximation to integral.   
+       ! Calculate next trapezoidal rule approximation to integral.
        g0=0.0d0
        do k=1,nint
           g0=g0+fffy(a+(k+k-1)*h)
@@ -220,7 +220,7 @@ contains
        nint=nint+nint
        jmax=min(i,maxj)
        fourj=1.0d0
-       
+
        do j=1,jmax
           ! Use Richardson extrapolation.
           fourj=4.0d0*fourj
@@ -247,4 +247,3 @@ contains
   end function romberg
 
 end subroutine condinit
-

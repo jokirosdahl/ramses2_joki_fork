@@ -189,14 +189,14 @@ subroutine cr_source_terms(s,ilevel)
 
          bxby = sqrt(bloc(1)**2+bloc(2)**2)
           if(norm.gt.1e-10) then
-            sint = bxby/norm     
+            sint = bxby/norm
             cost = bloc(3)/norm
           else
             sint = 1d0
             cost = 0d0
           endif
           if(bxby.gt.1e-10) then
-            sinp = bloc(2)/bxby     
+            sinp = bloc(2)/bxby
             cosp = bloc(1)/bxby
           else
             sinp = 0d0
@@ -214,7 +214,7 @@ subroutine cr_source_terms(s,ilevel)
             vs_loc(:) = -vs_loc(:) * bdotgradE_loc / max(1d-50,abs(bdotgradE_loc)) !! eq 3 in PO17
 
             Ecr = max(m%unew(ind,r%iEcr+igrp-1,ind_leaf(i)),smallecr) ! Ecr
-  
+
             ! Flux update ... first rotate flux vector onto B-field,
             ! i.e. describing the flux in the B coordinate system
             f2=0. ; f3=0.
@@ -258,22 +258,22 @@ subroutine cr_source_terms(s,ilevel)
             coef_12 = dt * sigma_x * v1 *three_gmone
             coef_13 = dt * sigma_y * v2 *three_gmone
             coef_14 = dt * sigma_z * v3 *three_gmone
-   
+
             coef_21 = 0.0
             coef_22 = 1.0 + dt * sigma_x * cr_c_two
 
             coef_31 = 0.0
             coef_33 = 1.0 + dt * sigma_y * cr_c_two
-   
+
             coef_41 = 0.0
             coef_44 = 1.0 + dt * sigma_z * cr_c_two
-   
+
             ! newfr1 = (rhs2 - coef21 * newEc)/coef22
             ! newfr2= (rhs3 - coef31 * newEc)/coef33
             ! newfr3 = (rhs4 - coef41 * newEc)/coef44
             ! coef11 - coef21 * coef12 /coef22 - coef13 * coef31 /coef33 - coef41 * coef14 /coef44)* newec
             !    =Ecr - coef12 *rhs2/coef22 - coef13 * rhs3/coef33 - coef14 * rhs4/coef44
-   
+
             e_coef = coef_11 - coef_12 * coef_21/coef_22 - coef_13 * coef_31/coef_33 &
                             - coef_14 * coef_41/coef_44
             new_ec = Ecr - coef_12 * rhs2/coef_22 - coef_13 * rhs3/coef_33 &

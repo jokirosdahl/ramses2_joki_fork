@@ -792,7 +792,7 @@ contains
     call units(sim%r,sim%g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
     ! Mesh spacing in that level
-    dx=sim%r%boxlen/2**ilevel 
+    dx=sim%r%boxlen/2**ilevel
     vol=dx**ndim
 
     ! Supernovae progenitors life time from Myr to proper time in code units
@@ -2304,7 +2304,7 @@ contains
        call compute_father_swap_table<<<num_blocks, num_threads>>>(swap_local, prefix_sum, head_idx, num_octs)
        call GPU_Error_Check(__FILE__, __LINE__)
        call nvtxEndRange()
- 
+
        ! Make new MG octs.
        call nvtxStartRange("GPU build_mg", color=2)!yellow
        if (ifine == ilevel) then

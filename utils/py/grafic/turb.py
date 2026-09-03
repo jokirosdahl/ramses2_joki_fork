@@ -2,7 +2,7 @@
 Turbulent velocity initial condition generator with configurable spectrum types.
 
 This script generates a divergence/rotation-controlled random velocity field
-using spectral filtering between k_min and k_max. It supports 2D (arrays shaped 
+using spectral filtering between k_min and k_max. It supports 2D (arrays shaped
 (n, n, 1)) and 3D (n, n, n) outputs.
 
 Spectrum types:
@@ -25,7 +25,7 @@ outputs upon inverse FFT. Density and pressure are set uniform.
 
 Examples:
   - 3D, level 6, vrms=0.1, k band [2, 16], 50/50 mix, parabolic spectrum:
-      python3 turb.py 6 --size 1.0 --ndim 3 --kmin 1 --kmax 3 --alpha 0.5 --vrms 1.0 
+      python3 turb.py 6 --size 1.0 --ndim 3 --kmin 1 --kmax 3 --alpha 0.5 --vrms 1.0
 
   - 2D, level 9, vrms=0.2, mostly solenoidal, power law spectrum (Kolmogorov slope):
       python3 turb.py 9 --size 1.0 --ndim 2 --kmin 2 --kmax 9 --alpha 0.2 --vrms 0.2 \
@@ -119,7 +119,7 @@ def build_turbulent_velocity(
     kx, ky, kz, kmag = generate_k_grid(n1, n2, n3)
     with np.errstate(invalid="ignore"):
         band = (kmag >= kmin) & (kmag <= kmax)
-        
+
         if spectrum_type == "parabolic":
             # Parabolic band-pass: w(k) ∝ (k - kmin)(kmax - k) within [kmin,kmax]
             envelope = (kmag - kmin) * (kmax - kmag)
@@ -141,7 +141,7 @@ def build_turbulent_velocity(
                 0.5 * (1.0 + np.cos(np.pi * (kmag - kmin) / (k1 - kmin))),
                 1.0
             )
-            # Smooth transition at high-k boundary  
+            # Smooth transition at high-k boundary
             high_transition = np.where(
                 (kmag > k2) & (kmag <= kmax),
                 0.5 * (1.0 + np.cos(np.pi * (kmag - k2) / (kmax - k2))),
@@ -150,7 +150,7 @@ def build_turbulent_velocity(
             envelope *= low_transition * high_transition
         else:
             raise ValueError(f"Unknown spectrum_type: {spectrum_type}. Use 'parabolic' or 'power_law'")
-        
+
         filt = np.sqrt(envelope, dtype=np.float64)
 
     # Avoid division by zero at k=0
@@ -264,9 +264,9 @@ def main():
     parser.add_argument("--ndim", type=int, default=3, help="Output dimensionality: 2 or 3 (default: 3)")
     parser.add_argument("--kmin", type=float, default=2.0, help="Minimum wavenumber for band-pass (>=1)")
     parser.add_argument("--kmax", type=float, default=None, help="Maximum wavenumber for band-pass (<= n/2)")
-    parser.add_argument("--spectrum", type=str, default="parabolic", choices=["parabolic", "power_law"], 
+    parser.add_argument("--spectrum", type=str, default="parabolic", choices=["parabolic", "power_law"],
                        help="Spectrum type: 'parabolic' (band-limited) or 'power_law' (default: parabolic)")
-    parser.add_argument("--slope", type=float, default=-5.0/3.0, 
+    parser.add_argument("--slope", type=float, default=-5.0/3.0,
                        help="Power law slope for spectrum='power_law' (default: -5/3, Kolmogorov)")
     parser.add_argument("--alpha", type=float, default=0.5, help="Compressive fraction [0..1] (1=compressive, 0=solenoidal)")
     parser.add_argument("--vrms", type=float, default=0.1, help="Target RMS velocity magnitude")
@@ -386,5 +386,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

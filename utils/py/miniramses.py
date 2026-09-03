@@ -2134,5 +2134,3 @@ def wr_grafic(dat,header1,header2,fileout):
         for k in range(n3):
             plane = dat[:, :, k]
             f.write_record(plane.T)
-
-

@@ -69,7 +69,7 @@ subroutine open_file(s,filename,nskip,ilun)
   integer(kind=8)::iskip=0
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::noct
   logical::file_exist
-  
+
   associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
 
   ncpufile=g%ncpu/r%nfile
