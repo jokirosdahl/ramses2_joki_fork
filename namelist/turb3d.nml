@@ -5,7 +5,7 @@ Note that you must have the FFTW library properly installed.
 You can specify the location of the FFTW library if needed:
 make NDIM=3 MPI=1 HYDRO=1 TURB=1 FFTW=$HOME/local_fftw
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 ncontrol=1
 nsubcycle=10*1,
@@ -68,11 +68,8 @@ courant_factor=0.8
 slope_type=1
 /
 
-&REFINE_PARAMS 
+&REFINE_PARAMS
 interpol_var=0
 interpol_type=0
 err_grad_p=0.1
 /
-
-
-

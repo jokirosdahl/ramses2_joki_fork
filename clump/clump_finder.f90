@@ -14,7 +14,7 @@ subroutine m_clump_finder(pst,create_output,keep_alive)
   logical::create_output,keep_alive
   !-----------------------------------------------------------------------
   ! This is the master routine for the RAMSES clump finder.
-  !-----------------------------------------------------------------------  
+  !-----------------------------------------------------------------------
   character(LEN=5)::nchar
   character(LEN=flen)::filename,filedir
   integer,dimension(1:flen/4)::input_array
@@ -32,7 +32,7 @@ subroutine m_clump_finder(pst,create_output,keep_alive)
   !--------------------------------------------------------------
   ! Compute rho from dark matter or stars or sinks or gas density
   !--------------------------------------------------------------
-  call m_rho_fine(pst,r%levelmin,r%rho_type_clump) 
+  call m_rho_fine(pst,r%levelmin,r%rho_type_clump)
 
   !-------------------------------------
   ! Find relevant peak patches and halos
@@ -116,7 +116,7 @@ recursive subroutine r_clump_finder(pst)
   else
      call clump_finder(pst%s)
   endif
-  
+
 end subroutine r_clump_finder
 !###########################################################
 !###########################################################
@@ -402,7 +402,7 @@ subroutine collect_test(s)
            end do
         end do
      end do
-     
+
      !-----------------------------------------------------------------------
      ! Sort cells above threshold according to their density
      !-----------------------------------------------------------------------
@@ -431,12 +431,12 @@ subroutine collect_test(s)
      end do
      c%level=iswap
      deallocate(iswap,isort)
-     
+
   endif
 
   end associate
-#endif  
-  
+#endif
+
 end subroutine collect_test
 !###########################################################
 !###########################################################
@@ -487,7 +487,7 @@ subroutine collect_peak(s)
 
   !--------------------------------------------------------
   ! Arrays to define neighbors (center=[0,0,0])
-  ! normalized to dx = 1 = size of the central leaf cell 
+  ! normalized to dx = 1 = size of the central leaf cell
   ! from -0.75 to 0.75
   !--------------------------------------------------------
   ind=0

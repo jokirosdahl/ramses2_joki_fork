@@ -1,7 +1,7 @@
 This namelist contains various input parameters for a 2d shadow test
 from Iliev et al. test 7.
 Compile using:
-make NDIM=2 RT=1 NRTGRP=1 NION=1 MPI=1
+make NDIM=2 DO_RT=1 NRTGRP=1 NION=1 MPI=1
 
 &RUN_PARAMS
 hydro=.true.

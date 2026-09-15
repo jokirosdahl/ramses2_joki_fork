@@ -236,14 +236,14 @@ subroutine cmpdt(r,uu,bb,gg,dx,dt)
   real(kind=8),dimension(1:nvar)::uu
   real(kind=8),dimension(1:ndim)::gg
   real(kind=8),dimension(1:6)::bb
-  
+
   real(kind=8)::dtcell,smallp
   real(kind=8)::b2,a2,c2,cfast2,ctot,grav
   integer::idim
 #if NENER>0
   integer::irad
 #endif
-  
+
   smallp = r%smallc**2/r%gamma
 
   ! Density
@@ -300,7 +300,7 @@ subroutine cmpdt(r,uu,bb,gg,dx,dt)
   do irad = 1,nener
      a2 = a2 + r%gamma_rad(irad)*uu(5+irad)
   end do
-#endif  
+#endif
   a2=a2/uu(1)
 
   ! Compute wave speed (note that we use ndim here, not 3)
@@ -392,7 +392,7 @@ subroutine riemann_llf(qleft,qright,fgdnv,params)
   cmax = max(abs(ul)+cl,abs(ur)+cr)
 
   !===============================
-  ! Compute conservative variables  
+  ! Compute conservative variables
   !===============================
   ! Mass density
   uleft (1) = qleft (1)
@@ -437,7 +437,7 @@ subroutine riemann_llf(qleft,qright,fgdnv,params)
   uright(nprim+1) = qright(5)*entho
 
   !==============================
-  ! Compute left and right fluxes  
+  ! Compute left and right fluxes
   !==============================
   ! Mass density
   fleft (1) = qleft (2)*uleft (1)
@@ -680,7 +680,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
   rl=max(qleft(1),smallr)
   ul=qleft(2); vl=qleft(3); wl=qleft(4)
   Pl=max(qleft(5),rl*smallp)
-  
+
   el=Pl*entho
   ekinl=half*rl*(ul*ul+vl*vl+wl*wl)
   etotl=el+ekinl
@@ -696,12 +696,12 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
      Ptotl=Ptotl+qleft(5+irad)
   end do
 #endif
-  
+
   ! Right variables
   rr=max(qright(1),smallr)
   ur=qright(2); vr=qright(3); wr=qright(4)
   Pr=max(qright(5),rr*smallp)
-  
+
   er=Pr*entho
   ekinr=half*rr*(ur*ur+vr*vr+wr*wr)
   etotr=er+ekinr
@@ -717,7 +717,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
      Ptotr=Ptotr+qright(5+irad)
   end do
 #endif
-  
+
   ! Find the largest eigenvalues in the normal direction to the interface
   cfastl=gamma*Pl
 #if NENER>0
@@ -726,7 +726,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
   end do
 #endif
   cfastl=sqrt(max(cfastl/rl,smallc**2))
-  
+
   cfastr=gamma*Pr
 #if NENER>0
   do irad = 1,nener
@@ -734,19 +734,19 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
   end do
 #endif
   cfastr=sqrt(max(cfastr/rr,smallc**2))
-  
+
   ! Compute HLL wave speed
   SL=min(ul,ur)-max(cfastl,cfastr)
   SR=max(ul,ur)+max(cfastl,cfastr)
-  
+
   ! Compute lagrangian sound speed
   rcl=rl*(ul-SL)
   rcr=rr*(SR-ur)
-  
+
   ! Compute acoustic star state
   ustar   =(rcr*ur   +rcl*ul   +  (Ptotl-Ptotr))/(rcr+rcl)
   Ptotstar=(rcr*Ptotl+rcl*Ptotr+rcl*rcr*(ul-ur))/(rcr+rcl)
-  
+
   ! Left star region variables
   rstarl=rl*(SL-ul)/(SL-ustar)
   etotstarl=((SL-ul)*etotl-Ptotl*ul+Ptotstar*ustar)/(SL-ustar)
@@ -756,7 +756,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
      eradstarl(irad)=eradl(irad)*(SL-ul)/(SL-ustar)
   end do
 #endif
-  
+
   ! Right star region variables
   rstarr=rr*(SR-ur)/(SR-ustar)
   etotstarr=((SR-ur)*etotr-Ptotr*ur+Ptotstar*ustar)/(SR-ustar)
@@ -766,7 +766,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
      eradstarr(irad)=eradr(irad)*(SR-ur)/(SR-ustar)
   end do
 #endif
-  
+
   ! Sample the solution at x/t=0
   if(SL>0d0)then
      ro=rl
@@ -821,7 +821,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
      end do
 #endif
   end if
-  
+
   !=========================
   ! Compute the Godunov flux
   !=========================
@@ -848,7 +848,7 @@ subroutine riemann_hllc(qleft,qright,fgdnv,params)
 #endif
   ! Thermal energy
   fgdnv(nprim+1) = uo*eo
-  
+
 end subroutine riemann_hllc
 !###########################################################
 !###########################################################

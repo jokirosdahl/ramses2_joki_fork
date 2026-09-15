@@ -91,7 +91,7 @@ subroutine courant_fine(r,g,m,ilevel,mass,ekin,eint,emag,dt)
   do igrid=m%head(ilevel),m%tail(ilevel)
 
      ! Loop over cells
-     do ind=1,twotondim                
+     do ind=1,twotondim
 
         ! Gather leaf cells
         if(.NOT. m%grid(igrid)%refined(ind))then

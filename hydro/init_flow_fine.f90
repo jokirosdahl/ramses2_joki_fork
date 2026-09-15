@@ -11,7 +11,7 @@ subroutine m_init_flow_fine(pst,ilevel)
   type(pst_t)::pst
   integer::ilevel
   !--------------------------------------------------------------------
-  ! This routine is the master procedure to input a given initial 
+  ! This routine is the master procedure to input a given initial
   ! condition into the exisiting AMR structure, either from a file
   ! of from an analytical model given as an external routine.
   !--------------------------------------------------------------------
@@ -34,7 +34,7 @@ subroutine m_init_flow_fine(pst,ilevel)
      INQUIRE(file=filename,exist=ok_file2)
      ok_file=ok_file1.or.ok_file2
      if(ok_file)then
-        ! Read external grafic files 
+        ! Read external grafic files
         if(s%r%verbose)write(*,*)'Reading initial conditions from grafic file'
         call r_input_hydro_grafic(pst,ilevel,1)
      else if (s%r%filetype=='gadget')then
@@ -55,4 +55,3 @@ end subroutine m_init_flow_fine
 !###############################################
 !###############################################
 !###############################################
-

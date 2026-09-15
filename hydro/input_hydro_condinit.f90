@@ -14,7 +14,7 @@ recursive subroutine r_input_hydro_condinit(pst,ilevel,input_size)
 
   integer::ilevel
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_INPUT_HYDRO_CONDINIT,pst%iUpper+1,input_size,0,ilevel)
      call r_input_hydro_condinit(pst%pLower,ilevel,input_size)
@@ -22,7 +22,7 @@ recursive subroutine r_input_hydro_condinit(pst,ilevel,input_size)
   else
      call input_hydro_condinit(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
-  
+
 end subroutine r_input_hydro_condinit
 !#########################################################################
 !#########################################################################
@@ -487,7 +487,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
 
   ! Loop over initial conditions regions
   do k=1,r%nregion
-     
+
      ! For "square" regions only:
      if(r%region_type(k) .eq. 'square')then
         ! Exponent of choosen norm
@@ -561,7 +561,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
            end if
         end do
      end if
-     
+
      ! For "point" regions only:
      if(r%region_type(k) .eq. 'point')then
         ! Volume elements
@@ -577,7 +577,7 @@ subroutine region_condinit(r,g,x,q,dx,nn)
            zn=max(1.0-abs(x(i,3)-r%z_center(k))/dx,0.0d0)
 #endif
            weight=xn*yn*zn
-           ! If cell lies within CIC cloud, 
+           ! If cell lies within CIC cloud,
            ! ADD to primitive variables the region values
            q(i,1)=q(i,1)+r%d_region(k)*weight/vol
            q(i,2)=q(i,2)+r%u_region(k)*weight
@@ -605,4 +605,3 @@ end subroutine region_condinit
 !################################################################
 !################################################################
 end module input_hydro_condinit_module
-

@@ -17,9 +17,9 @@ recursive subroutine r_output_poisson(pst,input,input_size)
   type(pst_t)::pst
   integer,VALUE::input_size
   type(in_output_poisson_t)::input
-  
+
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_OUTPUT_POISSON,pst%iUpper+1,input_size,0,input)
      call r_output_poisson(pst%pLower,input,input_size)
@@ -120,7 +120,7 @@ subroutine backup_poisson(r,g,m,mdl,filename)
   enddo
 #endif
   close(ilun)
-     
+
 end subroutine backup_poisson
 !###################################################
 !###################################################

@@ -46,7 +46,7 @@ subroutine m_input_part(pst)
   call r_mass_min_part(pst,pst%s%r%levelmin,1,mp_min,2)
   call r_broadcast_mp_min(pst,mp_min,2)
 
-  ! Check if we should turn on radiation or CR advection 
+  ! Check if we should turn on radiation or CR advection
   ! and update rt groups
   call r_check_part_emission(pst)
 
@@ -91,7 +91,7 @@ recursive subroutine r_broadcast_mp_min(pst,mp_min,input_size)
 
   real(kind=8)::mp_min,mm1
   integer::rID,ilevel
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_BROADCAST_MP_MIN,pst%iUpper+1,input_size,0,mp_min)
      call r_broadcast_mp_min(pst%pLower,mp_min,input_size)

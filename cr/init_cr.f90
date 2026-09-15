@@ -32,7 +32,7 @@ subroutine init_cr(r,m)
   implicit none
   type(run_t)::r
   type(mesh_t)::m
-  
+
   ! Initialise workspace for hydro kernels
   associate(h => m%cr_w)
     call h%kernel_1%init(2)

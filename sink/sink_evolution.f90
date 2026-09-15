@@ -296,8 +296,8 @@ contains
 #endif
 #ifdef MHD
     real(kind=8)::bx,by,bz,emag
-#endif   
-   
+#endif
+
 #ifdef HYDRO
 #if NDIM==3
     associate(r=>s%r,g=>s%g,m=>s%m)
@@ -357,7 +357,7 @@ contains
        vv(2)            = m%uold(icelln,3,igridn)/d
        vv(3)            = m%uold(icelln,4,igridn)/d
        e                = m%uold(icelln,5,igridn)
-      
+
        ! We need to remove all non-thermal energies as they are not accreted
 #ifdef MHD
        ! Deal with MHD

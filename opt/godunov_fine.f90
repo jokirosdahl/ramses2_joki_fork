@@ -41,7 +41,7 @@ subroutine godunov_fine(s,ilevel)
   ! This routine is a wrapper to the second order Godunov solver.
   ! Small grids (2x2x2) are gathered from level ilevel and sent to the
   ! hydro solver. On entry, hydro variables are gathered from array uold.
-  ! On exit, unew has been updated. 
+  ! On exit, unew has been updated.
   !--------------------------------------------------------------------------
   type(msg_large_realdp)::dummy_large_realdp
   integer::igrid
@@ -57,7 +57,7 @@ subroutine godunov_fine(s,ilevel)
 
   ! Collect or create all boundary (ghost) octs.
   ! These could be octs at processor domain boundaries,
-  ! octs at the physical domain boundaries, 
+  ! octs at the physical domain boundaries,
   ! or octs at coarse-fine boundaries.
 
   call make_boundaries(s,ilevel)
@@ -178,7 +178,7 @@ subroutine set_uold(r,g,m,ilevel)
   type(mesh_t)::m
   integer::ilevel
   !---------------------------------------------------------
-  ! This routine sets array uold to its new value unew 
+  ! This routine sets array uold to its new value unew
   ! after the hydro step.
   !---------------------------------------------------------
   integer::i
@@ -217,10 +217,10 @@ subroutine godfine1(s,ind_grid,ilevel,h)
   ! This routine gathers first hydro variables from neighboring grids
   ! to set initial conditions in a 6x6x6 grid. It interpolate from
   ! coarser level missing grid variables. It then calls the
-  ! Godunov solver that computes fluxes. These fluxes are zeroed at 
+  ! Godunov solver that computes fluxes. These fluxes are zeroed at
   ! coarse-fine boundaries, since contribution from finer levels has
-  ! already been taken into account. Conservative variables are updated 
-  ! and stored in array unew(:), both at the current level and at the 
+  ! already been taken into account. Conservative variables are updated
+  ! and stored in array unew(:), both at the current level and at the
   ! coarser level if necessary.
   !-------------------------------------------------------------------
   integer::ivar,idim,ind_son,ind_oct
@@ -313,7 +313,7 @@ subroutine godfine1(s,ind_grid,ilevel,h)
            ! Loop over 2x2x2 cells
            do k2=k2min,k2max
               do j2=j2min,j2max
-                 do i2=i2min,i2max                       
+                 do i2=i2min,i2max
                     ind_son=1+i2+2*j2+4*k2
                     i3=1; j3=1; k3=1
                     i3=1+2*(i1-1)+i2
@@ -322,7 +322,7 @@ subroutine godfine1(s,ind_grid,ilevel,h)
 #endif
 #if NDIM>2
                     k3=1+2*(k1-1)+k2
-#endif             
+#endif
                     ! Gather hydro variables
                     do ivar=1,nvar
                        h%uloc(i3,j3,k3,ivar)=m%uold(ind_son,ivar,ichild)
@@ -706,7 +706,7 @@ subroutine godfine1(s,ind_grid,ilevel,h)
      end do
      !-----------------------
      ! Right flux at boundary
-     !-----------------------     
+     !-----------------------
      if(idim==1)then
         ii1min=i1max; ii1max=i1max
      endif

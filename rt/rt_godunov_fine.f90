@@ -42,7 +42,7 @@ subroutine rt_godunov_fine(s,ilevel)
   ! This routine is a wrapper to the second order Godunov solver.
   ! Small grids (2x2x2) are gathered from level ilevel and sent to the
   ! hydro solver. On entry, hydro variables are gathered from array rtuold.
-  ! On exit, rtunew has been updated. 
+  ! On exit, rtunew has been updated.
   !--------------------------------------------------------------------------
   integer::igrid
 
@@ -194,7 +194,7 @@ subroutine set_rtuold(r, g, m, ilevel)
   integer :: ilevel
   real(kind=8)::Npc,fred
   !---------------------------------------------------------
-  ! This routine sets array rtuold to its new value rtunew 
+  ! This routine sets array rtuold to its new value rtunew
   ! after the hydro step.
   !---------------------------------------------------------
   integer :: i, j, ig, iN
@@ -263,10 +263,10 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   ! This routine gathers first RT variables from neighboring grids
   ! to set initial conditions in a 6x6x6 grid. It interpolate from
   ! coarser level missing grid variables. It then calls the
-  ! Godunov solver that computes fluxes. These fluxes are zeroed at 
+  ! Godunov solver that computes fluxes. These fluxes are zeroed at
   ! coarse-fine boundaries, since contribution from finer levels has
-  ! already been taken into account. Conservative variables are updated 
-  ! and stored in array rtunew(:), both at the current level and at the 
+  ! already been taken into account. Conservative variables are updated
+  ! and stored in array rtunew(:), both at the current level and at the
   ! coarser level if necessary.
   !-------------------------------------------------------------------
   integer::ivar,idim,ind_son,ind_oct
@@ -398,7 +398,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
 #endif
 #if NDIM>2
                        k3=1+2*(kk1-1)+k2
-#endif             
+#endif
                        ! Gather RT variables
                        do ivar=1,nrtvar
 #ifdef DO_RT
@@ -434,7 +434,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
                     if(hash_nbor(idim)>=m%box_ckey_max(idim,ilevel))hash_nbor(idim)=m%box_ckey_min(idim,ilevel)
                  endif
               enddo
-              
+
               ! Set grid index to null
               icell=0
               igrid=0
@@ -669,7 +669,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
      kk1min=k1min+kk0; kk1max=k1max-kk0
      !----------------------
      ! Left flux at boundary
-     !----------------------     
+     !----------------------
      if(idim==1)then
         ii1min=i1min; ii1max=i1min
      endif
@@ -725,7 +725,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
      end do
      !-----------------------
      ! Right flux at boundary
-     !-----------------------     
+     !-----------------------
      if(idim==1)then
         ii1min=i1max; ii1max=i1max
      endif
@@ -791,7 +791,7 @@ subroutine rt_godfine1(s,ind_grid,ilevel,h)
   !----------------
   do k1=k1min,k1max
      do j1=j1min,j1max
-        do i1=i1min,i1max     
+        do i1=i1min,i1max
            ! Check if in kernel
            if(.not.h%inkernel(i1,j1,k1))cycle
            ! Get oct index

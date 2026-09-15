@@ -29,7 +29,7 @@ subroutine m_update_time(pst,ilevel,done)
 #ifdef _METAL
   real(kind=8), external :: wallclock
 #endif
-  
+
   associate(r=>pst%s%r,g=>pst%s%g,m=>pst%s%m,p=>pst%s%p,mdl=>pst%s%mdl)
 
   ! Local constants
@@ -43,7 +43,7 @@ subroutine m_update_time(pst,ilevel,done)
 #endif
 
   ! Update the outer lightcone shell boundary after restart
-  if(g%first_coarse_restart)then 
+  if(g%first_coarse_restart)then
       g%aexp_old = g%aexp
       g%first_coarse_restart = .false.
   end if
@@ -81,7 +81,7 @@ subroutine m_update_time(pst,ilevel,done)
      end if
 
      if(mod(g%nstep_coarse,r%ncontrol)==0.or.g%output_done)then
-           
+
         !-------------------------------
         ! Output AMR structure to screen
         !-------------------------------
@@ -192,7 +192,7 @@ subroutine m_update_time(pst,ilevel,done)
      end if
   end if
 888 format(' Fine step= ',i0,' t=',1pe12.5,' dt=',1pe10.3,' a=',1pe10.3,' mem=',0pF0.1,'% ',0pF0.1,'% ',0pF0.1,'%')
- 
+
   !------------------------
   ! Update time variables
   !------------------------
@@ -332,7 +332,7 @@ subroutine getmem(outmem)
   else
      read_status=-1000
   endif
-  
+
   if (read_status < 0)then
      outmem=0.
      if (read_status .ne. -1000)write(*,*)'Problem in checking free memory'

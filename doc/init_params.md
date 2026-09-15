@@ -1,5 +1,5 @@
 This sets of parameters, contained in the namelist block `&INIT_PARAMS`. This is used to set up the initial conditions.
- 
+
 | Variable name, syntax, default value | Fortran type | Description |
 |:---------------------------- |:------------- |:------------------------- |
 | `initfile=' ' ` | `80*char` | Directory where IC files are stored.

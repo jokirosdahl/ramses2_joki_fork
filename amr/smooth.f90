@@ -65,11 +65,11 @@ subroutine smooth_fine(s,ilevel,nflag)
   integer::ilevel,nflag
   ! -------------------------------------------------------------------
   ! Dilatation operator.
-  ! This routine makes one cell width cubic buffer around flag1 cells 
+  ! This routine makes one cell width cubic buffer around flag1 cells
   ! at level ilevel by following these 3 steps:
-  ! step 1: flag1 cells with at least 1 flag1 neighbors (if ndim > 0) 
-  ! step 2: flag1 cells with at least 2 flag1 neighbors (if ndim > 1) 
-  ! step 3: flag1 cells with at least 2 flag1 neighbors (if ndim > 2) 
+  ! step 1: flag1 cells with at least 1 flag1 neighbors (if ndim > 0)
+  ! step 2: flag1 cells with at least 2 flag1 neighbors (if ndim > 1)
+  ! step 3: flag1 cells with at least 2 flag1 neighbors (if ndim > 2)
   ! Array flag2 is used as temporary workspace.
   ! -------------------------------------------------------------------
   integer::ismooth,count_nbor,ig,in

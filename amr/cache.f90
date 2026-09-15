@@ -385,7 +385,7 @@ subroutine open_cache(mdl, m, pack_size, pack, unpack, init, flush, combine, bou
   do icpu=1,mdl%nbuffer_flush
      mdl%send_flush(icpu)%array(1)=0
   end do
-  
+
   ! Post the first RECV for request
   call MPI_IRECV(mdl%recv_request_array,mdl%size_request_array,MPI_INTEGER,MPI_ANY_SOURCE,request_tag,MPI_COMM_WORLD,mdl%request_id,info)
 

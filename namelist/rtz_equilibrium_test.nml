@@ -1,9 +1,9 @@
-This namelist contains various input parameters for a 1 zone RTZ EQM test. Set rtz_equilibrium_test=1 for 
+This namelist contains various input parameters for a 1 zone RTZ EQM test. Set rtz_equilibrium_test=1 for
 equilibrium cooling curves or 2 for ionization states in T=[1e2,1e8] at fixed density
 Compile using:
-make NDIM=1 INIT=RTZEQM RT=1 RTZ=1 NRTGRP=1 NMETAL=10 N_HYDROGEN_IONS=2 N_H2=1 N_HELIUM_IONS=3 N_CARBON_IONS=7 N_NITROGEN_IONS=8 N_OXYGEN_IONS=9 N_NEON_IONS=11 N_MAGNESIUM_IONS=13 N_SILICON_IONS=15 N_SULFUR_IONS=17 N_IRON_IONS=27 NVECTOR=1
+make NDIM=1 INIT=RTZEQM DO_RT=1 DO_RTZ=1 NRTGRP=1 NMETAL=10 N_HYDROGEN_IONS=2 N_H2=1 N_HELIUM_IONS=3 N_CARBON_IONS=7 N_NITROGEN_IONS=8 N_OXYGEN_IONS=9 N_NEON_IONS=11 N_MAGNESIUM_IONS=13 N_SILICON_IONS=15 N_SULFUR_IONS=17 N_IRON_IONS=27 NVECTOR=1
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 rt=.false.
 ncontrol=1
@@ -74,9 +74,7 @@ is_init_xion=.true.
 z_ave = 1.d0
 /
 
-&REFINE_PARAMS 
+&REFINE_PARAMS
 interpol_var=0
 interpol_type=0
 /
-
-

@@ -32,4 +32,3 @@ module cub_module
     end subroutine
   end interface
 end module
-

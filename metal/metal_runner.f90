@@ -615,7 +615,7 @@ subroutine metal_refine(sim, ilevel, nmake, nkill)
   ! --- Step 5: level bucket sort on [head_child .. new_ifree-1] --------------
   head_child = int(sim%m%tail(ilevel) + 1, c_int)
   n_all      = new_ifree - head_child   ! total slots in child region
-  
+
   if (n_all > 0) then
      ! Init identity permutation.
      call mtl_init_swap_table(head_child, n_all)

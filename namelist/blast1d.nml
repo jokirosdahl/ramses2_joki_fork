@@ -2,7 +2,7 @@ This namelist contains input parameters for the 1D blastwave test.
 Compile the code using:
 make NDIM=1 HYDRO=1
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 nremap=10
 ncontrol=10
@@ -53,11 +53,10 @@ slope_type=2
 riemann='hllc'
 /
 
-&REFINE_PARAMS 
+&REFINE_PARAMS
 err_grad_d=0.01
 err_grad_u=0.01
 err_grad_p=0.01
 interpol_var=0
 interpol_type=2
 /
-

@@ -24,6 +24,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
 #define OT 5
 #define PONO 6
 #define CURRENTSHEET 7
+#define CR_LOOP 8
 
   integer::i
 #if INIT==LOOP
@@ -35,6 +36,9 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
 #if INIT==PONO
   real(kind=8)::A0, twopi, xx, yy, zz, rr, tt
 #endif
+#if INIT==CR_LOOP
+  real(kind=8)::A0, xx, yy
+#endif
 #if INIT==CURRENTSHEET
   real(kind=8)::B0, pi, xx, yy, tt
 #else
@@ -42,7 +46,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      A(i)=0.0
   end do
 #endif
-  
+
 #if INIT==LOOP
   R0 = 0.3
   A0 = 1d-3
@@ -102,6 +106,17 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      else
         A(i) = B0*(xx - 2.0)
      endif
+  end do
+#endif
+
+#if INIT==CR_LOOP
+  A0 = 1d0
+  do i = 1,nn
+     xx = x(i,1)-r%box_size(1)/2.0
+     yy = x(i,2)-r%box_size(2)/2.0
+     if(idim==1)A(i) = 0.0
+     if(idim==2)A(i) = 0.0
+     if(idim==3)A(i) = A0*(-sqrt(xx**2+yy**2))
   end do
 #endif
 

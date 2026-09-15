@@ -88,7 +88,7 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
+  dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
 
   ! Supernovae progenitors life time from Myr to proper time in code units
@@ -184,7 +184,7 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
 #if NENER>0
         do igrp=1,ncrgrp
           m%unew(icell,r%iEcr+igrp-1,igrid) = m%unew(icell,r%iEcr+igrp-1,igrid) + ethermal * r%fecr(igrp)
-        enddo      
+        enddo
 #endif
      endif
 
@@ -206,7 +206,7 @@ subroutine thermal_feedback(s,p,ilevel,msn_loc)
   call close_cache(mdl)
 
 end associate
-#endif  
+#endif
 #endif
 end subroutine thermal_feedback
 !##############################################################################
@@ -378,7 +378,7 @@ subroutine mechanical_feedback(s,p,ilevel,msn_loc)
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
 
   ! Mesh spacing in that level
-  dx_loc=r%boxlen/2**ilevel 
+  dx_loc=r%boxlen/2**ilevel
   vol_loc=dx_loc**ndim
 
   ! Supernovae progenitors life time from Myr to proper time in code units
@@ -561,7 +561,7 @@ subroutine mechanical_feedback(s,p,ilevel,msn_loc)
         do igrp=1,ncrgrp
           m%unew(icell,r%iEcr+igrp-1,igrid) = m%unew(icell,r%iEcr+igrp-1,igrid) + e_SN_crs(igrp) * dloss
           m%unew(icell,5,igrid) = m%unew(icell,5,igrid) + e_SN_crs(igrp) * dloss
-        enddo      
+        enddo
 #endif
      endif
 

@@ -86,7 +86,7 @@ subroutine interpol_hydro(u1,u2,interpol_var,interpol_type,smallr)
 
   end do
   ! End loop over variables
-  
+
   ! If necessary, convert children internal energy into total energy
   if(interpol_var==1)then
      do ind=1,twotondim

@@ -403,7 +403,7 @@ contains
     integer :: bit(3)
 
     ilev_par = hash_nbor(0) - 1
-    
+
     ix = hash_nbor(1) / 2
     iy = hash_nbor(2) / 2
     iz = hash_nbor(3) / 2
@@ -1554,7 +1554,7 @@ contains
     integer, value :: nsink
     real(kind=dp), value :: boxlen
     integer, value :: hash_size
-    
+
     integer :: ipart, gid, tid, idim, igrid, icell
     integer(kind=8) :: hash_cell(0:3)
     real(kind=dp) :: dx_loc

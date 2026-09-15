@@ -7,7 +7,7 @@
 !  uin         => (const)  input state
 !  gravin      => (const)  input gravitational acceleration
 !  iu1,iu2     => (const)  first and last index of input array,
-!  ju1,ju2     => (const)  cell centered,    
+!  ju1,ju2     => (const)  cell centered,
 !  ku1,ku2     => (const)  including buffer cells.
 !  flux       <=  (modify) return fluxes in the 3 coord directions
 !  if1,if2     => (const)  first and last index of output array,
@@ -94,7 +94,7 @@ subroutine unsplit(uin,gravin,qin,cin,flux,tmp,dq,qm,qp,fx,tx,divu,&
   jlo=MIN(1,ju1+2); jhi=MAX(1,ju2-2)
   klo=MIN(1,ku1+2); khi=MAX(1,ku2-2)
 
-  ! Translate to primative variables, compute sound speeds  
+  ! Translate to primative variables, compute sound speeds
   call ctoprim(uin,qin,cin,gravin, &
 #ifdef MHD
        & bin,bf, &
@@ -588,7 +588,7 @@ subroutine trace2d(q,dq,qm,qp, &
            sAR0 = +(ERR-ERL)
            sBL0 = -(ERL-ELL)
            sBR0 = -(ERR-ELR)
-           
+
            AL = AL + sAL0*dtdx*half
            AR = AR + sAR0*dtdx*half
            BL = BL + sBL0*dtdx*half
@@ -1094,7 +1094,7 @@ subroutine trace3d(q,dq,qm,qp, &
               su0 = su0 - (dex(irad))/r
               sv0 = sv0 - (dey(irad))/r
               sw0 = sw0 - (dez(irad))/r
-              se0(irad) = -u*dex(irad)-v*dey(irad)-w*dez(irad) & 
+              se0(irad) = -u*dex(irad)-v*dey(irad)-w*dez(irad) &
                    & - (dux+dvy+dwz)*gamma_rad(irad)*e(irad)
            end do
 #endif
@@ -1561,7 +1561,7 @@ subroutine cmpflxm(qm,im1,im2,jm1,jm2,km1,km2, &
               write(*,*)'unknown Riemann solver'
               stop
            end if
-           
+
            ! Compute fluxes
            flx(i,j,k,1  ) = fgdnv(1) ! Mass density
            flx(i,j,k,ln ) = fgdnv(2) ! Normal momentum
@@ -1587,7 +1587,7 @@ subroutine cmpflxm(qm,im1,im2,jm1,jm2,km1,km2, &
         end do
      end do
   end do
-  
+
 end subroutine cmpflxm
 !###########################################################
 !###########################################################
@@ -1741,7 +1741,7 @@ subroutine ctoprim(uin,q,c,gravin, &
 #endif
   real(kind=8),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:ndim)::gravin
   real(kind=8),dimension(iu1:iu2,ju1:ju2,ku1:ku2,1:nprim)::q
-  real(kind=8),dimension(iu1:iu2,ju1:ju2,ku1:ku2)::c  
+  real(kind=8),dimension(iu1:iu2,ju1:ju2,ku1:ku2)::c
 
   real(kind=8)::eint, dtxhalf, oneoverrho
   real(kind=8)::ekin, erad, emag
@@ -1811,7 +1811,7 @@ subroutine ctoprim(uin,q,c,gravin, &
 
            ! Compute density
            q(i,j,k,1) = max(uin(i,j,k,1),smallr)
-           
+
            ! Compute velocities
            oneoverrho = one/q(i,j,k,1)
            q(i,j,k,2) = uin(i,j,k,2)*oneoverrho
@@ -1855,7 +1855,7 @@ subroutine ctoprim(uin,q,c,gravin, &
            enddo
 #endif
            c(i,j,k)=sqrt(c(i,j,k)*oneoverrho)
-           
+
            ! Gravity predictor step
            q(i,j,k,2) = q(i,j,k,2) + gravin(i,j,k,1)*dtxhalf
 #if NDIM>1
@@ -1881,7 +1881,7 @@ subroutine ctoprim(uin,q,c,gravin, &
      end do
   end do
 #endif
- 
+
 end subroutine ctoprim
 !###########################################################
 !###########################################################
@@ -1923,7 +1923,7 @@ subroutine uslope(q,dq, &
   real(kind=8)::dfllr,dflmr,dflrr,dfmlr,dfmmr,dfmrr,dfrlr,dfrmr,dfrrr
   real(kind=8)::dfx,dfy,dfz,dff
 #endif
-  
+
   ilo=MIN(1,iu1+1); ihi=MAX(1,iu2-1)
   jlo=MIN(1,ju1+1); jhi=MAX(1,ju2-1)
   klo=MIN(1,ku1+1); khi=MAX(1,ku2-1)
@@ -1997,7 +1997,7 @@ subroutine uslope(q,dq, &
   end if
 #endif
 
-#if NDIM==2              
+#if NDIM==2
   if(slope_type==0)then
      dq = zero
   else if(slope_type==1.or.slope_type==2)then  ! minmod or average
@@ -2041,22 +2041,22 @@ subroutine uslope(q,dq, &
                  dfrl = q(i+1,j-1,k,n)-q(i,j,k,n)
                  dfrm = q(i+1,j  ,k,n)-q(i,j,k,n)
                  dfrr = q(i+1,j+1,k,n)-q(i,j,k,n)
-                 
+
                  vmin = min(dfll,dflm,dflr,dfml,dfmm,dfmr,dfrl,dfrm,dfrr)
                  vmax = max(dfll,dflm,dflr,dfml,dfmm,dfmr,dfrl,dfrm,dfrr)
-                 
+
                  dfx  = half*(q(i+1,j,k,n)-q(i-1,j,k,n))
                  dfy  = half*(q(i,j+1,k,n)-q(i,j-1,k,n))
                  dff  = half*(abs(dfx)+abs(dfy))
-                 
+
                  if(dff>zero)then
                     slop = min(one,min(abs(vmin),abs(vmax))/dff)
                  else
                     slop = one
                  endif
-                 
+
                  dlim = slop
-                 
+
                  dq(i,j,k,n,1) = dlim*dfx
                  dq(i,j,k,n,2) = dlim*dfy
               end do
@@ -2201,7 +2201,7 @@ subroutine uslope(q,dq, &
                  dfrll = q(i+1,j-1,k-1,n)-q(i,j,k,n)
                  dfrml = q(i+1,j  ,k-1,n)-q(i,j,k,n)
                  dfrrl = q(i+1,j+1,k-1,n)-q(i,j,k,n)
-                 
+
                  dfllm = q(i-1,j-1,k  ,n)-q(i,j,k,n)
                  dflmm = q(i-1,j  ,k  ,n)-q(i,j,k,n)
                  dflrm = q(i-1,j+1,k  ,n)-q(i,j,k,n)
@@ -2211,7 +2211,7 @@ subroutine uslope(q,dq, &
                  dfrlm = q(i+1,j-1,k  ,n)-q(i,j,k,n)
                  dfrmm = q(i+1,j  ,k  ,n)-q(i,j,k,n)
                  dfrrm = q(i+1,j+1,k  ,n)-q(i,j,k,n)
-                 
+
                  dfllr = q(i-1,j-1,k+1,n)-q(i,j,k,n)
                  dflmr = q(i-1,j  ,k+1,n)-q(i,j,k,n)
                  dflrr = q(i-1,j+1,k+1,n)-q(i,j,k,n)
@@ -2221,31 +2221,31 @@ subroutine uslope(q,dq, &
                  dfrlr = q(i+1,j-1,k+1,n)-q(i,j,k,n)
                  dfrmr = q(i+1,j  ,k+1,n)-q(i,j,k,n)
                  dfrrr = q(i+1,j+1,k+1,n)-q(i,j,k,n)
-                 
+
                  vmin = min(dflll,dflml,dflrl,dfmll,dfmml,dfmrl,dfrll,dfrml,dfrrl, &
                       &     dfllm,dflmm,dflrm,dfmlm,dfmmm,dfmrm,dfrlm,dfrmm,dfrrm, &
                       &     dfllr,dflmr,dflrr,dfmlr,dfmmr,dfmrr,dfrlr,dfrmr,dfrrr)
                  vmax = max(dflll,dflml,dflrl,dfmll,dfmml,dfmrl,dfrll,dfrml,dfrrl, &
                       &     dfllm,dflmm,dflrm,dfmlm,dfmmm,dfmrm,dfrlm,dfrmm,dfrrm, &
                       &     dfllr,dflmr,dflrr,dfmlr,dfmmr,dfmrr,dfrlr,dfrmr,dfrrr)
-                 
+
                  dfx  = half*(q(i+1,j,k,n)-q(i-1,j,k,n))
                  dfy  = half*(q(i,j+1,k,n)-q(i,j-1,k,n))
                  dfz  = half*(q(i,j,k+1,n)-q(i,j,k-1,n))
                  dff  = half*(abs(dfx)+abs(dfy)+abs(dfz))
-                 
+
                  if(dff>zero)then
                     slop = min(one,min(abs(vmin),abs(vmax))/dff)
                  else
                     slop = one
                  endif
-                 
+
                  dlim = slop
-                 
+
                  dq(i,j,k,n,1) = dlim*dfx
                  dq(i,j,k,n,2) = dlim*dfy
                  dq(i,j,k,n,3) = dlim*dfz
-                 
+
               end do
            end do
         end do
@@ -2340,7 +2340,7 @@ subroutine uslope(q,dq, &
   endif
 #endif
 #endif
-  
+
 end subroutine uslope
 !###########################################################
 !###########################################################

@@ -104,7 +104,7 @@ FUNCTION charge_transfer_ionization(ion, nelem, T) result(rate)
   ! Example:  O + H+ => O+ + H is HCTIon(1,8,1e4)
   ! Note that temperature is in linear scale
   implicit none
-  
+
   integer, intent(in):: ion, nelem
   real(KIND=8), intent(in):: T
   real(KIND=8):: rate
@@ -116,7 +116,7 @@ FUNCTION charge_transfer_ionization(ion, nelem, T) result(rate)
   rate = 0.d0
 
   ipIon = ion
-  if (ipIon.gt.3) then 
+  if (ipIon.gt.3) then
      rate = 0.d0
      return
   end if

@@ -7,7 +7,7 @@ program amr2map
   implicit none
 
   integer,parameter::flen=200
-  
+
   integer::ndim,twotondim,nvar
   integer::n,i,j,k,type=0,dopeak=0,domax=0,dograv=0,dort=0,backup=0
   integer::ivar,lmax=0
@@ -47,7 +47,7 @@ program amr2map
   real(KIND=8),dimension(:,:),allocatable::uold
   real(KIND=4),dimension(:,:),allocatable::qold
 
-  type level  
+  type level
      integer::ilevel
      real(KIND=8),dimension(:,:),pointer::map
      real(KIND=8),dimension(:,:),pointer::rho
@@ -69,10 +69,10 @@ program amr2map
      integer::nhilbert
      integer(kind=8),dimension(:,:,:),allocatable::bound_key
   end type params
-  
+
   type(level),dimension(1:100)::mapgrid
   type(params)::p
-  
+
   write(*,*)'Starting amr2map'
 
   ! Read amr2map parameters
@@ -92,7 +92,7 @@ program amr2map
   ndim=p%ndim
   twotondim=2**ndim
   nvar=p%nvar
-  
+
   !------------------------------
   ! Set up geometry parameters
   !------------------------------
@@ -164,7 +164,7 @@ program amr2map
      allocate(qold(1:twotondim,1:nvar))
   endif
 
-  ! Loop over levels 
+  ! Loop over levels
   do ilevel=p%levelmin,lmax
 
      dx=0.5**ilevel
@@ -178,7 +178,7 @@ program amr2map
 !     call cmp_cpu_list(xmin,xmax,ymin,ymax,zmin,zmax,ilevel,ncpu_read,cpu_list)
      ncpu_read=p%ncpu
      cpu_list(1)=1
-     
+
      ! Loop over processor files
      do k=1,ncpu_read
         icpu=k !cpu_list(k)
@@ -304,7 +304,7 @@ program amr2map
                     else
                        map = rho*pres
                     endif
-                 case (66) ! H2 fraction 
+                 case (66) ! H2 fraction
                     metmax = max(metmax,real(qold(ind,type),kind=8))
                     if(do_max)then
                        map = qold(ind,type)
@@ -364,7 +364,7 @@ program amr2map
 
      end do
      ! End loop over cpu
-     
+
   end do
   ! End loop over levels
 
@@ -469,7 +469,7 @@ program amr2map
            end do
            write(20,*) " "
         end do
-     else  
+     else
         if(ny_sample==0)ny_sample=nx_sample
         allocate(filemap(0:nx_sample,0:ny_sample))
         do i=0,nx_sample
@@ -498,18 +498,18 @@ program amr2map
   endif
 
 contains
-  
+
   subroutine read_params
-    
+
     implicit none
-    
+
     integer       :: i,n
     integer       :: iargc
     character(len=4)   :: opt
     character(len=128) :: arg
     LOGICAL       :: bad, ok
     real(kind=8)  :: xcen=0.5,ycen=0.5,zcen=0.5,rad=0
-    
+
     n = iargc()
     if (n < 4) then
        print *, 'usage: amr2map   -inp  input_dir'
@@ -550,7 +550,7 @@ contains
        print *, ' maxi : 1 = maximum along line of sight'
        stop
     end if
-    
+
     do i = 1,n,2
        call getarg(i,opt)
        if (i == n) then
@@ -564,7 +564,7 @@ contains
        case ('-out')
           outfich = trim(arg)
        case ('-dir')
-          proj = trim(arg) 
+          proj = trim(arg)
        case ('-xce')
           read (arg,*) xcen
        case ('-yce')
@@ -607,7 +607,7 @@ contains
           print '("unknown option ",a2," ignored")', opt
        end select
     end do
-    
+
     do_max=.false.
     if(domax==1)do_max=.true.
     do_grav=.false.
@@ -625,10 +625,10 @@ contains
        zmin=zcen-rad
        zmax=zcen+rad
     endif
-    
+
     return
-    
-  end subroutine read_params  
+
+  end subroutine read_params
   !================================================================
   !================================================================
   !================================================================
@@ -640,9 +640,9 @@ contains
     character(LEN=128)::nomfich
     integer::ilun,ilevel,noutput,skip
     integer::nfile,ncpu
-    
+
     nomfich=TRIM(repository)//'/params.bin'
-    
+
     ilun=10
     open(unit=ilun,file=nomfich,access="stream",action="read",form='unformatted')
     read(ilun,POS=1)nfile
@@ -699,20 +699,20 @@ function check_ramses_exist(repository)
   character(LEN=128)::nomfich
   character(LEN=128)::nomfich_grav
   logical::ok,ok_hydro,ok_grav
-  
+
   check_ramses_exist=.true.
   ipos=INDEX(repository,'output_')
   nomfich_grav=TRIM(repository)//'/grav.00001'
-  inquire(file=nomfich_grav, exist=ok_grav) ! verify input file 
+  inquire(file=nomfich_grav, exist=ok_grav) ! verify input file
   nomfich=TRIM(repository)//'/hydro.00001'
-  inquire(file=nomfich, exist=ok_hydro) ! verify input file 
+  inquire(file=nomfich, exist=ok_hydro) ! verify input file
   if ( .not. ok_grav .and. .not. ok_hydro ) then
      print *,TRIM(nomfich_grav)//' not found.'
      print *,TRIM(nomfich)//' not found.'
      check_ramses_exist=.false.
   endif
   nomfich=TRIM(repository)//'/amr.00001'
-  inquire(file=nomfich, exist=ok) ! verify input file 
+  inquire(file=nomfich, exist=ok) ! verify input file
   if ( .not. ok ) then
      print *,TRIM(nomfich)//' not found.'
      check_ramses_exist=.false.
@@ -723,7 +723,7 @@ function check_ramses_exist(repository)
      print *,TRIM(nomfich)//' not found.'
      check_ramses_exist=.false.
   endif
-  
+
 end function check_ramses_exist
 !================================================================
 !================================================================
@@ -806,7 +806,7 @@ end subroutine title
 !!$     kmin=int(zmin*dble(maxdom))
 !!$     kmax=kmin+1
 !!$  endif
-!!$  
+!!$
 !!$  ndom=1
 !!$  if(bit_length>0)ndom=8
 !!$  idom(1)=imin; idom(2)=imax
@@ -821,7 +821,7 @@ end subroutine title
 !!$  kdom(3)=kmin; kdom(4)=kmin
 !!$  kdom(5)=kmax; kdom(6)=kmax
 !!$  kdom(7)=kmax; kdom(8)=kmax
-!!$  
+!!$
 !!$  one_key=0
 !!$  one_key(1)=1
 !!$  do i=1,ndom
@@ -861,7 +861,7 @@ end subroutine title
 !!$        endif
 !!$     end do
 !!$  end do
-!!$  
+!!$
 !!$  ncpu_read=0
 !!$  do i=1,ndom
 !!$     do j=cpu_min(i),cpu_max(i)

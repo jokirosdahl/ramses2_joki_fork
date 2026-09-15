@@ -17,7 +17,7 @@ subroutine rt_flag(s,ilevel)
   integer::ilevel
   ! -------------------------------------------------------------------
   ! This routine flag for refinement cells that satisfies
-  ! some user-defined physical criteria at the level ilevel. 
+  ! some user-defined physical criteria at the level ilevel.
   ! -------------------------------------------------------------------
   integer,dimension(1:3,1:8),save::iii=reshape(&
        & (/0,0,0,1,0,0,0,1,0,1,1,0,0,0,1,1,0,1,0,1,1,1,1,1/),(/3,8/))
@@ -100,7 +100,7 @@ subroutine rt_flag(s,ilevel)
               uug(ivar)=m%rtuold(icellg,ivar,igridg)*c_factor(2*idim-1)
               uum(ivar)=m%rtuold(ind,ivar,igrid)*g%rt_c(ilevel)
               uud(ivar)=m%rtuold(icelld,ivar,igridd)*c_factor(2*idim)
-#endif 
+#endif
            end do
            call rt_refine(r,uug,uum,uud,ok)
         end do

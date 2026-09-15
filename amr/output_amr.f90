@@ -84,7 +84,7 @@ subroutine m_dump_all(pst,write_bkp_file)
         write(*,*)'Writing output file to disk in '//TRIM(filedir)
      endif
      ttstart = mdl_wtime(mdl)
-     
+
      if(r%verbose)write(*,*)'Writing header files'
      if(r%part)then
         filename=TRIM(filedir)//'part_header.txt'
@@ -162,7 +162,7 @@ subroutine m_dump_all(pst,write_bkp_file)
      else
         if(r%verbose)write(*,*)'Skipping AMR files'
      endif
-     
+
      ! Output HYDRO data
      if(r%hydro)then
         filename=TRIM(filedir)//'hydro.'
@@ -216,11 +216,11 @@ subroutine m_dump_all(pst,write_bkp_file)
 
      ttend = mdl_wtime(mdl)
      print '(A,F0.7)',' Time elapsed writing to disk: ',ttend-ttstart
-     
+
   end if
 
   end associate
-  
+
 end subroutine m_dump_all
 !#########################################################################
 !#########################################################################
@@ -239,10 +239,10 @@ subroutine output_namelist(filename)
 
   open(10,file=namelist_file,access="stream",action="read")
   open(11,file=filename,access="stream",action="write")
-  do 
-     read(10,iostat=ierr)nml_char 
+  do
+     read(10,iostat=ierr)nml_char
      if(ierr.NE.0)exit
-     write(11)nml_char 
+     write(11)nml_char
   end do
   close(10)
   close(11)
@@ -359,7 +359,7 @@ subroutine output_params(r,g,m,filename)
 
   !-----------------------------------
   ! Output run parameters in file
-  !-----------------------------------  
+  !-----------------------------------
   ilun=10
   fileloc=TRIM(filename)
   open(unit=ilun,file=fileloc,access="stream"&
@@ -414,7 +414,7 @@ subroutine input_params(mdl,r,g,filename,ncpu_file,levelmin_file,nlevelmax_file)
   ! Read run parameters from file.
   ! Note that ncpu, levelmin and nlevelmax
   ! are allowed to vary at restart.
-  !-----------------------------------  
+  !-----------------------------------
   integer::ilun
   integer::ndim_file,nfile_file,noutput_file
   integer::noutput_min,nlevelmax_min
@@ -511,10 +511,10 @@ recursive subroutine r_output_amr(pst,input_array,input_size,output_array,output
   integer::output_size
   integer,dimension(1:input_size)::input_array
   integer,dimension(1:output_size)::output_array
-  
+
   character(LEN=flen)::filename
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_OUTPUT_AMR,pst%iUpper+1,input_size,output_size,input_array)
      call r_output_amr(pst%pLower,input_array,input_size,output_array,output_size)
@@ -643,7 +643,7 @@ subroutine output_info(r,g,filename)
   ! Open file
   fileloc=TRIM(filename)
   open(unit=ilun,file=fileloc,form='formatted')
-  
+
   ! Write run parameters
   write(ilun,'("nfile       =",I11)')r%nfile
   write(ilun,'("ncpu        =",I11)')g%ncpu
@@ -669,7 +669,7 @@ subroutine output_info(r,g,filename)
   write(ilun,'("unit_d      =",E23.15)')scale_d
   write(ilun,'("unit_t      =",E23.15)')scale_t
   write(ilun,*)
-  
+
   close(ilun)
 
 end subroutine output_info
@@ -692,17 +692,17 @@ subroutine output_header(r,g,p,filename)
   character(LEN=flen)::fileloc
 
   if(r%verbose)write(*,*)'Entering output_header'
-  
+
   ilun=10!+g%myid
-  
+
   ! Open file
   fileloc=TRIM(filename)
   open(unit=ilun,file=fileloc,form='formatted')
-  
+
   ! Write header information
   write(ilun,*)'Total number of particles'
   write(ilun,*)p%npart_tot
-  
+
   write(ilun,*)'Total number of files'
   if(index(filename,'output')==0)then
      write(ilun,*)g%ncpu
@@ -765,12 +765,12 @@ subroutine input_header(r,g,filename,npart_tot_file,ncpu_file)
   character(LEN=flen)::fileloc
 
   if(r%verbose)write(*,*)'Entering input_header'
-  
+
   ilun=10!+g%myid
-  
+
   ! Write header information
   fileloc=TRIM(filename)
-  open(unit=ilun,file=fileloc,form='formatted')  
+  open(unit=ilun,file=fileloc,form='formatted')
   read(ilun,*)
   read(ilun,*)npart_tot_file
   read(ilun,*)

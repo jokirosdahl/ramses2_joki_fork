@@ -196,8 +196,8 @@ contains
   end function check_boundaries
 
   !> @brief
-  !> Setup the mapping of the subgrids. This creates a host array with dimensions 
-  !> 4x4x4xnum_subgrids where each element in the 4x4x4 subgrid is an index into 
+  !> Setup the mapping of the subgrids. This creates a host array with dimensions
+  !> 4x4x4xnum_subgrids where each element in the 4x4x4 subgrid is an index into
   !> sim%m%grid that points at the oct that should go in that part of the subgrid
   !>
   !> @param[in] sim : The simulation object
@@ -217,7 +217,7 @@ contains
        ! increment subgrid index
        subgrid_idx = subgrid_idx + 1
     end do
-    
+
   end subroutine setup_subgrid_mapping
 
   !> @brief
@@ -311,28 +311,28 @@ contains
        endif
     end do
     num_recv = sum(n_recv)
-    
+
     ! Allocate host memory for ghost oct hash ley
     allocate(key_recv_host(1:4*num_recv))
-    
+
     ! Allocate device and host memory for ghost oct index
     err_code = cudaMalloc(idx_recv_device_cptr,  num_recv*sizeof(my_integer))
     err_code = cudaMallocHost(idx_recv_host_cptr, num_recv*sizeof(my_integer))
     call c_f_pointer(idx_recv_device_cptr, idx_recv_device, [num_recv])
     call c_f_pointer(idx_recv_host_cptr, idx_recv_host, [num_recv])
-    
+
     ! Aloocate device and host memory for ghost oct hydro variables
     err_code = cudaMalloc(uold_recv_device_cptr,  40*num_recv*sizeof(my_real_dp))
-    err_code = cudaMallocHost(uold_recv_host_cptr, 40*num_recv*sizeof(my_real_dp)) 
+    err_code = cudaMallocHost(uold_recv_host_cptr, 40*num_recv*sizeof(my_real_dp))
     call c_f_pointer(uold_recv_device_cptr, uold_recv_device, [40*num_recv])
     call c_f_pointer(uold_recv_host_cptr, uold_recv_host, [40*num_recv])
-    
+
     ! Compute offset in 1D communicationn buffer
     n_skip(1) = 1
     do icpu = 2, g%ncpu
        n_skip(icpu) = n_skip(icpu-1) + n_recv(icpu-1)
     end do
-    
+
     ! Collect ghost oct index and hash key
     i_recv = 0
     do icache = 1, m%ncache
@@ -348,7 +348,7 @@ contains
           key_recv_host(ibuffer+3) = m%grid(r%ngridmax+icache)%ckey(3)
        endif
     end do
-    
+
     end associate
 #endif
   end subroutine setup_ghost_mapping
@@ -394,7 +394,7 @@ contains
 
     ! Allocate device and host memory for halo oct hydro variable
     err_code = cudaMalloc(uold_send_device_cptr,  40*num_send*sizeof(my_real_dp))
-    err_code = cudaMallocHost(uold_send_host_cptr, 40*num_send*sizeof(my_real_dp)) 
+    err_code = cudaMallocHost(uold_send_host_cptr, 40*num_send*sizeof(my_real_dp))
     call c_f_pointer(uold_send_device_cptr, uold_send_device, [40*num_send])
     call c_f_pointer(uold_send_host_cptr, uold_send_host, [40*num_send])
 
@@ -419,9 +419,9 @@ contains
   !> @brief
   !> Perforn halo exchange using MPI
   !>
-  !> @param[in] uold_send: 
+  !> @param[in] uold_send:
   !> @param[in] n_send:
-  !> @param[in] num_send: 
+  !> @param[in] num_send:
   !> @param[in] uold_recv:
   !> @param[in] n_recv:
   !> @param[in] num_recv
@@ -478,16 +478,16 @@ contains
           iskip = iskip + nbuffer
        end if
     end do
-    
+
     ! Wait for full completion of receives
-    call MPI_WAITALL(countrecv, reqrecv, statuses, info) 
-    
+    call MPI_WAITALL(countrecv, reqrecv, statuses, info)
+
     ! Wait for full completion of sends
     call MPI_WAITALL(countsend, reqsend, statuses, info)
-    
+
 #endif
   end subroutine halo_exchange_uold
-  
+
   subroutine halo_exchange_key(sim, ilevel)
 #ifndef WITHOUTMPI
     use mpi
@@ -506,7 +506,7 @@ contains
     integer::info, tag=101
     integer,dimension(sim%g%ncpu)::reqsend, reqrecv
     integer,dimension(MPI_STATUS_SIZE, sim%g%ncpu)::statuses
-    
+
     ! Send all messages
     countsend = 0
     iskip = 1
@@ -519,7 +519,7 @@ contains
           iskip = iskip + nbuffer
        end if
     end do
-    
+
     ! Receive all messages
     countrecv = 0
     iskip = 1
@@ -532,16 +532,16 @@ contains
           iskip = iskip + nbuffer
        end if
     end do
-    
+
     ! Wait for full completion of receives
-    call MPI_WAITALL(countrecv, reqrecv, statuses, info) 
-    
+    call MPI_WAITALL(countrecv, reqrecv, statuses, info)
+
     ! Wait for full completion of sends
     call MPI_WAITALL(countsend, reqsend, statuses, info)
-    
+
 #endif
   end subroutine halo_exchange_key
-  
+
   subroutine full_cache_prefetch(s,ilevel)
     use mdl_module
     use hydro_parameters, only: nvar
@@ -567,15 +567,15 @@ contains
     integer,dimension(1:ndim)::ckey_corner
     integer(kind=8),dimension(0:ndim)::hash_nbor
     integer::ichild
-    
+
 #ifdef HYDRO
-    
+
     associate(r=>s%r,g=>s%g,m=>s%m,mdl=>s%mdl)
-      
+
     !--------------------
     ! Gather grid stencil
     !--------------------
-      
+
     ! Loop over dirty octs
     do igrid=1,m%noct_dirty(ilevel)
 

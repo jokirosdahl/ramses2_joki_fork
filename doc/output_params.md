@@ -1,5 +1,5 @@
 This namelist block, called `&OUTPUT_PARAMS`, is used to set up the output strategy of data to disk.
- 
+
 | Variable name, syntax, default value | Fortran type | Description |
 |:---------------------------- |:------------- |:------------------------- |
 | `nfile=1     ` | `integer` | Number of files per family (amr, hydro, grav, part, star...) per snapshot. These files are stored in directories called `output_00001`, `output_00002`, etc. Default value is `nfile=1`, even if one uses a large number of processors. `nfile=-1` will set `nfile=ncpu`, which is the maximum allowed value. |
@@ -10,7 +10,7 @@ This namelist block, called `&OUTPUT_PARAMS`, is used to set up the output strat
 | `tout=0.0,0.0,0.0,` | `real array` | Value of specified output times with `tout>0`. |
 | `aout=1.1,1.1,1.1,` | `real array` | Value of specified output expansion factor (for cosmology runs only) with `0<aout<=1` where `aout=1` means "present epoch" or "redshift zero". |
 | `bkp_time_hrs=2` | `real` | Wallclock time in hours between two consecutive backup files. Backup files are used to perform a checkpoint/restart of a simulation that ended prematurely.|
-| `bkp_modulo=0`   | `integer` | Backup files are written using a numbering scheme that cycles modulo the prescribed number. Default value of 0 means never. A value of 1 corresponds to only 1 backup file at all time, with the risk of loosing it if something goes wrong during the write. Preferred values are 2 or 3. | 
+| `bkp_modulo=0`   | `integer` | Backup files are written using a numbering scheme that cycles modulo the prescribed number. Default value of 0 means never. A value of 1 corresponds to only 1 backup file at all time, with the risk of loosing it if something goes wrong during the write. Preferred values are 2 or 3. |
 | `run_time_hrs=0` | `real` | Esimated wallclock time of the current job in hours. This is used to dump a last backup file just before the end of the simulation. Default value of 0 means this is not used.|
 | `bkp_last_min=10` | `real` | Dump the last backup file just before the end of the simulation using the prescribed time in minutes. |
 | `foutput=N` | `integer` | Frequency of outputs in units of main time steps. If N=0 then no output files are generated. |

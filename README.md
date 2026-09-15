@@ -8,7 +8,7 @@ The ramses2 repository contains a major evolution of the original [RAMSES code][
 
 The main development branch is the `develop` branch (set as default). This branch is still work in progress and the code is rapidly evolving.
 
-You can download the code by cloning the git repository using 
+You can download the code by cloning the git repository using
 ```
 $ git clone git@github.com:ramses-organisation/ramses2.git
 ```
@@ -90,6 +90,5 @@ $ utils/f90/amr2map -inp output_00002 -out dens.map -typ 1
 $ utils/py/map2img.py dens.map --log
 ```
 
-In the molecular cloud collapse case, you can also explore the movie1 directory and use the python function directly on any of the maps in there. 
+In the molecular cloud collapse case, you can also explore the movie1 directory and use the python function directly on any of the maps in there.
 If you have the MPI library properly installed on your system, you can repeat all the tests above using the MPI=1 compilation option.
-

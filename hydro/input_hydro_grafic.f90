@@ -68,7 +68,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
 
   ! Mesh size at level ilevel in normalised units
   dx=0.5D0**ilevel
-    
+
   ! Mesh size at level ilevel in code units
   dx_loc=r%boxlen*dx
 
@@ -120,7 +120,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
      write(*,*)g%n1(ilevel),g%n2(ilevel),g%n3(ilevel)
      call mdl_abort(mdl)
   end if
-  
+
   !------------------------------------------
   ! Second step: read initial condition files
   !------------------------------------------
@@ -168,10 +168,10 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
         call title(ivar-5,ncharvar)
         filename=TRIM(r%initfile(ilevel))//'/ic_pvar_'//TRIM(ncharvar)
      endif
-     
+
      INQUIRE(file=filename,exist=ok_file)
      if(ok_file)then
-        ! Reading the existing file   
+        ! Reading the existing file
         if(g%myid==1)write(*,*)"Reading "//TRIM(filename)
         open(10,file=filename,form='unformatted')
         rewind 10
@@ -185,7 +185,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
         end do
         close(10)
      else
-        ! If file doesn't exist, initialize variable to default value 
+        ! If file doesn't exist, initialize variable to default value
         ! In most cases, this is zero (you can change that if necessary)
         if(g%myid==1)write(*,*)"Missing "//TRIM(filename)
         init_array=0d0
@@ -193,7 +193,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
            init_array=r%z_ave*0.02
         endif
      endif
-     
+
      ! For cosmo runs, rescale initial conditions to code units
      if(r%cosmo)then
         if(.not. r%cooling)then
@@ -206,7 +206,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
         if(ivar==4)init_array=g%dfact(ilevel)*g%vfact(1)*dx_loc/g%dxini(ilevel)*init_array/g%vfact(ilevel)
         if(ivar==5)init_array=(1.0+init_array)*g%T2_start/scale_T2
      endif
-     
+
      ! Loop over cells
      do igrid=m%head(ilevel),m%tail(ilevel)
         do ind=1,twotondim
@@ -242,10 +242,10 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
         end do
      end do
      ! End loop over cells
-     
+
   end do
   ! End loop over input variables
-  
+
   !------------------------------------------
   ! Read magnetic field initial condition files (MHD)
   !------------------------------------------
@@ -315,8 +315,8 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
 
   ! Deallocate initial conditions array
   deallocate(init_array)
-  deallocate(init_plane) 
-  
+  deallocate(init_plane)
+
   !----------------------------------------------------------------
   ! For cosmology runs: compute pressure, prevent negative density
   !----------------------------------------------------------------
@@ -337,7 +337,7 @@ subroutine input_hydro_grafic(mdl,r,g,m,ilevel)
      end do
      ! End loop over grids
   end if
-  
+
   !-------------------------------------
   ! If required, compute initial entropy
   !-------------------------------------
@@ -494,7 +494,7 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
 
   ! Mesh size at level ilevel in normalised units
   dx=0.5D0**ilevel
-    
+
   !-------------------------------------------------------------------------
   ! First step: compute level boundaries in terms of initial condition array
   !-------------------------------------------------------------------------
@@ -531,7 +531,7 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
      write(*,*)g%n1(ilevel),g%n2(ilevel),g%n3(ilevel)
      call mdl_abort(mdl)
   end if
-  
+
   !------------------------------------------
   ! Second step: read initial condition files
   !------------------------------------------
@@ -539,12 +539,12 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
   allocate(init_array(i1_min:i1_max,i2_min:i2_max,i3_min:i3_max))
   allocate(init_plane(1:g%n1(ilevel),1:g%n2(ilevel)))
 
-  ! Read refinement mask 
+  ! Read refinement mask
   filename=TRIM(r%initfile(ilevel))//'/ic_refmap'
   INQUIRE(file=filename,exist=ok_file)
   ok_file = ok_file .and. (r%initfile(ilevel+1) .ne.' ')
   if(ok_file)then
-     ! Reading the existing file   
+     ! Reading the existing file
      open(10,file=filename,form='unformatted')
      rewind 10
      read(10) ! skip first line
@@ -559,7 +559,7 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
   else
      init_array(i1_min:i1_max,i2_min:i2_max,i3_min:i3_max) = 0.0d0
   endif
-          
+
   ! Loop over cells
   do igrid=m%head(ilevel),m%tail(ilevel)
      do ind=1,twotondim
@@ -586,10 +586,10 @@ subroutine input_refmap_grafic(mdl,r,g,m,ilevel)
      end do
   end do
   ! End loop over cells
-     
+
   ! Deallocate initial conditions array
   deallocate(init_array)
-  deallocate(init_plane) 
+  deallocate(init_plane)
 #endif
 end subroutine input_refmap_grafic
 !################################################################

@@ -33,7 +33,7 @@ subroutine mdl_init
   ! Initialize software cache
   call init_cache(mdl)
 #endif
-  
+
 #ifdef DO_RTZ
   call initialize_elements()
 #endif
@@ -68,7 +68,7 @@ recursive subroutine r_clean_stop(pst)
      call r_clean_stop(pst%pLower)
      call mdl_get_reply(pst%s%mdl,rID,0)
   endif
-  
+
 end subroutine r_clean_stop
 !##############################################################
 !##############################################################

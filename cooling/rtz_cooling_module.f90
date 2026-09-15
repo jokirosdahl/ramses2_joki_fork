@@ -60,7 +60,7 @@ SUBROUTINE rtz_set_model(r, tables, h, omegab, omega0, omegaL, astart_sim, T2_si
   call rtz_updateRTGroups_CoolConstants(r, tables)
 
   if(r%nrestart==0 .and. r%cosmo) then
-      ! Use approximate temperature evolution from 
+      ! Use approximate temperature evolution from
       ! https://arxiv.org/pdf/astro-ph/0608032
       ! This ignores compton cooling but should be ok
       ! Just don't start the simulation at too high of redshift
@@ -69,7 +69,7 @@ SUBROUTINE rtz_set_model(r, tables, h, omegab, omega0, omegaL, astart_sim, T2_si
 
       z_start_sim = (1.d0 / astart_sim) - 1.d0
 
-      ! If redshift is less than the decoupling redshift, scale by (1+z)^2      
+      ! If redshift is less than the decoupling redshift, scale by (1+z)^2
       if (z_start_sim .lt. z_decoupling) then
          T2_sim = 2.725 * (1.d0 + z_decoupling)
          T2_sim = T2_sim * ((1.d0 + z_start_sim)/(1.d0 + z_decoupling))**2.d0
@@ -77,7 +77,7 @@ SUBROUTINE rtz_set_model(r, tables, h, omegab, omega0, omegaL, astart_sim, T2_si
       else
          T2_sim = 2.725 * (1.d0 + z_start_sim)
       end if
-  end if                                   
+  end if
 
 END SUBROUTINE rtz_set_model
 
@@ -118,7 +118,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
   ! dt      =>  Timestep size             [s]
   ! nCell   =>  Number of cells (length of all the above vectors)
   ! ilevel  =>  Refinement levels
-  ! dx_SS_H2=>  Cell size [cm] used for H2 self shielding 
+  ! dx_SS_H2=>  Cell size [cm] used for H2 self shielding
   !
   ! We use a slightly modified method of Anninos et al. (1997).
   !-------------------------------------------------------------------------
@@ -128,14 +128,14 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
   real(kind=8):: aexp
   real(kind=8),dimension(1:nvector):: T2
   real(kind=8),dimension(1:n_elements, 1:n_elements, 1:nvector):: xion
-  real(kind=8),dimension(1:n_elements, 1:nvector):: nElement 
+  real(kind=8),dimension(1:n_elements, 1:nvector):: nElement
   real(kind=8),dimension(1:nvector):: nH
 #ifdef DO_RT
   real(kind=8),dimension(1:ndim, 1:nvector):: p_gas
   real(kind=8),dimension(1:nrtgrp, 1:nvector):: Np, dNpdt
   real(kind=8),dimension(1:ndim, 1:nrtgrp, 1:nvector):: Fp, dFpdt
   integer::ilevel
-  real(kind=8):: dx_SS_H2 
+  real(kind=8):: dx_SS_H2
 #endif
 !  logical,dimension(1:nvector):: c_switch
   real(kind=8)::dt
@@ -200,7 +200,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
       ! Open file to save cooling and heating rates
       open(unit=base_unit+100, file='coolrates.dat', status='unknown')
 
-      if (r%rtz_equilibrium_test.eq.1) then 
+      if (r%rtz_equilibrium_test.eq.1) then
          !!! USE FOR EQM TESTS WITH COOLING AT CONSTANT RHO
          T2 = 1.d5 ! --> initialize at high temperature
          ! Set the ionization states to neutral
@@ -223,12 +223,12 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
             r%neq_TConst = 10.d0**(((8.d0 - 2.d0) * (real(i_interp,kind=8) - 1.d0)/(300.d0-1.d0)) + 2.d0)
          end if
 
-         if (r%rtz_equilibrium_test.eq.1) then 
+         if (r%rtz_equilibrium_test.eq.1) then
             !!! USE FOR EQM TESTS WITH COOLING AT CONSTANT RHO
             ! Interpolate over density
             nElement(1:n_elements,1:ncell)  = 0.d0  ! Initialize to zero
             nElement(1,1:ncell)  = 10.d0**(((5.d0 - (-2.d0)) * (real(i_interp,kind=8) - 1.d0)/(300.d0-1.d0)) + (-2.d0))
-            ! nElement(1,1:ncell)  = 10.d0**(((8.d0 - 1.d0) * (real(i_interp,kind=8) - 1.d0)/(300.d0-1.d0)) + 1.d0)      
+            ! nElement(1,1:ncell)  = 10.d0**(((8.d0 - 1.d0) * (real(i_interp,kind=8) - 1.d0)/(300.d0-1.d0)) + 1.d0)
             nElement(2,1:ncell)  = nElement(1,1:ncell) * 8.51d-02 ! Helium
             nElement(6,1:ncell)  = nElement(1,1:ncell) * 2.69d-04 * r%z_ave ! Carbon
             nElement(7,1:ncell)  = nElement(1,1:ncell) * 6.76d-05 * r%z_ave ! Nitrogen
@@ -314,7 +314,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
 
          ! Write for debugging
          if (r%rtz_equilibrium_test.eq.2) then
-            if (r%isH2_rtz) then 
+            if (r%isH2_rtz) then
                write(*,*) r%neq_TConst, loopcnt, xion(1,1,1), xion(1,2,1), xion(1,3,1)
             else
                write(*,*) r%neq_TConst, loopcnt, xion(1,1,1), xion(1,2,1)
@@ -322,7 +322,7 @@ SUBROUTINE rtz_solve_cooling(r, tables, T2, aexp, xion, nElement, &
          end if
 
          if (r%rtz_equilibrium_test.eq.1) then
-            if (r%isH2_rtz) then 
+            if (r%isH2_rtz) then
                write(*,*) nH(i), TK_to_save(i), T2(i), mu_to_save(i), loopcnt, xion(1,1,1), xion(1,2,1), xion(1,3,1)
             else
                write(*,*) nH(i), TK_to_save(i), T2(i), mu_to_save(i), loopcnt, xion(1,1,1), xion(1,2,1)
@@ -561,7 +561,7 @@ contains
     if(r%neq_isTconst) TK=r%neq_Tconst                   ! Force constant T
     fracMax = 0d0 ! Max fractional update, to check if dt can be increased
     ss_factor = 1d0                  ! UV background self_shielding factor
-    if (r%rtz_equilibrium_test.lt.0) then 
+    if (r%rtz_equilibrium_test.lt.0) then
        if(r%self_shielding) ss_factor = exp(-nH(icell)/1d-2)
     end if
     rho = get_rho_rtz(nElement(:,icell))
@@ -624,7 +624,7 @@ contains
 
           ! Deal with molecules separately
           if (elements(1)%atomic_number.gt.0 .and. r%isH2_rtz) then
-             if (r%isLW(igroup).eq.1.d0) then 
+             if (r%isLW(igroup).eq.1.d0) then
                 phAbs(igroup) = 0.5d0 * nElement_dep(1) * dXion(1, 3) * signc(igroup,1,3) * f_shd  ! s-1
              else
                 phAbs(igroup) = 0.5d0 * nElement_dep(1) * dXion(1, 3) * signc(igroup,1,3)
@@ -653,9 +653,9 @@ contains
              dt_rec = 0.9d0 * ddt(icell) / sqrt(2.d0+fracMax)
              code=1 ;   RETURN                        ! ddt(icell) too big
           endif
-          
+
           ! Update total G0
-          if (r%group_egy(igroup).gt.5.6d0 .and. r%group_egy(igroup).lt.13.6d0) then 
+          if (r%group_egy(igroup).gt.5.6d0 .and. r%group_egy(igroup).lt.13.6d0) then
              total_G0 = total_G0 + (dNp(igroup) * rt_c_cgs * r%group_egy(igroup) * eV2erg / (1.6d-3))
           end if
 
@@ -718,11 +718,11 @@ contains
        !HKnote: we call prime first so what we can store the correct cooling rates
        saved_cooling_rates = 0.d0
        call all_cooling(r, tables, 1.001d0*TK, ne, aexp, nElement_dep(1:n_elements), dXion, total_G0, dust_to_gas_mass_ratio_over_mw, xe, &
-                        primary_cosmic_ray_ionization_rate, H2_cosmic_ray_ionization_rate, & 
+                        primary_cosmic_ray_ionization_rate, H2_cosmic_ray_ionization_rate, &
                         ss_factor, dNp, ilevel, Crate_prime, saved_cooling_rates, saved_cooling_rates_names)
        saved_cooling_rates = 0.d0
        call all_cooling(r, tables, TK, ne, aexp, nElement_dep(1:n_elements), dXion, total_G0, dust_to_gas_mass_ratio_over_mw, xe, &
-                        primary_cosmic_ray_ionization_rate, H2_cosmic_ray_ionization_rate, & 
+                        primary_cosmic_ray_ionization_rate, H2_cosmic_ray_ionization_rate, &
                         ss_factor, dNp, ilevel, Crate, saved_cooling_rates, saved_cooling_rates_names)
        Crate_prime = (Crate_prime - Crate) / ((1.001d0*TK) - TK)
        dCdT2 = Crate_prime * mu                            ! dC/dT2 = mu * dC/dT
@@ -737,7 +737,7 @@ contains
                   ,T2(icell)+rate*ddt(icell)/(1.d0-dRate*ddt(icell)))
        dUU   = MAX(dUU, ABS(dT2-T2(icell))) / (T2(icell)+T_MIN) &
                         *one_over_T_FRAC
-     
+
        fracMax=MAX(fracMax,dUU)
        if(dUU .gt. 1.) then                                     ! 10% rule
          !  write(*,*) "Broken Temperature", T2(icell), dT2, ddt(icell)/1.d12, Crate
@@ -799,15 +799,15 @@ contains
 
        ! Contains formation on dust and via the primordial channel
        alpha_H2_loc = alpha_H2(TK, dust_to_gas_mass_ratio_over_mw, xe, H2_cosmic_ray_ionization_rate, &
-                               total_G0, dXion(1,1), dXion(1,2), nElement_dep(1)) 
+                               total_G0, dXion(1,1), dXion(1,2), nElement_dep(1))
        cr_H2 = cr_H2 + alpha_H2_loc
 
        !! Destruction !!
 
        ! Collisional dissociation
-       if (r%rtz_include_collisional_ionization) then 
+       if (r%rtz_include_collisional_ionization) then
          if (elements(2)%atomic_number.gt.0) then
-            beta_H2_loc = beta_H2_krome(TK, dXion(1,1)*nElement_dep(1), ne, xH2_loc*nElement_dep(1), dXion(2,1)*nElement_dep(2)) 
+            beta_H2_loc = beta_H2_krome(TK, dXion(1,1)*nElement_dep(1), ne, xH2_loc*nElement_dep(1), dXion(2,1)*nElement_dep(2))
          else
             beta_H2_loc = beta_H2_krome(TK, dXion(1,1)*nElement_dep(1), ne, xH2_loc*nElement_dep(1), 0.d0)
          end if
@@ -815,12 +815,12 @@ contains
        end if
 
        ! Photodissociation
-       if (r%rtz_include_photoionization) then 
+       if (r%rtz_include_photoionization) then
          de_H2 = de_H2 + (UV_background_G0 * 5.68d-11)
-       end if 
+       end if
 
        ! Cosmic ray destruction
-       if (r%rtz_include_cosmic_ray_ionization) then 
+       if (r%rtz_include_cosmic_ray_ionization) then
          de_H2 = de_H2 + H2_cosmic_ray_ionization_rate
        end if
 
@@ -832,7 +832,7 @@ contains
                 de_H2 = de_H2 + (dXion(1,3) * SUM(signc(igroup,1,3) * dNp * f_shd))
              else
                 de_H2 = de_H2 + (dXion(1,3) * SUM(signc(igroup,1,3) * dNp * f_shd))
-             end if  
+             end if
           end do
        end if
 #endif
@@ -854,7 +854,7 @@ contains
 
       ! Update mu and T
       mu = getMu_RTZ(r, ne, nElement_dep, dXion)
-      TK = dT2 * mu   
+      TK = dT2 * mu
 
     end if
 
@@ -892,48 +892,48 @@ contains
              end if
 
              ! Recombination of the more excited ionization state
-             if (iIon.lt.n_ions) then  
+             if (iIon.lt.n_ions) then
                 cr = cr + (recombination(TK, iIon+1, iElement) * ne * dXion(iElement,iIon+1))
              end if
 
              ! Collisional ionization of the less excited state
              if (r%rtz_include_collisional_ionization) then
-               if (iIon.gt.1) then 
+               if (iIon.gt.1) then
                   cr = cr + (collisional_ionization(TK, iIon-1, iElement) * ne * dXion(iElement,iIon-1))
                end if
              end if
 
              ! UVB Photoionization of the less excited state
-             if (r%rtz_include_photoionization) then 
-               if (iIon.gt.1) then 
+             if (r%rtz_include_photoionization) then
+               if (iIon.gt.1) then
                   cr = cr + (HM12_UVB_z(iElement,iIon-1,1) * ss_factor * dXion(iElement,iIon-1))
                end if
              end if
 
              ! Photoionization by sub-ionizing ISRF --> only impacts lowest ionization states
-             if (r%rtz_include_photoionization) then 
-               if (iIon.eq.2) then 
+             if (r%rtz_include_photoionization) then
+               if (iIon.eq.2) then
                   cr = cr + (UV_background_G0 * elements(iElement)%G0_photo_rate * dXion(iElement,iIon-1))
                end if
              end if
 
              ! Cosmic ray ionization of the less excited state
-             if (r%rtz_include_cosmic_ray_ionization) then 
-               if (iIon > 1) then 
+             if (r%rtz_include_cosmic_ray_ionization) then
+               if (iIon > 1) then
                   cr = cr + (cosmic_ray_ionization_rates(iElement,iIon-1) * total_cosmic_ray_ionization_rate * dXion(iElement,iIon-1))
                end if
              end if
 
              ! Cosmic ray ionization of the less excited state from induced UV
-             if (r%rtz_include_cosmic_ray_ionization) then 
-               if (iIon.eq.2) then 
+             if (r%rtz_include_cosmic_ray_ionization) then
+               if (iIon.eq.2) then
                   cr = cr + (cosmic_ray_ionization_rates_induced_UV(iElement) * cosmic_ray_scale_factor * dXion(iElement,iIon-1))
                end if
              end if
 
              ! Recombination on dust from the more excited state
-             if (r%rtz_include_dust_recombination) then 
-               if (iIon.lt.n_ions) then 
+             if (r%rtz_include_dust_recombination) then
+               if (iIon.lt.n_ions) then
                   cr = cr + (dust_recombination(iIon+1, i, TK, UV_background_G0, ne) * dust_effective_number_density * dXion(iElement,iIon+1))
                end if
              end if
@@ -941,7 +941,7 @@ contains
 #ifdef DO_RT
              ! Photoionization of less excited state from the local radiation field
              if (r%rtz_include_photoionization.and.r%rt_advect) then
-                if (iIon > 1) then 
+                if (iIon > 1) then
                    cr = cr + (dXion(iElement,iIon-1) * SUM(signc(:,iElement,iIon-1)*dNp))
                 end if
              end if
@@ -957,49 +957,49 @@ contains
                de = de + alpha_H2_loc
              end if
 
-             ! Collisional ionization 
+             ! Collisional ionization
              if (r%rtz_include_collisional_ionization) then
-               if (iIon .lt. n_ions) then 
+               if (iIon .lt. n_ions) then
                   de = de + (collisional_ionization(TK, iIon, iElement) * ne)
                end if
              end if
 
              ! UVB Photoionization
-             if (r%rtz_include_photoionization) then 
-               if (iIon .lt. n_ions) then 
+             if (r%rtz_include_photoionization) then
+               if (iIon .lt. n_ions) then
                   de = de + (HM12_UVB_z(iElement,iIon,1) * ss_factor)
                end if
              end if
 
              ! Photoionization by sub-ionizing ISRF --> only impacts lowest ionization states
-             if (r%rtz_include_photoionization) then 
+             if (r%rtz_include_photoionization) then
                if (iIon .eq. 1) then
                   de = de + (UV_background_G0 * elements(iElement)%G0_photo_rate)
                end if
              end if
 
              ! Recombination
-             if (iIon .gt. 1) then 
+             if (iIon .gt. 1) then
                 de = de + (recombination(TK, iIon, iElement) * ne)
-             end if 
+             end if
 
              ! Cosmic ray ionization
-             if (r%rtz_include_cosmic_ray_ionization) then 
+             if (r%rtz_include_cosmic_ray_ionization) then
                if (iIon .lt. n_ions) then
                   de = de + (cosmic_ray_ionization_rates(iElement,iIon) * total_cosmic_ray_ionization_rate)
                end if
              end if
 
              ! Cosmic ray ionization from induced UV
-             if (r%rtz_include_cosmic_ray_ionization) then 
-               if (iIon .eq. 1) then 
+             if (r%rtz_include_cosmic_ray_ionization) then
+               if (iIon .eq. 1) then
                   de = de + (cosmic_ray_ionization_rates_induced_UV(iElement) * cosmic_ray_scale_factor)
                end if
              end if
-            
+
              ! Recombination on dust
-             if (r%rtz_include_dust_recombination) then 
-               if (iIon .gt. 1) then 
+             if (r%rtz_include_dust_recombination) then
+               if (iIon .gt. 1) then
                   de = de + (dust_recombination(iIon, iElement, TK, UV_background_G0, ne) * dust_effective_number_density)
                end if
              end if
@@ -1007,7 +1007,7 @@ contains
 #ifdef DO_RT
              ! Photoionization  from the local radiation field
              if (r%rtz_include_photoionization.and.r%rt_advect) then
-                if (iIon .lt. n_ions) then 
+                if (iIon .lt. n_ions) then
                    de = de + (dXion(iElement,iIon) * SUM(signc(:,iElement,iIon)*dNp))
                 end if
              end if
@@ -1044,15 +1044,15 @@ contains
 
                   if (iIon.gt.1) then
                      ! Ionization from less excited state
-                     cr = cr + (charge_transfer_ionization(iIon-1,iElement,TK) * dXion(iElement,iIon-1) * HII_number_density) ! Example:  O + H+ => O+ + H   
+                     cr = cr + (charge_transfer_ionization(iIon-1,iElement,TK) * dXion(iElement,iIon-1) * HII_number_density) ! Example:  O + H+ => O+ + H
 
-                     ! Charge exchange recombination 
+                     ! Charge exchange recombination
                      de = de + (charge_transfer_recombination(iIon,iElement,TK) * HI_number_density) ! Example:  O+ + H => O + H+
                   end if
 
                   if (iIon.lt.n_ions) then
                      ! Charge exchange ionization
-                     de = de + (charge_transfer_ionization(iIon,iElement,TK) * HII_number_density) ! Example:  O + H+ => O+ + H   
+                     de = de + (charge_transfer_ionization(iIon,iElement,TK) * HII_number_density) ! Example:  O + H+ => O+ + H
 
                      ! Charge exchange recombination from the more excited state
                      cr = cr + (charge_transfer_recombination(iIon+1,iElement,TK) * dXion(iElement,iIon+1) * HI_number_density) ! Example:  O+ + H => O + H+
@@ -1073,9 +1073,9 @@ contains
              total_cosmic_ray_ionization_rate = primary_cosmic_ray_ionization_rate * (1.d0 + phi_s)
 
              ! Update mu and T --> only H and He (others don't matter)
-             if (iElement.lt.3) then 
+             if (iElement.lt.3) then
                 mu = getMu_RTZ(r, ne, nElement_dep, dXion)
-                TK = dT2 * mu   
+                TK = dT2 * mu
              end if
 
              ! Check for convergence -- Fractional change in ion
@@ -1157,7 +1157,7 @@ SUBROUTINE rtz_updateRTGroups_CoolConstants(r,tables)
     !Photoheating rates for photons on ions
     do iP = 1,nrtgrp
       do iE = 1,n_elements
-        if (elements(iE)%atomic_number.gt.0) then 
+        if (elements(iE)%atomic_number.gt.0) then
           do iI = 1,elements(iE)%n_ions-1
             tables%PHrate(iP,iE,iI,i) =  eV2erg * &    ! See eq (19) in Aubert(08)
                   (tables%sigec(iP,iE,iI,i) * r%group_egy(iP)  &
@@ -1172,7 +1172,7 @@ SUBROUTINE rtz_updateRTGroups_CoolConstants(r,tables)
 END SUBROUTINE rtz_updateRTGroups_CoolConstants
 !************************************************************************
 FUNCTION getNe(xion,nion) result(ne)
-  !Returns the electron number density by looping over all elements 
+  !Returns the electron number density by looping over all elements
   !and summing their contributions
   implicit none
 
@@ -1189,10 +1189,10 @@ FUNCTION getNe(xion,nion) result(ne)
         !Get the number of ions
         n_ions = elements(iElement)%n_ions
 
-        !Loop over all ions 
+        !Loop over all ions
         !Start loop at 2, no electrons in the ground state
         do iIons=2,n_ions
-           ne = ne + (nion(iElement) * xion(iElement,iIons) * real(iIons - 1, kind=8)) 
+           ne = ne + (nion(iElement) * xion(iElement,iIons) * real(iIons - 1, kind=8))
         end do
      end if
   end do
@@ -1218,13 +1218,13 @@ FUNCTION dust_to_gas_scale_RR14(log10_O_over_H) result(ratio)
    ! y = log (G/D)
    ! x = 12 + log10(O/H)
    ! Xsun = 8.69
-   ! 
+   !
    ! y = a + alphaH * (Xsun - x) for x>xt
    ! y = b + alphaL * (Xsun - x) for x<=xt
    a      = 2.21d0
    alphaH = 1.00d0 ! MW case
    b      = 0.96d0 ! 0.68
-   alphaL = 3.10d0 ! 3.08 
+   alphaL = 3.10d0 ! 3.08
    xt     = 8.10d0 ! 7.96
    Xsun   = 8.69d0
    x = Xsun - log10_O_over_H

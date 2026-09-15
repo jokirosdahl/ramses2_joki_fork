@@ -516,13 +516,13 @@ end function bessel_i2
 !************************************************************************
 subroutine cmp_flux_tensors(uin, iP0, F, rt_c &
      &                     ,iu1,iu2,ju1,ju2,ku1,ku2,if2,jf2,kf2)
-  !------------------------------------------------------------------------  
-  ! Compute central fluxes for a photon group, for each cell in a vector 
-  ! of grids. 
-  ! The flux tensor is a three by four tensor (2*3 and 1*2 in 1D and 2D, 
-  ! respectively) where the first column is photon flux (x,y,z) and 
-  ! the other three columns compose the Eddington tensor (see Aubert & 
-  ! Teyssier '08), times c^2. 
+  !------------------------------------------------------------------------
+  ! Compute central fluxes for a photon group, for each cell in a vector
+  ! of grids.
+  ! The flux tensor is a three by four tensor (2*3 and 1*2 in 1D and 2D,
+  ! respectively) where the first column is photon flux (x,y,z) and
+  ! the other three columns compose the Eddington tensor (see Aubert &
+  ! Teyssier '08), times c^2.
   ! input/output:
   ! uin       => RT variables of all cells in a vector of grids
   !              (photon energy densities and photon fluxes).
@@ -546,7 +546,7 @@ subroutine cmp_flux_tensors(uin, iP0, F, rt_c &
   real(kind=8),dimension(1:ndim)::F_norm, F_rot
   real(kind=8)::F_norm_norm, lagrange_a, lagrange_b
   !------------------------------------------------------------------------
-  ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by 
+  ! Loop (N+2)X(N+2)X(N+2) cells in grid, where N=2**(nsuperoct+1) = 2 by
   ! default. All dimension indices go from 0 to N+1.
   ! We only need to calculate tensors for those cells which have faces to
   ! the NXNXN center cells, so by skipping the 'corners' we are reduced
@@ -569,10 +569,10 @@ subroutine cmp_flux_tensors(uin, iP0, F, rt_c &
      endif
      F(i,j,k,1,1:nDim)= pflux            !   First col is photon flux
      ! Rest is Eddington tensor...initalize it to zero
-     F(i,j,k,2:ndim+1,1:nDim) = 0d0   
+     F(i,j,k,2:ndim+1,1:nDim) = 0d0
      Np_c_sq = Np * rt_c**2 * Np
      if(Np_c_sq .eq. 0d0) cycle            !Zero density => no pressure
-        
+
      pflux_sq = sum(pflux**2)              !  Sq. photon flux magnitude
      u(:) = 0d0                            !           Flux unit vector
      if(pflux_sq .gt. 0d0) u(:) = pflux/sqrt(pflux_sq)
@@ -603,7 +603,7 @@ subroutine cmp_flux_tensors(uin, iP0, F, rt_c &
 
           ! Step 2: Apply the rotation matrix to F/|cN|
           F_rot = matmul(rotation_matrix,F_norm)
-          
+
           if (F_rot(1).gt.0.9992854588184282) then
             ! For large F close to 1, use the analytic solution
             pressure_tensor_2D(1,1) = 1.0
@@ -611,7 +611,7 @@ subroutine cmp_flux_tensors(uin, iP0, F, rt_c &
             pressure_tensor_2D(2,1) = 0.0
             pressure_tensor_2D(2,2) = 0.0
           else
-            ! Step 3: Interpolate the value of lagrange_b 
+            ! Step 3: Interpolate the value of lagrange_b
             ! and then compute lagrange_a
             lagrange_b = interp_b(F_rot(1))
             lagrange_a = LOG(1.0 / (2.0 * ACOS(-1.0) * bessel_i0(dble(lagrange_b))))
@@ -657,7 +657,7 @@ end subroutine cmp_flux_tensors
 
 !************************************************************************
 FUNCTION cmp_face(fdn, fup, udn, uup, rt_c)
-  
+
 ! Compute intercell fluxes for all (four) RT variables, using the
 ! Harten-Lax-van Leer method (see eq. 30 in Aubert&Teyssier(2008).
 ! fdn    => flux function in the cell downwards from the border

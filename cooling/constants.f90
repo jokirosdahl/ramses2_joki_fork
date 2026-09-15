@@ -45,5 +45,5 @@ module constants
   real(kind=8),parameter::ionEv_HII   = 13.60d0
   real(kind=8),parameter::ionEv_HeII  = 24.59d0
   real(kind=8),parameter::ionEv_HeIII = 54.42d0
-  
+
 end module constants

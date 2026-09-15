@@ -1052,8 +1052,8 @@ kernel void cmpdt_kernel(
 #endif
             float grav;
 #ifdef GRAV
-            grav = abs(f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)]) + 
-                   abs(f[(oct_idx - 1)*3*8 + 1*8 + (cell_idx - 1)]) + 
+            grav = abs(f[(oct_idx - 1)*3*8 + 0*8 + (cell_idx - 1)]) +
+                   abs(f[(oct_idx - 1)*3*8 + 1*8 + (cell_idx - 1)]) +
                    abs(f[(oct_idx - 1)*3*8 + 2*8 + (cell_idx - 1)]);
 #else
             grav = abs(constant_gravity[0]) + abs(constant_gravity[1]) + abs(constant_gravity[2]);

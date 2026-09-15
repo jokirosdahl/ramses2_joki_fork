@@ -36,7 +36,7 @@ subroutine m_newdt_fine(pst,ilevel)
   ! This routine compute the time step using 3 constraints:
   ! 1- a Courant-type condition using particle velocity
   ! 2- the gravity free-fall time
-  ! 3- 10% maximum variation for aexp 
+  ! 3- 10% maximum variation for aexp
   ! This routine also compute the particle kinetic energy.
   !-----------------------------------------------------------
   real(kind=8)::dx,tff,fourpi,threepi2

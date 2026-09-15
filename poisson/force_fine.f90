@@ -10,7 +10,7 @@ module force_fine_module
 #endif
 
 contains
-#ifdef GRAV  
+#ifdef GRAV
 !#########################################################
 !#########################################################
 !#########################################################
@@ -28,11 +28,11 @@ subroutine m_force_fine(pst,ilevel,icount)
   integer::dummy(2)
   real(kind=8)::rhomax,epot
   type(level_count_t)::level_count
- 
+
   if(pst%s%m%noct_tot(ilevel)==0)return
   if(pst%s%r%verbose)write(*,'("   Entering force_fine for level ",I2)')ilevel
 
-  if(pst%s%r%gravity_type>0)then 
+  if(pst%s%r%gravity_type>0)then
      ! Compute analytical gravity force
      call r_force_analytic(pst,ilevel,1)
   else
@@ -41,7 +41,7 @@ subroutine m_force_fine(pst,ilevel,icount)
      level_count%icount=icount
      call r_gradient_phi(pst,level_count,2)
      ! Add external acceleration
-     if(pst%s%r%gravity_type<0)then 
+     if(pst%s%r%gravity_type<0)then
         call r_force_analytic(pst,ilevel,1)
      endif
   endif
@@ -270,7 +270,7 @@ subroutine gradient_phi(s,ilevel,icount)
 
   ! Loop over grids
   do igrid=m%head(ilevel),m%tail(ilevel)
-     
+
      ! Get central oct potential
      do ind=1,twotondim
         phi_nbor(ind,0)=m%phi(ind,igrid)
@@ -398,7 +398,7 @@ subroutine compute_epot(r,g,m,ilevel,epot)
   !----------------------------------------------------------
   integer::igrid,ind,idim
   real(kind=8)::dx,fact,fourpi
- 
+
   ! Mesh size at level ilevel in code units
   dx=r%boxlen/2**ilevel
   ! Local constants
@@ -475,7 +475,7 @@ subroutine compute_rhomax(r,g,m,ilevel,rhomax)
   ! This routine computes the potential energy
   !----------------------------------------------------------
   integer::igrid,ind,idim
- 
+
   ! Compute maximum total mass density
   rhomax=0D0
 

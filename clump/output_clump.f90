@@ -16,7 +16,7 @@ recursive subroutine r_output_clump(pst,input_array,input_size,output_array,outp
   integer::output_size
   integer,dimension(1:input_size)::input_array
   integer,dimension(1:output_size)::output_array
-  
+
   character(LEN=flen)::filename,fileloc
   integer::rID
 
@@ -265,7 +265,7 @@ subroutine output_clump_field(s,filename)
   character(LEN=flen)::filename
   !----------------------------------------------------------------
   ! This routine output the peak patch fields for each processor
-  !----------------------------------------------------------------  
+  !----------------------------------------------------------------
   integer::ilevel,igrid,ilun
   integer(kind=8),dimension(s%r%levelmin:s%r%nlevelmax)::nskip
   real(kind=4),dimension(1:twotondim)::flg1,flg2
@@ -306,7 +306,7 @@ subroutine file_descriptor_clump(r,filename)
   implicit none
   type(run_t)::r
   character(LEN=flen)::filename
-  
+
   character(LEN=flen)::fileloc
   integer::ivar,ilun
 
@@ -326,7 +326,7 @@ subroutine file_descriptor_clump(r,filename)
 
   ivar=3
   write(ilun,'("variable #",I2,": density")')ivar
-  
+
   close(ilun)
 
 end subroutine file_descriptor_clump

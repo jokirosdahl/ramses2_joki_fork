@@ -67,7 +67,7 @@ FUNCTION dust_recombination(ion, nelem, T, G, ne) result(rate)
 
   if (T.lt.10.0) then
      ! No dust recombination at very low temperatures
-     return 
+     return
   end if
 
   ! First check to make sure that all elements are not zero

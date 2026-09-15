@@ -61,5 +61,3 @@ for el,j in zip(elements,atomic_number):
     counter += 1
 
     os.system(f"mv {el}* ./{el.upper()}")
-
-

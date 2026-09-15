@@ -147,7 +147,7 @@ recursive subroutine r_collect_bound_key(pst,input_array,input_size,output_array
   integer,dimension(1:output_size)::output_array
 
   integer,dimension(:),allocatable::next_output_array
-  
+
   integer::ilevel
   integer,dimension(:),allocatable::noct
   integer(kind=8),dimension(1)::dummy
@@ -204,7 +204,7 @@ subroutine compute_new_bound_key(r,g,m,ilevel,noct,bound_key_target)
   type(mesh_t)::m
   integer::ilevel
   integer,dimension(1:g%ncpu)::noct
-  integer(kind=8),dimension(1:nhilbert,0:g%ncpu)::bound_key_target  
+  integer(kind=8),dimension(1:nhilbert,0:g%ncpu)::bound_key_target
   !----------------------------------------------------
   ! This routine compute the new Hilbert keys so that
   ! perfect load balancing is enforced.
@@ -688,7 +688,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
         msg%int4(ind)=0
      endif
   end do
-  
+
 #ifdef HYDRO
   do ind=1,twotondim
      do ivar=1,nvar
@@ -696,7 +696,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef MHD
   do ind=1,twotondim
      do ivar=1,6
@@ -712,7 +712,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef DO_CR
   do ind=1,twotondim
      do ivar=1,ncruvar
@@ -720,7 +720,7 @@ subroutine pack_flush_loadbalance(mesh, igrid, msg_size, msg_array)
      end do
   end do
 #endif
-  
+
 #ifdef GRAV
   do ind=1,twotondim
      do idim=1,ndim
@@ -765,7 +765,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
         mesh%grid(igrid)%refined(ind)=.false.
      endif
   enddo
-  
+
 #ifdef HYDRO
   do ind=1,twotondim
      do ivar=1,nvar
@@ -773,7 +773,7 @@ subroutine unpack_flush_loadbalance(mesh,igrid,msg_size,msg_array,hash_key)
      end do
   end do
 #endif
-  
+
 #ifdef MHD
   do ind=1,twotondim
      do ivar=1,6
@@ -927,7 +927,7 @@ subroutine balance_part(s,p,ilevel)
   ! Determine particle domains if needed
   !-----------------------------------------------
   if(part_memory)then
-     
+
      !-----------------------------
      ! Allocate temporary work space
      !-----------------------------
@@ -937,11 +937,11 @@ subroutine balance_part(s,p,ilevel)
      allocate(bound_key_left(1:nhilbert,0:ncpu))
      allocate(bound_key_right(1:nhilbert,0:ncpu))
      allocate(bound_key_target(1:nhilbert,0:ncpu))
-     
+
      ! Loop over levels
      do ilev=ilevel,r%nlevelmax
         dx_loc=r%boxlen/2**ilev
-     
+
         ! Compute number of particles
         npart_lev=p%tailp(ilev)-p%headp(ilev)+1
         npart_lev_tot=0
@@ -988,7 +988,7 @@ subroutine balance_part(s,p,ilevel)
         !---------------------------------------------------------
         do while (unbalance.GT.1)
            iter=iter+1
-           
+
            ! Compute number of particles above tick marks
            npart_cum=0
 
@@ -999,7 +999,7 @@ subroutine balance_part(s,p,ilevel)
               ! Compute Hilbert key of particle parent grid
               ix_ref(1:ndim)=int((p%xp(ipart,1:ndim)+m%skip(1:ndim))/(2*dx_loc))
               hk_ref(1:nhilbert)=hilbert_key(ix_ref,ilev-1)
-              
+
               do icpu=1,ncpu
                  if(gt_keys(bound_key_target(1:nhilbert,icpu),hk_ref(1:nhilbert)))then
                     npart_cum(icpu)=npart_cum(icpu)+1
@@ -1056,7 +1056,7 @@ subroutine balance_part(s,p,ilevel)
      deallocate(bound_key_new)
      deallocate(bound_key_left)
      deallocate(bound_key_right)
-     
+
   endif
 
   !---------------------------------
@@ -1707,7 +1707,7 @@ subroutine balance_part(s,p,ilevel)
      call MPI_WAITALL(countsend,reqsend,statuses,info)
 
   endif
-  
+
   deallocate(x_recv_buf,x_send_buf)
 
   allocate(i_recv_buf(1:recv_cnt_tot))
@@ -1933,7 +1933,7 @@ subroutine balance_part(s,p,ilevel)
   call MPI_ALLREDUCE(p%npart,p%npart_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,info)
 
   end associate
-  
+
 end subroutine balance_part
 !#########################################################################
 !#########################################################################

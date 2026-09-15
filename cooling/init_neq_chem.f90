@@ -44,7 +44,7 @@ subroutine init_neq_chem(r,g,tables)
      call rtz_set_model(r,tables,dble(70./100.),dble(0.049),dble(0.3),dble(0.7),dble(r%aexp_ini),T2_sim)
 #else
      call neq_set_model(r,tables,dble(70./100.),dble(0.049),dble(0.3),dble(0.7),dble(r%aexp_ini),T2_sim)
-#endif 
+#endif
   endif
 
 
@@ -55,7 +55,7 @@ subroutine init_neq_chem(r,g,tables)
   call initialize_cr_rates()
 
   ! Initialize the UV background data
-  call load_UVB_data() 
+  call load_UVB_data()
 
   if(r%cosmo)then
      call update_UVB((1.d0/dble(g%aexp_ini))-1.d0)

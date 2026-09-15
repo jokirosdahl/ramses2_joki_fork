@@ -6,7 +6,7 @@ make NDIM=1 HYDRO=1 MHD=1 INIT=ALFVENWAVE
 hydro=.true.
 /
 
-&AMR_PARAMS 
+&AMR_PARAMS
 levelmin=10
 levelmax=10
 ngridmax=10000
@@ -28,6 +28,3 @@ courant_factor=0.8
 slope_type=2
 riemann='hlld'
 /
-
-
-

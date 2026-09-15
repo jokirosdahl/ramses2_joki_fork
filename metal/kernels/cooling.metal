@@ -170,7 +170,7 @@ kernel void cooling_kernel(
     int oct_idx = (group_idx.y * group_dim.y + thread_idx.y);
     if (oct_idx >= params.num_octs) return;
     oct_idx = params.head_idx + oct_idx;
-    
+
     int cell_idx = thread_idx.x;
 
     if (grid[oct_idx].refined[cell_idx]) return;
@@ -183,7 +183,7 @@ kernel void cooling_kernel(
     float velocity_z = uold[cell_idx + 8 * 3 + 8 * nvar * oct_idx] / density;
     float energy = uold[cell_idx + 8 * 4 + 8 * nvar * oct_idx] / density;
     float kinetic = 0.5f * (velocity_x * velocity_x + velocity_y * velocity_y + velocity_z * velocity_z);
-    
+
     float emag = 0.0f;
 #ifdef MHD
     for (int idim = 0; idim < 3; idim++) {

@@ -24,12 +24,12 @@ contains
 !
 ! Used variables:
 !     -----------------------------------------------------------------
-!     potential            phi     
-!     physical RHS         rho     
-!     residual             f(:,1)  
-!     BC-modified RHS      f(:,2)  
-!     mask                 f(:,3)  
-!     scan flag            flag2   
+!     potential            phi
+!     physical RHS         rho
+!     residual             f(:,1)
+!     BC-modified RHS      f(:,2)
+!     mask                 f(:,3)
+!     scan flag            flag2
 !
 ! ------------------------------------------------------------------------
 
@@ -277,7 +277,7 @@ recursive subroutine recursive_multigrid(pst,ilevel,ifinelevel,safe)
         call r_gauss_seidel_mg(pst,gs_step,storage_size(gs_step)/32)
         gs_step%redstep=.false.  ! Black step
         call r_gauss_seidel_mg(pst,gs_step,storage_size(gs_step)/32)
-     end do     
+     end do
 
      ! Compute residual and restrict into upper level RHS
      double_level%ilevel=ilevel
@@ -984,7 +984,7 @@ subroutine make_bc_rhs(s,ilevel,icount)
         m%f(ind,2,igrid) = fourpi*(m%rho(ind,igrid) - offset)
 
         ! Do not process masked cells
-        if(m%f(ind,3,igrid)<=0.0) cycle 
+        if(m%f(ind,3,igrid)<=0.0) cycle
 
         ! Separate directions
         do idim=1,ndim

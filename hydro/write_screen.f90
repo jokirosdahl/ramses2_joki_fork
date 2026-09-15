@@ -20,7 +20,7 @@ subroutine write_screen(r,m)
   integer::igrid,ind
   logical::leaf
   real(kind=8)::ekin,emag,erad,dx
-  
+
 #ifdef HYDRO
 
   if(ndim>1)return

@@ -21,7 +21,7 @@ recursive subroutine r_cr_input_condinit(pst,ilevel,input_size)
   else
      call cr_input_condinit(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
-  
+
 end subroutine r_cr_input_condinit
 !#########################################################################
 !#########################################################################
@@ -36,7 +36,7 @@ subroutine cr_input_condinit(r,g,m,ilevel)
   type(global_t)::g
   type(mesh_t)::m
   integer::ilevel
-  
+
   ! Local variables
   integer::igrid,ngrid,ind,idim,nstride,i,ivar
   !integer::l
@@ -115,7 +115,7 @@ subroutine cr_region_condinit(r,g,x,q,dx,nn)
   do k=1,r%cr_nregion
      if(r%cr_reg_group(k) .le. 0 .or. r%cr_reg_group(k) .gt. ncrgrp) cycle
      igroup = r%cr_reg_group(k)
-     
+
      ! For "square" regions only:
      if(r%cr_region_type(k) .eq. 'square')then
         ! Exponent of choosen norm
@@ -139,7 +139,7 @@ subroutine cr_region_condinit(r,g,x,q,dx,nn)
            ! If cell lies within region,
            if(rad<1.0)then
               q(i,1+(igroup-1)*ndim)=r%cr_fx_region(k)
-#if NDIM>1 
+#if NDIM>1
               q(i,2+(igroup-1)*ndim)=r%cr_fy_region(k)
 #endif
 #if NDIM>2
@@ -148,7 +148,7 @@ subroutine cr_region_condinit(r,g,x,q,dx,nn)
            end if
         end do
      end if
-     
+
   end do
 
   return

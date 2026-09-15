@@ -21,7 +21,7 @@ recursive subroutine r_rt_input_condinit(pst,ilevel,input_size)
   else
      call rt_input_condinit(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
-  
+
 end subroutine r_rt_input_condinit
 !#########################################################################
 !#########################################################################
@@ -36,7 +36,7 @@ subroutine rt_input_condinit(r,g,m,ilevel)
   type(global_t)::g
   type(mesh_t)::m
   integer::ilevel
-  
+
   ! Local variables
   integer::igrid,ngrid,ind,idim,nstride,i,ivar
   !integer::l
@@ -119,7 +119,7 @@ subroutine rt_region_condinit(r,g,x,q,dx,nn,ilevel)
      if(r%rt_reg_group(k) .le. 0 .or. r%rt_reg_group(k) .gt. nrtgrp) cycle
      if(r%rt_n_region(k).le.0.0) r%rt_n_region(k)=smallnp
      group_ind = 1+(r%rt_reg_group(k)-1)*(ndim+1)
-     
+
      ! For "square" regions only:
      if(r%rt_region_type(k) .eq. 'square')then
         ! Exponent of choosen norm
@@ -143,8 +143,8 @@ subroutine rt_region_condinit(r,g,x,q,dx,nn,ilevel)
            ! If cell lies within region,
            if(rad<1.0)then
               q(i,group_ind)=r%rt_n_region(k)
-              q(i,group_ind+1)=r%rt_u_region(k) * g%rt_c(ilevel) 
-#if NDIM>1 
+              q(i,group_ind+1)=r%rt_u_region(k) * g%rt_c(ilevel)
+#if NDIM>1
               q(i,group_ind+2)=r%rt_v_region(k) * g%rt_c(ilevel)
 #endif
 #if NDIM>2
@@ -153,7 +153,7 @@ subroutine rt_region_condinit(r,g,x,q,dx,nn,ilevel)
            end if
         end do
      end if
-     
+
      ! For "point" regions only:
      if(r%rt_region_type(k) .eq. 'point')then
         ! Volume elements
@@ -170,9 +170,9 @@ subroutine rt_region_condinit(r,g,x,q,dx,nn,ilevel)
 #endif
            weight=xn*yn*zn
            if(weight.gt.0) then
-              ! If cell lies within CIC cloud, 
+              ! If cell lies within CIC cloud,
               ! Convert photon number to photon number density
-              q(i,group_ind) = r%rt_n_region(k)/scale_np *weight/vol 
+              q(i,group_ind) = r%rt_n_region(k)/scale_np *weight/vol
               q(i,group_ind+1) = r%rt_u_region(k)/scale_np*weight/vol &
                                * g%rt_c(ilevel)
 #if NDIM>1
@@ -211,7 +211,7 @@ recursive subroutine r_rt_input_source_regions(pst,ilevel,input_size)
   else
      call rt_input_source_regions(pst%s%r,pst%s%g,pst%s%m,ilevel)
   endif
-  
+
 end subroutine r_rt_input_source_regions
 !#########################################################################
 !#########################################################################
@@ -226,7 +226,7 @@ subroutine rt_input_source_regions(r,g,m,ilevel)
   type(global_t)::g
   type(mesh_t)::m
   integer::ilevel
-  
+
   ! Local variables
   integer::igrid,ngrid,ind,idim,nstride,i,ivar
   !integer::l
@@ -314,7 +314,7 @@ subroutine rt_source_regions_sweep(r,g,x,q,dx,dt,nn,ilevel)
      if(r%rt_src_group(k) .le. 0 .or. r%rt_src_group(k) .gt. nrtgrp) cycle
      if(r%rt_n_source(k).le.smallnp) r%rt_n_source(k)=smallnp
      group_ind = 1+(r%rt_src_group(k)-1)*(ndim+1)
-     
+
      ! For "square" regions only:
      if(r%rt_source_type(k) .eq. 'square')then
         ! Exponent of choosen norm
@@ -340,7 +340,7 @@ subroutine rt_source_regions_sweep(r,g,x,q,dx,dt,nn,ilevel)
               q(i,group_ind)=r%rt_n_source(k)/g%rt_c(ilevel)/scale_fp
               ! The input flux is the fraction Fp/(c*Np) (Max 1 magnitude)
               q(i,group_ind+1)=r%rt_u_source(k)*r%rt_n_source(k)/scale_fp
-#if NDIM>1 
+#if NDIM>1
               q(i,group_ind+2)=r%rt_v_source(k)*r%rt_n_source(k)/scale_fp
 #endif
 #if NDIM>2
@@ -349,7 +349,7 @@ subroutine rt_source_regions_sweep(r,g,x,q,dx,dt,nn,ilevel)
            end if
         end do
      end if
-     
+
      ! For "point" regions only:
      if(r%rt_source_type(k) .eq. 'point')then
         ! Volume elements
@@ -366,15 +366,15 @@ subroutine rt_source_regions_sweep(r,g,x,q,dx,dt,nn,ilevel)
 #endif
            weight=xn*yn*zn
            if(weight.gt.0) then
-              ! If cell lies within CIC cloud, 
+              ! If cell lies within CIC cloud,
               ! Convert photon number to photon number density
               q(i,group_ind) = q(i,group_ind) + &
-                               r%rt_n_source(k)/scale_np *weight/vol * dt_cgs               
+                               r%rt_n_source(k)/scale_np *weight/vol * dt_cgs
 
               ! The input flux is the fraction Fp/(c*Np) (Max 1 magnitude)
               q(i,group_ind+1) = q(i,group_ind+1) &
                                + r%rt_u_source(k)*r%rt_n_source(k)/scale_np &
-                               * weight/vol * g%rt_c(ilevel) * dt_cgs 
+                               * weight/vol * g%rt_c(ilevel) * dt_cgs
 #if NDIM>1
               q(i,group_ind+2) = q(i,group_ind+2) &
                                + r%rt_v_source(k)*r%rt_n_source(k)/scale_np   &

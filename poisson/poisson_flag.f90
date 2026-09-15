@@ -12,7 +12,7 @@ subroutine poisson_flag(s,ilevel)
   integer::ilevel
   ! -------------------------------------------------------------------
   ! This routine flag for refinement cells that satisfies
-  ! some user-defined physical criteria at the level ilevel. 
+  ! some user-defined physical criteria at the level ilevel.
   ! -------------------------------------------------------------------
   real(kind=8)::dx_loc,vol_loc,d_scale,factG,twopi
   real(kind=8),dimension(1:nvar)::uu
@@ -72,7 +72,7 @@ subroutine poisson_flag(s,ilevel)
            call jeans_length_refine(r,uu,bb,factG,dx_loc,r%jeans_refine(ilevel),ok)
 #endif
         endif
-        
+
         ! Count only newly flagged cells
         if(m%flag1(ind,igrid)==0.and.ok)g%nflag=g%nflag+1
         if(ok)m%flag1(ind,igrid)=1
@@ -139,4 +139,3 @@ end subroutine jeans_length_refine
 !#####################################################################
 !#####################################################################
 !#####################################################################
-

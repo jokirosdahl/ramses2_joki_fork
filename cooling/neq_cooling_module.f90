@@ -1347,4 +1347,3 @@ SUBROUTINE reduce_flux(Fp, cNp)
 END SUBROUTINE reduce_flux
 #endif
 END MODULE neq_cooling_module
-

@@ -20,14 +20,14 @@ subroutine m_synchro_hydro_fine(pst,ilevel,dteff)
   ! Add gravity source terms to uold with time step dteff.
   !--------------------------------------------------------------
   integer,dimension(1:3)::input_array,dummy
-  
+
   if(pst%s%m%noct_tot(ilevel)==0)return
   if(pst%s%r%verbose)write(*,'("   Entering synchro_hydro_fine for level",i2," and time step dt=",1PE12.5)')ilevel,dteff
 
   input_array(1)=ilevel
   input_array(2:3)=transfer(dteff,input_array)
   call r_synchro_hydro_fine(pst,input_array,3,dummy,0)
-  
+
 end subroutine m_synchro_hydro_fine
 !################################################################
 !################################################################
@@ -47,7 +47,7 @@ recursive subroutine r_synchro_hydro_fine(pst,input_array,input_size,output_arra
   integer::ilevel
   real(kind=8)::dteff
   integer::rID
-  
+
   if(pst%nLower>0)then
      rID = mdl_send_request(pst%s%mdl,MDL_SYNCHRO_HYDRO_FINE,pst%iUpper+1,input_size,output_size,input_array)
      call r_synchro_hydro_fine(pst%pLower,input_array,input_size,input_array,output_size)
@@ -106,7 +106,7 @@ subroutine synchro_hydro_fine(r,m,ilevel,dteff)
         do idim=1,ndim
            m%uold(ind,idim+1,igrid)=m%uold(ind,idim+1,igrid)+&
                 & max(dble(m%uold(ind,1,igrid)),r%smallr)*r%constant_gravity(idim)*dteff
-        end do        
+        end do
 #endif
         ! Update total energy
         do idim=1,3

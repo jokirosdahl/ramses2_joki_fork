@@ -52,7 +52,7 @@ subroutine drive_turb(r,g,m,t,ilevel)
   real(kind=8)::dx
   real(kind=8),dimension(1:nvector)::rho
   real(kind=8),dimension(1:nvector,1:ndim)::xx,ff
- 
+
   ! Mesh size at level ilevel in code units
   dx=r%boxlen/2**ilevel
 

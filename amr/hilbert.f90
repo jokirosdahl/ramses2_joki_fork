@@ -9,7 +9,7 @@ module hilbert
 #if NDIM == 2
   integer, parameter :: big_shift = -60, left_shift = 4, right_shift = -2
 #endif
-  
+
 #if NDIM == 1
   integer, parameter :: big_shift = -62, left_shift = 2, right_shift = -1
 #endif
@@ -22,18 +22,18 @@ module hilbert
   ! J K Lawder, Using State Diagrams for Hilbert Curve Mappings
   ! http://www.dcs.bbk.ac.uk/TriStarp/pubs/JL2_00.pdf
   !
-  ! Usage of state diagrams: 
+  ! Usage of state diagrams:
   !
-  ! - cartesian index: position of a cell inside 
+  ! - cartesian index: position of a cell inside
   !   its oct in cartesian order (0 to 7)
   !
-  ! - current state: integer encoding the "orientation" 
+  ! - current state: integer encoding the "orientation"
   !   of the hilbert curve inside the oct
   !
-  ! - three_digit_diagram(cartesion index + current state * 8)  
+  ! - three_digit_diagram(cartesion index + current state * 8)
   !   hilbert index of the cell given by cartesion index
   !
-  ! - next_state_diagram(cartesian index + current state * 8)  
+  ! - next_state_diagram(cartesian index + current state * 8)
   !   orientation of curve inside the cell given by cartesian index
 
   !================================================================
@@ -69,61 +69,61 @@ module hilbert
        &   4, 4, 8, 8, 2, 7, 2, 3,&
        &   7, 2,11, 2, 7, 5, 8, 5,&
        &  10, 3, 2, 6,10, 3, 4, 4 /)
-    
-  integer(kind=4),parameter,dimension(0:95, 1:3) :: one_digit_diagram=reshape((/&
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0,&  
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
 
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0,&  
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0,&  
-       & 0,  0,  1,  1,  1,  1,  0,  0,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 1,  0,  0,  1,  1,  0,  0,  1,&  
-       & 0,  0,  0,  0,  1,  1,  1,  1,&  
-       & 1,  1,  0,  0,  0,  0,  1,  1,&  
-       & 0,  1,  1,  0,  0,  1,  1,  0,&  
-       & 1,  1,  1,  1,  0,  0,  0,  0/), (/96, 3/))  
-  
+  integer(kind=4),parameter,dimension(0:95, 1:3) :: one_digit_diagram=reshape((/&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 1,  1,  1,  1,  0,  0,  0,  0,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+       & 1,  1,  1,  1,  0,  0,  0,  0,&
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 1,  1,  1,  1,  0,  0,  0,  0,&
+       & 1,  1,  1,  1,  0,  0,  0,  0,&
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+       & 1,  1,  1,  1,  0,  0,  0,  0,&
+       & 0,  0,  1,  1,  1,  1,  0,  0,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 1,  0,  0,  1,  1,  0,  0,  1,&
+       & 0,  0,  0,  0,  1,  1,  1,  1,&
+       & 1,  1,  0,  0,  0,  0,  1,  1,&
+       & 0,  1,  1,  0,  0,  1,  1,  0,&
+       & 1,  1,  1,  1,  0,  0,  0,  0/), (/96, 3/))
+
   ! Next state diagram for reverse (hilbert to cartesian key) conversion
   integer(kind=4),parameter,dimension(0:95)::next_state_diagram_reverse=(/&
-       & 1,   2,   2,   3,   3,   5,   5,   4,&  
-       & 2,   0,   0,   8,   8,   7,   7,   6,&  
-       & 0,   1,   1,   9,   9,  11,  11,  10,&  
-       &11,   6,   6,   0,   0,   9,   9,   8,&  
-       & 9,   7,   7,  11,  11,   0,   0,   5,&  
-       &10,   8,   8,   6,   6,   4,   4,   0,&  
-       & 3,  11,  11,   5,   5,   1,   1,   7,&  
-       & 4,   9,   9,  10,  10,   6,   6,   1,&  
-       & 5,  10,  10,   1,   1,   3,   3,   9,&  
-       & 7,   4,   4,   2,   2,   8,   8,   3,&  
-       & 8,   5,   5,   7,   7,   2,   2,  11,&  
-       & 6,   3,   3,   4,   4,  10,  10,   2/)  
+       & 1,   2,   2,   3,   3,   5,   5,   4,&
+       & 2,   0,   0,   8,   8,   7,   7,   6,&
+       & 0,   1,   1,   9,   9,  11,  11,  10,&
+       &11,   6,   6,   0,   0,   9,   9,   8,&
+       & 9,   7,   7,  11,  11,   0,   0,   5,&
+       &10,   8,   8,   6,   6,   4,   4,   0,&
+       & 3,  11,  11,   5,   5,   1,   1,   7,&
+       & 4,   9,   9,  10,  10,   6,   6,   1,&
+       & 5,  10,  10,   1,   1,   3,   3,   9,&
+       & 7,   4,   4,   2,   2,   8,   8,   3,&
+       & 8,   5,   5,   7,   7,   2,   2,  11,&
+       & 6,   3,   3,   4,   4,  10,  10,   2/)
 
 #endif
 
@@ -139,7 +139,7 @@ module hilbert
        & 0, 3, 1, 1, &
        & 2, 2, 0, 3, &
        & 3, 1, 3, 2/)
-  
+
   integer(kind=8),parameter,dimension(0:15)::next_digits_diagram=(/&
        & 0, 1, 3, 2, &
        & 0, 3, 1, 2, &
@@ -171,7 +171,7 @@ module hilbert
 #if NDIM==1
   ! State diagrams for 1D case - a bit silly, but...
   integer(kind=4),parameter,dimension(0:1)::next_state_diagram=(/0, 0/)
-  
+
   integer(kind=8),parameter,dimension(0:1)::next_digits_diagram=(/0, 1/)
 
   integer(kind=4),parameter,dimension(0:1)::next_state_diagram_reverse=(/0, 0/)
@@ -180,7 +180,7 @@ module hilbert
 #endif
 
 contains
-  
+
   !================================================================
   !================================================================
   !================================================================
@@ -223,7 +223,7 @@ contains
        cstate = next_state_diagram(ind)
        hkey(1) = hkey(1) + next_digits_diagram(ind)
     enddo
-    
+
   end function hilbert_key
 
   !================================================================
@@ -276,9 +276,9 @@ contains
     integer(kind=8), dimension(:,:), intent(in)    :: ix
     integer(kind=4), dimension(:  ), intent(inout) :: cstate
     integer(kind=8), dimension(:,:), intent(inout) :: hkey
-    
+
     ! Compute nvector 3-integer hilbert keys from the cartesian keys ix
-        
+
     ! Local vars
     integer :: ibit, ip, add_digit, idim, ikey, nkey_local
     integer(kind=4), dimension(1:nvector) :: nstate, sdigit, ind
@@ -290,9 +290,9 @@ contains
     end if
 
     nkey_local = ceiling(1.d0 * final_level / levels_per_key(ndim))
-    
+
     do ibit = final_level - initial_level - 1, 0, -1
-       
+
        do ikey = nkey_local, 1, -1
           do ip = 1, npoint
              hkey(ip, ikey) = ISHFT(hkey(ip, ikey), left_shift)
@@ -410,7 +410,7 @@ contains
 #if NHILBERT <= 1
     ge_keys = (key_a(1) >= key_b(1))
 #endif
-  
+
 #if NHILBERT == 2
     if     (key_a(2) > key_b(2)) then
        ge_keys  =  .true.
@@ -424,8 +424,8 @@ contains
        ge_keys = .true.
     end if
 #endif
-    
-#if NHILBERT == 3  
+
+#if NHILBERT == 3
     if     (key_a(3) > key_b(3)) then
        ge_keys = .true.
     elseif (key_a(3) < key_b(3)) then
@@ -444,7 +444,7 @@ contains
 #endif
 
   end function ge_keys
- 
+
   !================================================================
   !================================================================
   !================================================================
@@ -581,7 +581,7 @@ contains
 #endif
 
   end function eq_keys
-  
+
   !================================================================
   !================================================================
   !================================================================
@@ -596,7 +596,7 @@ contains
 
     integer :: ikey, nkey_local
 
-    refine_key(1:nhilbert) = key_in(1:nhilbert) 
+    refine_key(1:nhilbert) = key_in(1:nhilbert)
     nkey_local = ceiling(1.d0 * key_level / levels_per_key(ndim))
     do ikey = nkey_local, 1, -1
        refine_key(ikey) = ISHFT(refine_key(ikey), left_shift)
@@ -605,7 +605,7 @@ contains
           refine_key(ikey) = refine_key(ikey) + ISHFT(refine_key(ikey-1),big_shift)
        endif
     end do
-    
+
   end function refine_key
 
   !================================================================
@@ -622,7 +622,7 @@ contains
 
     integer :: ikey, nkey_local
 
-    coarsen_key(1:nhilbert) = key_in(1:nhilbert) 
+    coarsen_key(1:nhilbert) = key_in(1:nhilbert)
     nkey_local = ceiling(1.d0 * key_level / levels_per_key(ndim))
     do ikey = 1, nkey_local
        coarsen_key(ikey) = ISHFT(coarsen_key(ikey),-ndim)
@@ -630,7 +630,7 @@ contains
           coarsen_key(ikey) = coarsen_key(ikey) + ISHFT(ISHFT(coarsen_key(ikey+1),64-ndim),bits_per_int(ndim)-64)
        endif
     end do
-    
+
   end function coarsen_key
 
   !================================================================

@@ -95,7 +95,7 @@ subroutine dump_sink_particles(pst)
     !input_array=transfer(filename,input_array)
     !call r_output_amr(pst,input_array,flen/4,dummy,0)
     !filename=TRIM(filedir)//'info.txt'
-    !call output_info(pst%s%r,pst%s%g,filename)  
+    !call output_info(pst%s%r,pst%s%g,filename)
 
 end subroutine dump_sink_particles
 !###########################################################
@@ -310,7 +310,7 @@ subroutine m_formation_site(pst)
   logical::keep_alive
   !----------------------------------------------------------------------
   ! This is the master routine for the RAMSES sink formation sites finder
-  !----------------------------------------------------------------------  
+  !----------------------------------------------------------------------
 
 #if NDIM==3 && defined(GRAV)
 
@@ -356,7 +356,7 @@ recursive subroutine r_sink_clump(pst,ilevel,input_size)
      call sink_clump(pst%s)
 #endif
   endif
-  
+
 end subroutine r_sink_clump
 !###########################################################
 !###########################################################
@@ -368,7 +368,7 @@ subroutine sink_clump(s)
   use clump_merger_module
   implicit none
   type(ramses_t)::s
-  
+
 #if NDIM==3 && defined(GRAV)
 
   !-----------------------------------------------

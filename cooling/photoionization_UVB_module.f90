@@ -12,7 +12,7 @@ module photoionization_UVB_module
   real(KIND=8):: HM12_UVB_redshifts(N_UVB_POINTS)
   real(KIND=8):: HM12_UVB_hydrogen(N_UVB_POINTS,1,2)
   real(KIND=8):: HM12_UVB_helium(N_UVB_POINTS,2,2)
-  real(KIND=8):: HM12_UVB_carbon(N_UVB_POINTS,6,2) 
+  real(KIND=8):: HM12_UVB_carbon(N_UVB_POINTS,6,2)
   real(KIND=8):: HM12_UVB_nitrogen(N_UVB_POINTS,7,2)
   real(KIND=8):: HM12_UVB_oxygen(N_UVB_POINTS,8,2)
   real(KIND=8):: HM12_UVB_neon(N_UVB_POINTS,10,2)
@@ -28,284 +28,284 @@ CONTAINS
 
 subroutine load_UVB_data()
     implicit none
-    
+
     integer :: unit_num, ios, i, j
-    
+
     write(*,*) 'Initializing UV background data'
-    
+
     ! Load redshifts
     open(newunit=unit_num, file='./data/HM12/redshifts.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Redshifts UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_redshifts(i)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Hydrogen photoionization
     open(newunit=unit_num, file='./data/HM12/hydrogen_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Hydrogen UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_hydrogen(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Hydrogen photoheating
     open(newunit=unit_num, file='./data/HM12/hydrogen_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Hydrogen UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_hydrogen(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Helium photoionization
     open(newunit=unit_num, file='./data/HM12/helium_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Helium UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_helium(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Helium photoheating
     open(newunit=unit_num, file='./data/HM12/helium_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Helium UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_helium(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Carbon photoionization
     open(newunit=unit_num, file='./data/HM12/carbon_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Carbon UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_carbon(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Carbon photoheating
     open(newunit=unit_num, file='./data/HM12/carbon_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Carbon UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_carbon(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Nitrogen photoionization
     open(newunit=unit_num, file='./data/HM12/nitrogen_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Nitrogen UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_nitrogen(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Nitrogen photoheating
     open(newunit=unit_num, file='./data/HM12/nitrogen_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Nitrogen UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_nitrogen(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Oxygen photoionization
     open(newunit=unit_num, file='./data/HM12/oxygen_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Oxygen UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_oxygen(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Oxygen photoheating
     open(newunit=unit_num, file='./data/HM12/oxygen_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Oxygen UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_oxygen(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Neon photoionization
     open(newunit=unit_num, file='./data/HM12/neon_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Neon UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_neon(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Neon photoheating
     open(newunit=unit_num, file='./data/HM12/neon_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Neon UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_neon(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Magnesium photoionization
     open(newunit=unit_num, file='./data/HM12/magnesium_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Magnesium UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_magnesium(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Magnesium photoheating
     open(newunit=unit_num, file='./data/HM12/magnesium_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Magnesium UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_magnesium(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Silicon photoionization
     open(newunit=unit_num, file='./data/HM12/silicon_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Silicon UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_silicon(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Silicon photoheating
     open(newunit=unit_num, file='./data/HM12/silicon_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Silicon UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_silicon(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Sulfur photoionization
     open(newunit=unit_num, file='./data/HM12/sulfur_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Sulfur UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_sulfur(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Sulfur photoheating
     open(newunit=unit_num, file='./data/HM12/sulfur_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Sulfur UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_sulfur(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Iron photoionization
     open(newunit=unit_num, file='./data/HM12/iron_pi.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Iron UVB file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_iron(i, :, 1)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
     ! Iron photoheating
     open(newunit=unit_num, file='./data/HM12/iron_ph.dat', status='old', action='read', iostat=ios)
     if (ios /= 0) then
         write(*,*) 'Error: Could not open Iron UVB heat file'
         return
     end if
-    
+
     do i = 1, N_UVB_POINTS
         read(unit_num, *, iostat=ios) HM12_UVB_iron(i, :, 2)
         if (ios /= 0) exit
     end do
     close(unit_num)
-    
+
 end subroutine load_UVB_data
 
 subroutine update_UVB(redshift)
@@ -341,23 +341,23 @@ subroutine update_UVB(redshift)
                end if
                if (j.lt.3) then
                   HM12_UVB_z(2,j,1)  = (scale_low * HM12_UVB_helium(i,j,1))  + (scale_high * HM12_UVB_helium(i+1,j,1))
-                  HM12_UVB_z(2,j,2)  = (scale_low * HM12_UVB_helium(i,j,2))  + (scale_high * HM12_UVB_helium(i+1,j,2))               
+                  HM12_UVB_z(2,j,2)  = (scale_low * HM12_UVB_helium(i,j,2))  + (scale_high * HM12_UVB_helium(i+1,j,2))
                end if
                if (j.lt.7) then
                   HM12_UVB_z(6,j,1)  = (scale_low * HM12_UVB_carbon(i,j,1))  + (scale_high * HM12_UVB_carbon(i+1,j,1))
-                  HM12_UVB_z(6,j,2)  = (scale_low * HM12_UVB_carbon(i,j,2))  + (scale_high * HM12_UVB_carbon(i+1,j,2)) 
+                  HM12_UVB_z(6,j,2)  = (scale_low * HM12_UVB_carbon(i,j,2))  + (scale_high * HM12_UVB_carbon(i+1,j,2))
                end if
                if (j.lt.8) then
                   HM12_UVB_z(7,j,1)  = (scale_low * HM12_UVB_nitrogen(i,j,1))  + (scale_high * HM12_UVB_nitrogen(i+1,j,1))
-                  HM12_UVB_z(7,j,2)  = (scale_low * HM12_UVB_nitrogen(i,j,2))  + (scale_high * HM12_UVB_nitrogen(i+1,j,2))                
+                  HM12_UVB_z(7,j,2)  = (scale_low * HM12_UVB_nitrogen(i,j,2))  + (scale_high * HM12_UVB_nitrogen(i+1,j,2))
                end if
                if (j.lt.9) then
                   HM12_UVB_z(8,j,1)  = (scale_low * HM12_UVB_oxygen(i,j,1))  + (scale_high * HM12_UVB_oxygen(i+1,j,1))
-                  HM12_UVB_z(8,j,2)  = (scale_low * HM12_UVB_oxygen(i,j,2))  + (scale_high * HM12_UVB_oxygen(i+1,j,2))                
+                  HM12_UVB_z(8,j,2)  = (scale_low * HM12_UVB_oxygen(i,j,2))  + (scale_high * HM12_UVB_oxygen(i+1,j,2))
                end if
                if (j.lt.11) then
                   HM12_UVB_z(10,j,1)  = (scale_low * HM12_UVB_neon(i,j,1))  + (scale_high * HM12_UVB_neon(i+1,j,1))
-                  HM12_UVB_z(10,j,2)  = (scale_low * HM12_UVB_neon(i,j,2))  + (scale_high * HM12_UVB_neon(i+1,j,2))                
+                  HM12_UVB_z(10,j,2)  = (scale_low * HM12_UVB_neon(i,j,2))  + (scale_high * HM12_UVB_neon(i+1,j,2))
                end if
                if (j.lt.13) then
                   HM12_UVB_z(12,j,1)  = (scale_low * HM12_UVB_magnesium(i,j,1))  + (scale_high * HM12_UVB_magnesium(i+1,j,1))
@@ -375,7 +375,7 @@ subroutine update_UVB(redshift)
                   HM12_UVB_z(26,j,1)  = (scale_low * HM12_UVB_iron(i,j,1))  + (scale_high * HM12_UVB_iron(i+1,j,1))
                   HM12_UVB_z(26,j,2)  = (scale_low * HM12_UVB_iron(i,j,2))  + (scale_high * HM12_UVB_iron(i+1,j,2))
                end if
-             end do               
+             end do
           end if
        end do
     end if

@@ -1,8 +1,8 @@
 This namelist contains various input parameters for a 2d Stromgren sphere test.
 Compile using:
-make NDIM=2 RT=1 NRTGRP=1 NION=1 MPI=1
+make NDIM=2 DO_RT=1 NRTGRP=1 NION=1 MPI=1
 
-&RUN_PARAMS 
+&RUN_PARAMS
 hydro=.true.
 rt=.true.
 ncontrol=1
@@ -40,8 +40,8 @@ bound_ymax=-1,-1, 1, 0
 nregion=1                       ! Number of geometrical regions
 region_type(1)='square'         ! Region gemoetry
 x_center=0.5                    ! Region center, should be [0,boxlen]
-y_center=0.5                    ! 
-length_x=100.0                  ! Region width, in units of boxlen 
+y_center=0.5                    !
+length_x=100.0                  ! Region width, in units of boxlen
 length_y=100.0                  ! (this region covers the whole box)
 d_region=1d-1                   ! Initial density of the gas in H/cc
 p_region=8.69869d-6		! Initial pressure (corresponds to 10^4 K)
@@ -74,7 +74,7 @@ neq_TConst=1d4                  ! Force constant gas temperature of 10^4 K
 is_init_xion=.true.
 /
 
-&REFINE_PARAMS 
+&REFINE_PARAMS
 interpol_var=0
 interpol_type=0
 err_grad_xHII=0.1

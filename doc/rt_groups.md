@@ -16,7 +16,3 @@ The namelist block `&RT_GROUPS` is used to specify parameters controlling the ra
 | `group_cse(3,:)` |                | `(\7.4d-20,1.1d-18,1.0d-18\)`|  |
 | `kappaAbs`       | `real array`   | `(\0,0,0\)`  | Dust absorption coefficient (opacity with Planck mean) for each group. The opacity scales with the local metallicity. If `is_kIR_T=.true.`, the IR opacity also scales with the local gas temperature. |
 | `kappaSc`        | `real array`   | `(\0,0,0\)`  | Dust scattering coefficient (opacity with Rosseland mean) for each group. In general, this is only for the IR photon group (which is usually the first group). The IT opacity scales with the local metallicity. If `is_kIR_T=.true.`, it also scales with the local gas temperature. |
-
-
-
-

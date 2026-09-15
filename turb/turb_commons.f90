@@ -113,7 +113,7 @@ contains
   !=====================================================================================
   !=====================================================================================
   !=====================================================================================
-  !=====================================================================================  
+  !=====================================================================================
   subroutine write_turb_fields(run, turb, output_dir)
     implicit none
     type(run_t)                  :: run
@@ -577,7 +577,7 @@ subroutine find_conj_pair(i,j,k,ii,jj,kk)
 #include "fftw3.f"
 #endif
     ! Transform complex field into purely real field for 3D vector field
-   
+
     complex(kind=8), intent(in)  :: complex_field(1:3,0:TGRID_X,0:TGRID_Y,0:TGRID_Z)
                                            ! Complex field to transform
     real(kind=8), intent(out)    :: real_field(1:3,0:TGRID_X,0:TGRID_Y,0:TGRID_Z)
@@ -719,7 +719,7 @@ subroutine find_conj_pair(i,j,k,ii,jj,kk)
        cube_vals(:,i,1) = turb%afield_now(:, bmin(1,i), 0, 0)
        cube_vals(:,i,2) = turb%afield_now(:, bmax(1,i), 0, 0)
     end do
-    
+
     do i=1,nok
        interp(:,i,1) = dr2(1,i)
        interp(:,i,2) = dr1(1,i)
@@ -841,7 +841,7 @@ subroutine find_conj_pair(i,j,k,ii,jj,kk)
     integer(ILP)                  :: int_array(1:N)
     integer(ILP), parameter       :: randmax = 9223372036854775807_ILP
     double precision              :: dbl_array(1:N)
-   
+
     do i=1,N
        call kiss64_core(s, int_array(i))
     end do

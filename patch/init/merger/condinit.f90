@@ -29,7 +29,7 @@ module merger_parameters
 #ifdef MHD
   ! Magnetic Field Setup
   real(dp)::B_ave = 0.0D0
-  character(len=16)::mag_topology='toroidal' ! magnetic topology: 
+  character(len=16)::mag_topology='toroidal' ! magnetic topology:
                                              ! 'constant' (along x-axis)
                                              ! 'toroidal'
                                              ! 'dipole'
@@ -57,7 +57,7 @@ subroutine read_merger_params(g)
   character(LEN=80)::infile
 
   !--------------------------------------------------
-  ! Local variables  
+  ! Local variables
   !--------------------------------------------------
   real(dp)::norm_u
   logical::vcirc_file1_exists, vcirc_file2_exists
@@ -183,15 +183,15 @@ subroutine condinit(r,g,x,q,dx,nn)
   real(dp)::rho_0_1, rho_0_2, rho_0, weight, da1, Vrot,vflowx,vflowy,vflowz
   real(dp)::slabvol,GaFr,denslab
   logical, save:: init_nml=.false.
-  
+
   call units(r,g,scale_l,scale_t,scale_d,scale_v,scale_nH,scale_T2)
-  
+
   ! Read user-defined merger parameters from the namelist
   if (.not. init_nml) then
      call read_merger_params(g)
      init_nml = .true.
   end if
-  
+
   ! Gaseous disks masses (given in  2.3262e5 Msun unit)
   ! !!!!!! The galaxy #1 must be the more heavy !!!!!
   Mgaz_disk1 = Mgaz_disk1
@@ -218,7 +218,7 @@ subroutine condinit(r,g,x,q,dx,nn)
   ! Gaseous Slab Area and Density
   slabvol = pi * (rslab**2) * hslab
   denslab = (Mgaz_disk1 * HIfr) / slabvol
-  
+
   if(maxval(abs(xc1)) .GT. (minval(r%box_size(1:ndim))/2.0D0))then
      write(*,*)'Error: galactic center (1) coordinates must be in the box [', (-r%box_size(1)/2.0D0), ';', (r%box_size(1)/2.0D0), ']^3'
      stop
@@ -227,29 +227,29 @@ subroutine condinit(r,g,x,q,dx,nn)
      write(*,*)'Error: galactic center (2) coordinates must be in the box [', (-r%box_size(1)/2.0D0), ';', (r%box_size(1)/2.0D0), ']^3'
      stop
   endif
-  
+
   a2=1.0d4 / scale_T2 ! sound speed squared
   aa=sqrt(a2)
-  
+
   ! Galactic central gas densities
   select case (rad_profile)
   case ('exponential')
      rho_0_1 = (1.0D0 - exp(-rcut1 / rcar1) * (1.0D0 + rcut1 / rcar1) ) * (1.0D0 - exp(-hcut1 / hcar1))
-     rho_0_1 = Mgaz_disk1 / (4.0D0 * pi * rcar1**2 * hcar1 * rho_0_1) 
-     rho_0_2 = (1.0D0 - exp(-rcut2 / rcar2) * (1.0D0 + rcut2 / rcar2) ) * (1.0D0 - exp(-hcut2 / hcar2)) 
+     rho_0_1 = Mgaz_disk1 / (4.0D0 * pi * rcar1**2 * hcar1 * rho_0_1)
+     rho_0_2 = (1.0D0 - exp(-rcut2 / rcar2) * (1.0D0 + rcut2 / rcar2) ) * (1.0D0 - exp(-hcut2 / hcar2))
      rho_0_2 = Mgaz_disk2 / (4.0D0 * pi * rcar2**2 * hcar2 * rho_0_2)
   case ('Toomre')
      rho_0_1 = (sqrt(1.0D0 + rcut1**2/rcar1**2) - 1.0D0) * (1.0D0 - exp(-hcut1 / hcar1))
      rho_0_1 = Mgaz_disk1 / (4.0D0 * pi * rcar1**2 * hcar1 * rho_0_1)
-     rho_0_2 = (sqrt(1.0D0 + rcut2**2/rcar2**2) - 1.0D0) * (1.0D0 - exp(-hcut2 / hcar2)) 
+     rho_0_2 = (sqrt(1.0D0 + rcut2**2/rcar2**2) - 1.0D0) * (1.0D0 - exp(-hcut2 / hcar2))
      rho_0_2 = Mgaz_disk2 / (4.0D0 * pi * rcar2**2 * hcar2 * rho_0_2)
   case ('exponentialslab')
      rho_0_1 = (1.0D0 - exp(-rcut1 / rcar1) * (1.0D0 + rcut1 / rcar1) ) * (1.0D0 - exp(-hcut1 / hcar1))
      rho_0_1 = Mgaz_disk1 / (4.0D0 * pi * rcar1**2 * hcar1 * rho_0_1)
-     rho_0_2 = (1.0D0 - exp(-rcut2 / rcar2) * (1.0D0 + rcut2 / rcar2) ) * (1.0D0 - exp(-hcut2 / hcar2)) 
+     rho_0_2 = (1.0D0 - exp(-rcut2 / rcar2) * (1.0D0 + rcut2 / rcar2) ) * (1.0D0 - exp(-hcut2 / hcar2))
      rho_0_2 = Mgaz_disk2 / (4.0D0 * pi * rcar2**2 * hcar2 * rho_0_2)
   end select
-  
+
   ! Intergalactic gas density
   select case (rad_profile)
   case ('exponential')
@@ -269,31 +269,31 @@ subroutine condinit(r,g,x,q,dx,nn)
         dmin = rho_0_1 * exp(-hcut1 / hcar1) * exp(-rcut1 / rcar1)
      end select
   end if
-  
+
   rhohalo=r%d_region(1)
   vflowx=r%u_region(1)
   vflowy=r%v_region(1)
   vflowz=r%w_region(1)
   phalo=r%p_region(1) ! This is actually the temperature in K
-  
+
   dmin=rhohalo/scale_nH  ! Get halo density in H/cc from paramfile and convert to code units
-  
+
   ! Loop over cells
   do i=1,nn
      do j=1,3
         xx1(j)=x(i,j)-(xc1(j)+r%box_size(j)/2.0D0)
         xx2(j)=x(i,j)-(xc2(j)+r%box_size(j)/2.0D0)
      enddo
-     
+
      ! Compute angular velocity
-     
+
      ! Distance between cell and both galactic centers
      rr1 = norm2(xx1)
      rr2 = norm2(xx2)
-     
+
      ! Projected cell position over galactic centers axis
      da1 = dot_product(xc2 - xc1, xx1) / norm2(xc2 - xc1)**2
-     
+
      if(da1 .LT. (Mgaz_disk1 / (Mgaz_disk1 + Mgaz_disk2))) then ! cell belongs to galaxy #1
         ind_gal = 1
         rr = rr1
@@ -338,7 +338,7 @@ subroutine condinit(r,g,x,q,dx,nn)
         ! Density
         select case (rad_profile)
         case ('exponential')
-           q(i,1)= rho_0 * exp(-abs_z / HH) * exp(-rc / rgal) 
+           q(i,1)= rho_0 * exp(-abs_z / HH) * exp(-rc / rgal)
         case ('Toomre')
            q(i,1)= rho_0 * exp(-abs_z / HH) / sqrt(1.0D0 + rc**2/rgal**2)
         case ('exponentialslab')
@@ -349,7 +349,7 @@ subroutine condinit(r,g,x,q,dx,nn)
         end select
         q(i,1) = max(weight * q(i,1), dmin)
         ! P = rho * a**2 = rho * Cs**2
-        q(i,5)=a2*q(i,1)        
+        q(i,5)=a2*q(i,1)
         ! Metals
         if(r%metal)then
            q(i,r%imetal)=r%z_ave*0.02
@@ -358,7 +358,7 @@ subroutine condinit(r,g,x,q,dx,nn)
         if(r%entropy)then
            q(i,r%ientropy)=q(i,5)/q(i,1)**r%gamma
         endif
-        ! V = Vrot * (u_rot^xx_rad)/r + Vx_gal        
+        ! V = Vrot * (u_rot^xx_rad)/r + Vx_gal
         !  -> Vrot = sqrt(Vcirc**2 - 3*Cs**2 + r/rho * grad(rho) * Cs**2)
         select case (rad_profile)
         case ('exponential')
@@ -397,7 +397,7 @@ contains
     integer, intent(in)		:: indice
     real(dp)					:: find_Vcirc
     real(dp)					:: vitesse, rayon_bin, vitesse_old, rayon_bin_old
-    integer					:: k, indmax    
+    integer					:: k, indmax
     k=2
     if (indice .EQ. 1) then
        indmax = size(Vcirc_dat1,1)
@@ -429,7 +429,7 @@ contains
           rayon_bin_old = rayon_bin
           rayon_bin = Vcirc_dat2(k,1)
        end if
-    end do    
+    end do
     find_Vcirc = vitesse_old + (rayon - rayon_bin_old) * (vitesse - vitesse_old) / (rayon_bin - rayon_bin_old)
     return
   end function find_Vcirc
@@ -437,7 +437,7 @@ contains
   function vect_prod(a,b)
     implicit none
     real(dp), dimension(3), intent(in)::a,b
-    real(dp), dimension(3)::vect_prod    
+    real(dp), dimension(3)::vect_prod
     vect_prod(1) = a(2) * b(3) - a(3) * b(2)
     vect_prod(2) = a(3) * b(1) - a(1) * b(3)
     vect_prod(3) = a(1) * b(2) - a(2) * b(1)
@@ -448,7 +448,7 @@ contains
     real(dp) :: norm2
     norm2 = sqrt(dot_product(x,x))
   end function norm2
-  
+
 end subroutine condinit
 !-------------------------------------------------------------------------------------
 ! Circular velocity files reading
@@ -461,7 +461,7 @@ subroutine read_vcirc_files
   ! Those circular velocity files must contain :                              !
   ! - Column #1 : radius (in pc)                                              !
   ! - Column #2 : circular velocity (in km/s)                                 !
-  !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!  
+  !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~!
   ! Galaxy #1
   nvitesses = 0
   open(unit=123, file=trim(Vcirc_dat_file1), iostat=ierr)

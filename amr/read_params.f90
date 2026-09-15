@@ -67,7 +67,7 @@ subroutine m_read_params(pst)
   integer::nremap=10          ! Particle load balancing frequency (0: never)
 
   ! Maximum number of allocatable particles
-  integer::npartmax=0 
+  integer::npartmax=0
   integer::nstarmax=0
   integer::nsinkmax=0
   integer::ntreemax=0
@@ -432,7 +432,7 @@ subroutine m_read_params(pst)
   integer::iIons,ixHI=0,ixHII=0,ixHeII=0,ixHeIII=0 !   Ionization indices
 #ifdef DO_RTZ
   integer::element_first_idx(1:27)       !  Start idx of elements in uold
-  integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold 
+  integer::molecules_first_idx(1:3)     !  Start idx of molecules in uold
   real(kind=8),dimension(1:27,1:27)::ionEvs=0.     !  Ionization energies
 #else
   real(kind=8),dimension(nion)::ionEvs=0.          !  Ionization energies
@@ -519,7 +519,7 @@ subroutine m_read_params(pst)
   logical::sink_refine=.false.
   logical::sink_dump=.false.
   logical::static_sink=.false.
-  logical::fix_sink_mass=.false. 
+  logical::fix_sink_mass=.false.
   logical::drag_sink=.false. ! Whether to use dynamical friction for black hole dynamics
 
   ! Sink accretion parameters
@@ -542,7 +542,7 @@ subroutine m_read_params(pst)
   ! Sink feedback parameters
   logical::agn = .false. ! Whether to activate AGN feedback around black hole/sink particles
   integer::agn_feedback_radius = 4 ! Radius (in dx_min) of feedback region (should be geq sink_b_spline_order/2)
-  integer::agn_weighting_scheme = 1 ! Which AGN weighting scheme (psy_function) to use 
+  integer::agn_weighting_scheme = 1 ! Which AGN weighting scheme (psy_function) to use
   real(kind=8)::epsilon_rad = 0.1d0 ! Radiative efficiency
   real(kind=8)::epsilon_radio = 1.0d0 ! Efficiency of momentum feedback for jet
   real(kind=8)::epsilon_quasar = 0.15d0 ! Efficiency of thermal feedback for quasar
@@ -580,7 +580,7 @@ subroutine m_read_params(pst)
   integer      :: turb_Ndt=100        ! Number of timesteps per autocorr. time
   real(kind=8) :: turb_rms=1.0        ! rms turbulent forcing acceleration
   real(kind=8) :: turb_min_rho=1d-50  ! Minimum density for turbulence
-  
+
 #ifdef DO_RTZ
   integer::i_Element, i_Iion
 #endif
@@ -945,7 +945,7 @@ subroutine m_read_params(pst)
      write(*,*)'the code was compiled with HYDRO=0'
      write(*,*)'Please recompile with HYDRO=1'
      call mdl_abort(s%mdl)
-  endif  
+  endif
 #endif
 #ifdef GRAV
   if(.not. poisson)then
@@ -987,7 +987,7 @@ subroutine m_read_params(pst)
      write(*,*)'the code was compiled with CR=0'
      write(*,*)'Please recompile with CR=1'
      call mdl_abort(s%mdl)
-  endif  
+  endif
 #endif
 #ifndef MHD
   if(cr)then
@@ -995,11 +995,11 @@ subroutine m_read_params(pst)
      write(*,*)'the code was compiled with MHD=0'
      write(*,*)'Please recompile with MHD=1'
      call mdl_abort(s%mdl)
-  endif  
+  endif
 #endif
 
   !----------------------------
-  ! Read hydro parameters 
+  ! Read hydro parameters
   !----------------------------
   rewind(1)
   read(1,NML=init_params,END=101)
@@ -1042,10 +1042,10 @@ subroutine m_read_params(pst)
 114 continue
   rewind(1)
   read(1, NML=lightcone_params, END=115)
-115 continue 
+115 continue
   rewind(1)
   read(1, NML=turb_params, END=116)
-116 continue 
+116 continue
   rewind(1)
   read(1,NML=trac_params,END=117)
 117 continue
@@ -1193,10 +1193,10 @@ subroutine m_read_params(pst)
      iCount=0
 #ifdef DO_RTZ
      do i_Element=1,n_elements ! loop over elements
-        if (elements(i_Element)%atomic_number.gt.0) then 
+        if (elements(i_Element)%atomic_number.gt.0) then
            do i_Iion=1,elements(i_Element)%n_ions ! loop over ions
               icount = icount + 1
-              if (i_Iion.eq.1) then 
+              if (i_Iion.eq.1) then
                  element_first_idx(i_Element) = icount
               end if
            end do ! end loop over ions
@@ -1204,7 +1204,7 @@ subroutine m_read_params(pst)
      end do ! end loop over elements
 
      ! Deal with molecules separately
-     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then 
+     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then
         icount = icount + 1
         molecules_first_idx(1) = icount
      end if
@@ -1250,13 +1250,13 @@ subroutine m_read_params(pst)
      write(*,*) 'Their indices in U are:'
 #ifdef DO_RTZ
      do i_Element=1,n_elements ! Loop over elements
-        if (elements(i_Element)%atomic_number.gt.0) then 
+        if (elements(i_Element)%atomic_number.gt.0) then
            write(*,'(A10, I4)') 'i' // trim(elements(i_Element)%element_name) // '=', iIons-1+element_first_idx(i_Element)
         end if
      end do
 
      ! Deal with molecules separately
-     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then 
+     if (elements(1)%atomic_number.gt.0 .and. isH2_rtz) then
         write(*,'(A10, I4)') 'iH2 =', iIons-1+molecules_first_idx(1)
      end if
 #else

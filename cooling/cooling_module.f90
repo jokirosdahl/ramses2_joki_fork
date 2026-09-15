@@ -66,24 +66,24 @@ module cooling_module
   end type cooling_table
 
   type cooling_t
-  
+
      type(cooling_table)::table
-     
+
      real(kind=8) :: X = 0.76d0
      real(kind=8) :: Y = 0.24d0
      real(kind=8) :: mu_mol = 1.2195d0
      real(kind=8) :: dumfac_ion=dumfac_ion_theuns
      real(kind=8) :: dumfac_rec=dumfac_rec_theuns
-     
+
      logical :: first = .true.
-     
+
      ! On DOIT AVOIR OU teyssier OU theuns OU madau
      ! OU courty avec un OU exclusif
      logical :: teyssier=.false.
      logical :: theuns=.false.
      logical :: madau=.false.
      logical :: courty=.true.  ! Default model
-     
+
      ! Si teyssier ou theuns :
      real(kind=8) :: J0in=1d-22  ! J0 default
      real(kind=8) :: J0min=1d-29 ! Valeur minimale du J0
@@ -105,7 +105,7 @@ module cooling_module
      real(kind=8)::cb1s,cb2s,cb3s,ci1s,ci2s,ci3s,cr1s,cr2s,cr3s,cds
      real(kind=8)::ce1s,ce3s,ch1s,ch2s,ch3s,cocs,cohs
      real(kind=8)::cool_out, heat_out
-          
+
      real(kind=8) :: zreioniz=8.5d0
      ! Ordre+1 du polynome d'interpolation (NE PAS CHANGER)
      real(kind=8) :: coefcourty(0:Nordercourty,6)= reshape(           &
@@ -135,7 +135,7 @@ module cooling_module
      real(kind=8) :: uvb_last_update = -1.0d0 ! UVB HI rate when table was last computed
 
   end type cooling_t
-  
+
 contains
 !=======================================================================
 subroutine set_model(c,Nmodel,J0in_in,J0min_in,alpha_in,normfacJ0_in,  &
@@ -1423,4 +1423,3 @@ function cooling_needs_update(c, aexp)
 end function cooling_needs_update
 
 end module cooling_module
-

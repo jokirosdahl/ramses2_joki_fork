@@ -3,10 +3,10 @@ module lightcone_module
   use ramses_commons, only: pst_t, ramses_t
   implicit none
 contains
-  subroutine m_output_lightcone(pst)  
+  subroutine m_output_lightcone(pst)
     use mdl_module, only: mdl_mkdir
 
-    type(pst_t), intent(in) :: pst    
+    type(pst_t), intent(in) :: pst
     character(LEN=5) :: nchar
     integer :: dummy(1)
     integer, dimension(1:flen/4) :: input_array
@@ -52,12 +52,12 @@ contains
     else
        call title(pst%s%g%myid, nchar)
        nchar = TRIM(transfer(input_array, nchar))
-       
+
        ! Build filenames for both particle types
        part_filename = 'lightcone/part_'//TRIM(nchar)
        tree_filename = 'lightcone/tree_'//TRIM(nchar)
        grav_filename = 'lightcone/grav_'//TRIM(nchar)
-       
+
        ! Output regular DM particles
        if (pst%s%r%part) then
           call output_lightcone(pst%s, pst%s%p, part_filename)
@@ -360,7 +360,7 @@ contains
                       rho = s%m%rho(ind,igrid)
                       phi = s%m%phi(ind,igrid)
                       accel(:) = s%m%f(ind,:,igrid)
-                      dphidt = ( s%m%phi(ind,igrid) - s%m%phi_old(ind,igrid) ) / s%g%dtold(s%r%levelmin) 
+                      dphidt = ( s%m%phi(ind,igrid) - s%m%phi_old(ind,igrid) ) / s%g%dtold(s%r%levelmin)
 #endif
                       call add_to_buffer_grav(buffer, real(position(:), kind=4), real(rho, kind=4), real(phi, kind=4), real(accel(:), kind=4), real(dphidt, kind=4))
 

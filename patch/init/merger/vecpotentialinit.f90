@@ -39,7 +39,7 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      rc = sqrt(xx**2+yy**2) ! kpc
 
      select case (mag_topology)
-        
+
      case ('constant') ! constant done elsewhere
         if(idim==1) A(i)=0
         if(idim==2) A(i)=0
@@ -55,7 +55,6 @@ subroutine vecpotentialinit(r,g,x,A,idim,nn)
      end select
 
   enddo
-#endif  
+#endif
 
 end subroutine vecpotentialinit
-

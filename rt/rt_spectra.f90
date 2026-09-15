@@ -238,7 +238,7 @@ MODULE SED_module
   implicit none
 
   PUBLIC sed_table_t, init_SED_table, inp_SED_table &
-        ,update_SED_group_props, getNPhotonsEmitted 
+        ,update_SED_group_props, getNPhotonsEmitted
 #ifdef DO_RTZ
   PUBLIC initialize_cross_sections_from_blackbody &
         ,initialize_group_energies_from_blackbody
@@ -310,14 +310,14 @@ SUBROUTINE init_SED_table(r, g, SED)
   logical::ok,okAge,okZ
   real(kind=8)::dlgA, pL0, pL1, tmp
   integer::locid,ncpu2
-  integer::nv 
+  integer::nv
   integer,parameter::tag=1132
 
 ! set nv to the correct value depending on whether we are using rtz or not
 #ifdef DO_RTZ
   nv=3+2
   do i=1,n_elements
-     if (elements(i)%atomic_number.gt.0) then 
+     if (elements(i)%atomic_number.gt.0) then
         nv = nv + (2 * elements(i)%n_ions)
      end if
      if (r%isH2_rtz) then
@@ -420,7 +420,7 @@ SUBROUTINE init_SED_table(r, g, SED)
         counter = 1
         do ii=1, n_elements ! Loop over elements
            ! Cross sections for atomic species
-           if (elements(ii)%atomic_number.gt.0) then 
+           if (elements(ii)%atomic_number.gt.0) then
               do jj=1,elements(ii)%n_ions-1 !loop over ionization states
                  tbl(ia,iz,3+counter) = getSEDcsn(r,Ls,SEDs(:,ia,iz),nLs,pL0,pL1,ii,jj)
                  counter = counter + 1
@@ -544,7 +544,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
   ! Supernovae progenitors life time from Myr to proper time in code units
   !t_SN = r%t_SNII*1d6*(365.*24.*3600.)/(scale_t/g%aexp**2)
   t_SN_gyr = r%t_SNII/1d3
-  
+
   sum_L_cpu   = 0d0 ! Accumulated luminosity, avg cross sections and
   sum_egy_cpu = 0d0 ! photon energies for all stars belonging to
   sum_csn_cpu = 0d0 ! 'this' cpu
@@ -570,7 +570,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
      counter = 1
      do ii=1, n_elements ! Loop over elements
      ! Cross sections for atomic species
-        if (elements(ii)%atomic_number.gt.0) then 
+        if (elements(ii)%atomic_number.gt.0) then
            do jj=1,elements(ii)%n_ions-1 !loop over ionization states
               call inp_SED_table(SED, age, Z, 3+counter, .true., csn_star(1:nrtgrp,ii,jj))! [cm^2]
               counter = counter + 1
@@ -654,7 +654,7 @@ SUBROUTINE update_SED_group_props(r, g, SED, p)
      counter = 1
      do ii=1, n_elements ! Loop over elements
      ! Cross sections for atomic species
-        if (elements(ii)%atomic_number.gt.0) then 
+        if (elements(ii)%atomic_number.gt.0) then
            do jj=1,elements(ii)%n_ions-1 !loop over ionization states
               r%group_csn(ip,ii,jj) = SED%table(1,1,ip,3+counter)
               counter = counter + 1
@@ -919,7 +919,7 @@ SUBROUTINE write_SED_table(SED)
 
 #ifdef DO_RTZ
   do i=1,n_elements
-     if (elements(i)%atomic_number.gt.0) then 
+     if (elements(i)%atomic_number.gt.0) then
         nv = nv + (2 * elements(i)%n_ions)
      end if
 #if N_H2 > 0
@@ -1053,9 +1053,9 @@ END SUBROUTINE getNPhotonsEmitted
 FUNCTION blackbody(T, lambda) result(B_lam)
   ! Blackbody function B_lam
   ! Harley addition so that it is easier to make default
-  ! cross sections 
+  ! cross sections
   ! T --> temeprature [K]
-  ! lambda --> wavelengths [A] 
+  ! lambda --> wavelengths [A]
   use constants, only: c_cgs, hplanck, kB
   implicit none
   real(kind=8), intent(in):: T, lambda
@@ -1072,7 +1072,7 @@ FUNCTION blackbody(T, lambda) result(B_lam)
 END FUNCTION blackbody
 
 SUBROUTINE initialize_cross_sections_from_blackbody(r, T, group_L0, group_L1, group_csn, group_cse, isH2_rtz)
-  ! This subroutine initializes the cross sections of 
+  ! This subroutine initializes the cross sections of
   ! each species to be consistent with a blackbody of
   ! a given temperature
   use constants, only: c_cgs, hplanck, eV2erg
@@ -1108,9 +1108,9 @@ SUBROUTINE initialize_cross_sections_from_blackbody(r, T, group_L0, group_L1, gr
      end do
 
      ! Loop over elements
-     do ii=1, n_elements 
+     do ii=1, n_elements
         ! Check if we actually use the element
-        if (elements(ii)%atomic_number.gt.0) then 
+        if (elements(ii)%atomic_number.gt.0) then
            ! Loop over ionization states
            do jj=1,elements(ii)%n_ions-1 !loop over ionization states
               group_csn(ip,ii,jj) = getSEDcsn(r, X, Y, 1000, group_L0(ip), group_L1(ip), ii, jj)
@@ -1129,7 +1129,7 @@ SUBROUTINE initialize_cross_sections_from_blackbody(r, T, group_L0, group_L1, gr
 END SUBROUTINE initialize_cross_sections_from_blackbody
 
 SUBROUTINE initialize_group_energies_from_blackbody(r, T, group_L0, group_L1, group_egy)
-  ! This subroutine initializes the cross sections of 
+  ! This subroutine initializes the cross sections of
   ! each species to be consistent with a blackbody of
   ! a given temperature
   use constants, only: c_cgs, hplanck, eV2erg

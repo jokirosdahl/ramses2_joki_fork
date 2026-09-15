@@ -14,7 +14,7 @@ subroutine get_threetondim_nbor_parent_cell(s,hash_key,igrid_nbor,ind_nbor,flush
   integer,dimension(1:threetondim)::ind_nbor
   logical::flush_cache,fetch_cache
   !
-  ! This routine computes and acquire the 3**ndim neighboring father cells 
+  ! This routine computes and acquire the 3**ndim neighboring father cells
   ! for the input hash_key. The output arrays are the father cells
   ! parent oct indices and their associated cell indices within the oct.
   ! The corresponding data can be accessed using: grid(igrid)%data(ind).
@@ -157,7 +157,7 @@ subroutine get_twondim_nbor_parent_cell(s,hash_key,igrid_nbor,ind_nbor,flush_cac
   integer,dimension(0:twondim)::ind_nbor
   logical::flush_cache,fetch_cache
   !
-  ! This routine computes and acquires the 2xndim neighboring father cells 
+  ! This routine computes and acquires the 2xndim neighboring father cells
   ! for the input hash_key. The output arrays are the father cells
   ! parent oct indices and their associated cell indices within the oct.
   ! The corresponding data can be accessed using: grid(igrid)%data(ind).
@@ -184,11 +184,11 @@ subroutine get_twondim_nbor_parent_cell(s,hash_key,igrid_nbor,ind_nbor,flush_cac
      ind=ind+2**(idim-1)*ii(idim)
   end do
 
-  ! Get grid into memory and lock it if remote 
+  ! Get grid into memory and lock it if remote
   call get_grid(s,hash_father,igrid,flush_cache=flush_cache,fetch_cache=fetch_cache,lock=.true.)
   igrid_nbor(0)=igrid
   ind_nbor(0)=ind
-  
+
   ! Deal with neighboring father cells
   do inbor=1,twondim
      hash_nbor(1:ndim)=hash_key(1:ndim)+shift(1:ndim,inbor)
@@ -206,14 +206,14 @@ subroutine get_twondim_nbor_parent_cell(s,hash_key,igrid_nbor,ind_nbor,flush_cac
         ind=ind+2**(idim-1)*ii(idim)
      end do
 
-     ! Get grid into memory and lock it if remote 
+     ! Get grid into memory and lock it if remote
      call get_grid(s,hash_father,igrid,flush_cache=flush_cache,fetch_cache=fetch_cache,lock=.true.)
      igrid_nbor(inbor)=igrid
      ind_nbor(inbor)=ind
   end do
 
   end associate
-  
+
 end subroutine get_twondim_nbor_parent_cell
 !###############################################################
 !###############################################################
@@ -231,7 +231,7 @@ subroutine get_parent_cell(s,hash_key,igrid,ind,flush_cache,fetch_cache,lock)
   logical::flush_cache,fetch_cache
   logical,optional::lock
   !
-  ! This routine acquires the parent cell of the grid 
+  ! This routine acquires the parent cell of the grid
   ! corresponding to the input hash key.
   !
   integer(kind=8),dimension(0:ndim)::hash_father
@@ -316,7 +316,7 @@ subroutine get_grid(s,hash_key,child,flush_cache,fetch_cache,lock,use_ghost)
   logical,optional::lock
   logical,optional::use_ghost
   !
-  ! This routine acquires the grid 
+  ! This routine acquires the grid
   ! corresponding to the input hash key.
   ! Two logicals set the type of acquire.
   ! "fetch" means read-only, "flush" means write-only.
@@ -412,7 +412,7 @@ subroutine get_grid(s,hash_key,child,flush_cache,fetch_cache,lock,use_ghost)
         mdl%send_request_array(2:ndim+1)=hash_key(1:ndim)
 
         ! Post RECV for the expected response
-        call MPI_IRECV(mdl%recv_fetch_array,mdl%size_fetch_array,MPI_INTEGER,grid_cpu-1,msg_tag,MPI_COMM_WORLD,response_id,info)  
+        call MPI_IRECV(mdl%recv_fetch_array,mdl%size_fetch_array,MPI_INTEGER,grid_cpu-1,msg_tag,MPI_COMM_WORLD,response_id,info)
 
         ! Post SEND for the request
         call MPI_ISEND(mdl%send_request_array,mdl%size_request_array,MPI_INTEGER,grid_cpu-1,request_tag,MPI_COMM_WORLD,send_request_id,info)

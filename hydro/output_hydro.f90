@@ -15,7 +15,7 @@ recursive subroutine r_output_hydro(pst,input_array,input_size,output_array,outp
   integer::output_size
   integer,dimension(1:input_size)::input_array
   integer,dimension(1:output_size)::output_array
-  
+
   character(LEN=flen)::filename
   integer::rID
 
@@ -208,7 +208,7 @@ subroutine file_descriptor_hydro(r,filename,write_bkp_file)
   type(run_t)::r
   character(LEN=flen)::filename
   logical::write_bkp_file
-  
+
   character(LEN=flen)::fileloc
   integer::ivar,ilun
 

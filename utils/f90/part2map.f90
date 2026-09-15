@@ -55,7 +55,7 @@ program part2map
   end type params
   type(params)::p
 
-  
+
   !------------------------------
   ! Read parameter and info files
   !------------------------------
@@ -82,7 +82,7 @@ program part2map
   write(*,*)'nfile=',nfile
 
   !-----------------
-  ! Set up geometry 
+  ! Set up geometry
   !-----------------
   if(xmin<0)xmin=0
   if(xmax<0)xmax=p%boxlen

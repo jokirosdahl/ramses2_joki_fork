@@ -361,10 +361,10 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
            ! If both non-equilibrium chemistry and rtz_cooling are turned on
            ! we use a detailed model for the chemistry
 
-           if (r%rtz_equilibrium_test.eq.2) then 
+           if (r%rtz_equilibrium_test.eq.2) then
                ! for now, just assume some density solar metallicity
                nElement(1:n_elements,1:nleaf)  = 0.d0  ! Initialize to zero
-               nElement(1,1:nleaf)  = 1.d-1                          ! Hydrogen      
+               nElement(1,1:nleaf)  = 1.d-1                          ! Hydrogen
                nElement(2,1:nleaf)  = nElement(1,1:nleaf) * 8.51d-02 ! Helium
                nElement(6,1:nleaf)  = nElement(1,1:nleaf) * 2.69d-04 ! Carbon
                nElement(7,1:nleaf)  = nElement(1,1:nleaf) * 6.76d-05 ! Nitrogen
@@ -386,8 +386,8 @@ subroutine cooling_fine(r,g,m,c,tables,ilevel)
 #ifdef DO_RT
                 & Np, Fp, p_gas, dNpdt, dFpdt, ilevel, &
 #endif
-                & dtcool, nleaf, dx_SS_H2)   
-#else        
+                & dtcool, nleaf, dx_SS_H2)
+#else
         else if(r%neq_chem)then
            call neq_solve_cooling(r, tables, T2, xion, nH, Zsolar, &
 #ifdef DO_RT

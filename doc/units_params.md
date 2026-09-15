@@ -6,6 +6,3 @@ The namelist block `&UNITS_PARAMS` is used to specify the unit system to convert
 | `units_time`        | `real`  | 1 | This is the scaling factor used to convert times from code units to cgs units. Units are therefore [s]. When `poisson=.true.`, units of time must be set so that `G=1`. If you are not sure, please use predefined unit systems at compilation time using for example `UNITS=COSMO` or `UNITS=MERGER`. Units are defined in the file `amr/units.f90`. |
 | `units_length`      | `real`  | 1 | This is the scaling factor used to convert length scales from code units to cgs units. Units are therefore [cm]. |
 | `units_np`          | `real`  | 1 | This is the scaling factor used to convert photon number density scales from code units to cgs units. Units are therefore [#photon/cm^3]. |
-
-
-

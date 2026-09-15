@@ -28,9 +28,9 @@ $(
     PATCHDIRS=(${PATCHDIRS//:/ })
     for PATCHDIR in "${PATCHDIRS[@]}"; do
 	for filename in ${PATCHDIR}/*.f90; do
-            echo "$filename" 
+            echo "$filename"
             cat "$filename"
-	done 
+	done
     done
   fi |  sed 's/\$/ /g' |
     sed "s/\"/'/g" | cat -e | sed 's/\$/\"/' | sed 's/^/  write(ilun,format)"/'

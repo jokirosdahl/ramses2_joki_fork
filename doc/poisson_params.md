@@ -13,7 +13,3 @@ Two different Poisson solvers are available in RAMSES: conjugate gradient (CG) a
 | `gravity_params`    | `real array` | 0.0   | Runtime parameters used in the analytical expression of the external acceleration set in `grav_ana.f90` or the analytical density set in `rho_ana.f90`. |
 | `epsilon`           | `real`  | 1e-4  | Stopping criterion for the iterative Poisson solver: residual 2-norm should be lower than `epsilon` times the right hand side 2-norm. |
 | `cg_levelmin`       | `integer`  | 999 | Minimum level from which the Conjugate Gradient solver is used in place of the Multigrid solver. |
-
-
-
-

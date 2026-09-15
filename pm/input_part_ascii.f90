@@ -224,7 +224,7 @@ subroutine input_part_ascii(mdl,r,g,p,npart_tot)
   ! Allocate particle-based arrays.
   ! Read particles positions and velocities from various files
   ! including gadget, ascii or restart files.
-  ! grafic initial conditions are performed after the AMR grid 
+  ! grafic initial conditions are performed after the AMR grid
   ! has been constructed.
   !------------------------------------------------------------
   integer::jpart_loc
@@ -252,13 +252,13 @@ subroutine input_part_ascii(mdl,r,g,p,npart_tot)
 
   !--------------------------------------
   ! Read ASCII initial conditions file
-  !--------------------------------------  
+  !--------------------------------------
   filename=TRIM(r%initfile(r%levelmin))//'/ic_part'
   open(10,file=filename,form='formatted')
   jpart=0
   indglob=0
   jpart_loc=0
-  do 
+  do
 #if NDIM==1
      read(10,*,end=100)xx1,vv1,mm1
      if(ABS(xx1)<r%box_size(1)/2.0d0)then
@@ -362,7 +362,7 @@ subroutine input_star_ascii(mdl,r,g,p,npart_tot)
   ! Allocate particle-based arrays.
   ! Read particles positions and velocities from various files
   ! including gadget, ascii or restart files.
-  ! grafic initial conditions are performed after the AMR grid 
+  ! grafic initial conditions are performed after the AMR grid
   ! has been constructed.
   !------------------------------------------------------------
   integer::jpart_loc
@@ -387,10 +387,10 @@ subroutine input_star_ascii(mdl,r,g,p,npart_tot)
         start_ind(icpu+1)=start_ind(icpu)+npart
      endif
   end do
-  
+
   !--------------------------------------
   ! Read ASCII initial conditions file
-  !--------------------------------------  
+  !--------------------------------------
   filename=TRIM(r%initfile(r%levelmin))//'/ic_star'
   open(10,file=filename,form='formatted')
   jpart=0
@@ -502,7 +502,7 @@ subroutine input_sink_ascii(mdl,r,g,p,npart_tot)
   ! Allocate particle-based arrays.
   ! Read particles positions and velocities from various files
   ! including gadget, ascii or restart files.
-  ! grafic initial conditions are performed after the AMR grid 
+  ! grafic initial conditions are performed after the AMR grid
   ! has been constructed.
   !------------------------------------------------------------
   integer::jpart_loc
@@ -527,10 +527,10 @@ subroutine input_sink_ascii(mdl,r,g,p,npart_tot)
         start_ind(icpu+1)=start_ind(icpu)+npart
      endif
   end do
-  
+
   !--------------------------------------
   ! Read ASCII initial conditions file
-  !--------------------------------------  
+  !--------------------------------------
   filename=TRIM(r%initfile(r%levelmin))//'/ic_sink'
   open(10,file=filename,form='formatted')
   jpart=0
